@@ -44,6 +44,7 @@ object Catalog {
             sums = "SHA256SUMS", signature = "SHA256SUMS.sig", signingKey = NOVA_KEY,
             apk = { names -> names.firstOrNull { it == "nova-universal.apk" } ?: names.firstOrNull { it.endsWith("-universal.apk") } },
             note = "The Nova app pairs with a Nova server on Linux (sudo nova add shows the code).",
+            extra = "Comes with five home-screen widgets: status, live stats, quick actions, inbox and storage. In Nova: Menu → Home-screen widgets.",
         ),
         Listing(
             id = "orbit", name = "Orbit",
