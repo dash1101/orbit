@@ -1,6 +1,8 @@
 name: android
 
-# Builds Orbit for Android on every push. A tag like v0.2.0 also publishes the APK (with SHA256SUMS) as a release.
+# Builds Orbit for Android on every push. With the signing key stored as repository secrets, a tag like v0.2.0
+# also publishes the release; without it, a tag build is left unsigned, to be signed with the key and released
+# from the machine that holds it (see RELEASING.md).
 on:
   push:
     branches: [main]
@@ -14,6 +16,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.key.outputs.signed }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -21,33 +25,39 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.9" }
       - name: Signing key (when the repository has one)
+        id: key
         env:
           ORBIT_KEYSTORE_B64: ${{ secrets.ORBIT_KEYSTORE_B64 }}
         run: |
           if [ -n "$ORBIT_KEYSTORE_B64" ]; then
             echo "$ORBIT_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/orbit-release.jks"
             echo "ORBIT_KEYSTORE=$RUNNER_TEMP/orbit-release.jks" >> "$GITHUB_ENV"
-          elif [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
-            echo "::error::Releases must be signed with the persistent key. Add the ORBIT_KEYSTORE_B64, ORBIT_KEYSTORE_PASSWORD and ORBIT_KEY_ALIAS secrets (see the README), then run the tag again."
-            exit 1
+            echo "signed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::No ORBIT_KEYSTORE_B64 secret: this APK is signed with a throwaway key, so it can't update an installed copy."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No signing key stored here: tag builds are left unsigned, other builds use a throwaway key."
           fi
       - name: Build APK
         working-directory: android
         env:
           ORBIT_KEYSTORE_PASSWORD: ${{ secrets.ORBIT_KEYSTORE_PASSWORD }}
           ORBIT_KEY_ALIAS: ${{ secrets.ORBIT_KEY_ALIAS }}
+          SIGNED: ${{ steps.key.outputs.signed }}
         run: |
-          name="${GITHUB_REF_NAME#v}"
-          case "$GITHUB_REF" in refs/tags/*) ;; *) name="0.0.0-dev" ;; esac
-          gradle --no-daemon :app:assembleRelease -PorbitVersionName="$name" -PorbitVersionCode="${GITHUB_RUN_NUMBER}"
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/orbit-android.apk"
+          name="${GITHUB_REF_NAME#v}"; extra=""
+          case "$GITHUB_REF" in
+            refs/tags/*) [ "$SIGNED" = true ] || extra="-PorbitUnsigned=true" ;;
+            *) name="0.0.0-dev" ;;
+          esac
+          gradle --no-daemon :app:assembleRelease -PorbitVersionName="$name" -PorbitVersionCode="${GITHUB_RUN_NUMBER}" $extra
+          ls app/build/outputs/apk/release/
+          if [ -n "$extra" ]; then out=orbit-android-unsigned.apk; else out=orbit-android.apk; fi
+          cp app/build/outputs/apk/release/app-release*.apk "$GITHUB_WORKSPACE/$out"
       - uses: actions/upload-artifact@v4
-        with: { name: orbit-android, path: orbit-android.apk }
+        with: { name: orbit-android, path: "orbit-android*.apk" }
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && needs.build.outputs.signed == 'true'
     needs: [build]
     runs-on: ubuntu-latest
     permissions:
@@ -61,17 +71,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mv out/orbit-android.apk "out/orbit-android-${GITHUB_REF_NAME}.apk"
-          # the desktop app: plain Python, so one archive serves Linux, Windows and macOS
           git archive --format=tar.gz --prefix="orbit-${GITHUB_REF_NAME}/" -o "out/orbit-desktop-${GITHUB_REF_NAME}.tar.gz" HEAD -- orbit install.sh README.md
           cd out
           sha256sum * > SHA256SUMS
-          cat > notes.md <<'NOTES'
-          One place for Pocketfader, Nova and YTM Beacon.
-
-          - **Desktop** (Linux, Windows, macOS): unpack `orbit-desktop-*.tar.gz`, then `./install.sh` on Linux or `python -m orbit` (`py -m orbit` on Windows). Needs Python 3.9 or newer.
-          - **Android** (5.0+): install `orbit-android-*.apk`, then install Pocketfader and Nova from it.
-
-          Check downloads against `SHA256SUMS`. Pre-release: the Android app has not been tried on a device yet.
-          NOTES
-          gh release create "$GITHUB_REF_NAME" orbit-android-*.apk orbit-desktop-*.tar.gz SHA256SUMS --repo "$GITHUB_REPOSITORY" \
-            --prerelease --title "Orbit $GITHUB_REF_NAME" --notes-file notes.md
+          # the release may already exist (desktop published first): then add or replace the files
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" -p SHA256SUMS -O old-sums 2>/dev/null || true
+            cat SHA256SUMS old-sums 2>/dev/null | awk '!seen[$2]++' > merged && mv merged SHA256SUMS   # new lines win
+            gh release upload "$GITHUB_REF_NAME" orbit-android-*.apk orbit-desktop-*.tar.gz SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file ../packaging/release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" orbit-android-*.apk orbit-desktop-*.tar.gz SHA256SUMS --repo "$GITHUB_REPOSITORY" \
+              --prerelease --title "Orbit $GITHUB_REF_NAME" --notes-file ../packaging/release-notes.md
+          fi

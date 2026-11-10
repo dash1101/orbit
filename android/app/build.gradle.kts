@@ -30,7 +30,12 @@ android {
             }
         }
     }
-    val appSigning = if (releaseKey != null) signingConfigs.getByName("orbit") else signingConfigs.getByName("debug")
+    // -PorbitUnsigned: leave the APK unsigned, to be signed with the release key outside the build
+    val appSigning = when {
+        releaseKey != null -> signingConfigs.getByName("orbit")
+        findProperty("orbitUnsigned") != null -> null
+        else -> signingConfigs.getByName("debug")
+    }
 
     buildTypes {
         release {
