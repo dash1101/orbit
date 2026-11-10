@@ -106,9 +106,9 @@ jobs:
           cat run.log || true
           [ "$ok" = 1 ] || { echo "the program did not start"; exit 1; }
           grep -q '"name": "Orbit"' hub.json
-          curl -sf http://127.0.0.1:8799/ | grep -q "<title>Orbit</title>"
-          curl -sf -o /dev/null http://127.0.0.1:8799/apps/nova.svg
-          curl -sf http://127.0.0.1:8799/api/install | grep -q '"host"'
+          curl -sf http://127.0.0.1:8799/ -o page.html && grep -q "<title>Orbit</title>" page.html
+          curl -sf http://127.0.0.1:8799/apps/nova.svg -o /dev/null
+          curl -sf http://127.0.0.1:8799/api/install -o install.json && grep -q '"host"' install.json
           kill $pid || true
           echo "smoke test passed"
       - name: Package
