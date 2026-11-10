@@ -9,7 +9,7 @@ data class Listing(
     val name: String,
     val blurb: String,
     val repo: String,
-    val pkg: String?,
+    val pkgs: List<String>,        // the app's Android package ids, newest first (Pocketfader's id is changing)
     val icon: String,              // file in assets/icons
     val color: Long,
     val sums: String,              // checksum list in each release
@@ -17,8 +17,9 @@ data class Listing(
     val signingKey: String? = null,
     val apk: (Collection<String>) -> String? = { null },
     val note: String = "",
+    val extra: String = "",        // shown on the app's card
 ) {
-    val onAndroid get() = pkg != null
+    val onAndroid get() = pkgs.isNotEmpty()
 }
 
 object Catalog {
@@ -29,25 +30,19 @@ object Catalog {
         Listing(
             id = "pocketfader", name = "Pocketfader",
             blurb = "Control your computer's volume and music from your phone",
-            repo = "dash1101/pocketfader", pkg = "app.pocketfader.client", icon = "pocketfader.svg", color = 0xFFA78BFA,
+            repo = "dash1101/pocketfader", pkgs = listOf("app.novalabs.pocketfader", "app.pocketfader.client"), icon = "pocketfader.svg", color = 0xFFA78BFA,
             sums = "SHA256SUMS.txt",
             apk = { names -> names.firstOrNull { Regex("""pocketfader-android-v[^/]*\.apk""").matches(it) } },
             note = "The phone app talks to Pocketfader on your computer: install that with Orbit for desktop.",
+            extra = "Includes YTM Beacon: its Discord status controls are built into Pocketfader, so there's no separate Beacon app for Android.",
         ),
         Listing(
             id = "nova", name = "Nova",
             blurb = "Secure remote for your Linux home server",
-            repo = "dash1101/Nova", pkg = "app.novalabs.nova", icon = "nova.svg", color = 0xFF5EC4B6,
+            repo = "dash1101/Nova", pkgs = listOf("app.novalabs.nova"), icon = "nova.svg", color = 0xFF5EC4B6,
             sums = "SHA256SUMS", signature = "SHA256SUMS.sig", signingKey = NOVA_KEY,
             apk = { names -> names.firstOrNull { it == "nova-universal.apk" } ?: names.firstOrNull { it.endsWith("-universal.apk") } },
             note = "The Nova app pairs with a Nova server on Linux (sudo nova add shows the code).",
-        ),
-        Listing(
-            id = "ytm-beacon", name = "YTM Beacon",
-            blurb = "Show what you play on YouTube Music in your Discord status",
-            repo = "dash1101/ytm-beacon", pkg = null, icon = "ytm-beacon.png", color = 0xFFF472B6,
-            sums = "checksums.txt",
-            note = "YTM Beacon runs on your computer, next to the Discord app. It isn't available on Android yet.",
         ),
     )
 }

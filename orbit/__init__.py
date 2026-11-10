@@ -1,3 +1,3 @@
 """Orbit: one place to see, start, update and configure your own apps."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"

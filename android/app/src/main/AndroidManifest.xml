@@ -9,6 +9,7 @@
     <!-- Android 11+ only shows an app another app's packages it names here. -->
     <queries>
         <package android:name="app.pocketfader.client" />
+        <package android:name="app.novalabs.pocketfader" />
         <package android:name="app.novalabs.nova" />
     </queries>
 

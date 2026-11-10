@@ -84,8 +84,12 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     fun saveToken(t: String) { token = t.trim(); prefs.edit().putString("token", token).apply(); refresh(force = true) }
 
     // ---- what's installed and what's out ----------------------------------------------------------
-    fun installedVersion(pkg: String?): String? {
-        pkg ?: return null
+    fun installedVersion(a: Listing): String? = a.pkgs.firstNotNullOfOrNull { versionOf(it) }
+
+    /** The package id of the copy that's installed (an app may be installed under an older id). */
+    private fun installedPackage(a: Listing): String? = a.pkgs.firstOrNull { versionOf(it) != null }
+
+    private fun versionOf(pkg: String): String? {
         return try {
             val info = if (Build.VERSION.SDK_INT >= 33)
                 ctx.packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
@@ -100,7 +104,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     fun refresh(force: Boolean = false) {
         for (a in Catalog.apps) {
             val old = cards[a.id] ?: Card()
-            cards[a.id] = old.copy(installed = installedVersion(a.pkg))
+            cards[a.id] = old.copy(installed = installedVersion(a))
             if (!a.onAndroid) continue
             val fresh = System.currentTimeMillis() - (fetched[a.id] ?: 0L) < 10 * 60_000
             if (fresh && !force && old.release != null) continue
@@ -117,13 +121,13 @@ class HubModel(app: Application) : AndroidViewModel(app) {
 
     // ---- open / remove ----------------------------------------------------------------------------
     fun open(a: Listing): Boolean {
-        val i = a.pkg?.let { ctx.packageManager.getLaunchIntentForPackage(it) } ?: return false
+        val i = installedPackage(a)?.let { ctx.packageManager.getLaunchIntentForPackage(it) } ?: return false
         ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         return true
     }
 
     fun uninstall(a: Listing) {
-        val pkg = a.pkg ?: return
+        val pkg = installedPackage(a) ?: return
         @Suppress("DEPRECATION")
         ctx.startActivity(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:$pkg"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -135,8 +139,8 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     fun cancelJob() { job?.cancelled = true; running?.cancel() }
 
     fun install(a: Listing) {
-        if (job?.state == JobState.RUNNING || a.pkg == null) return
-        val before = installedVersion(a.pkg)
+        if (job?.state == JobState.RUNNING || !a.onAndroid) return
+        val before = installedVersion(a)
         val steps = buildList {
             add(Step("find", "Find the latest release"))
             if (a.signature != null) add(Step("signature", "Check the release's signature"))
@@ -162,7 +166,6 @@ class HubModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun perform(j: InstallJob, before: String?) {
         val a = j.app
-        val pkg = a.pkg!!
         val dir = File(ctx.cacheDir, "downloads").apply { mkdirs() }
         var file: File? = null
         var current: Step? = null
@@ -214,7 +217,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             val archived = if (Build.VERSION.SDK_INT >= 33)
                 ctx.packageManager.getPackageArchiveInfo(out.path, PackageManager.PackageInfoFlags.of(0))
             else @Suppress("DEPRECATION") ctx.packageManager.getPackageArchiveInfo(out.path, 0)
-            if (archived == null || archived.packageName != pkg) throw Problem("The download isn't ${a.name}'s app, so it won't be installed.")
+            if (archived == null || archived.packageName !in a.pkgs) throw Problem("The download isn't ${a.name}'s app, so it won't be installed.")
             s.detail = "SHA-256 ${sha.take(12)}… · ${archived.versionName}"
             s.end()
 
@@ -236,7 +239,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             // 6 · install
             s = step("install")
             s.detail = "Android asks you to confirm"
-            val result = installApk(out, pkg)
+            val result = installApk(out, archived.packageName)
             if (result.status != PackageInstaller.STATUS_SUCCESS) throw installProblem(result, a)
             s.detail = "installed ${archived.versionName}"
             s.end()

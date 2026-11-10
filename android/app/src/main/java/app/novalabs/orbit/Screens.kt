@@ -171,6 +171,10 @@ private fun AppCard(model: HubModel, app: Listing, review: () -> Unit) {
             if (card.hint.isNotEmpty()) Txt(card.hint, color = t.muted, size = 12.5.sp)
         }
         if (!app.onAndroid) Txt(app.note, color = t.muted, size = 12.5.sp)
+        if (app.extra.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Txt(app.extra, color = t.muted, size = 12.5.sp)
+        }
         if (app.onAndroid) {
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
