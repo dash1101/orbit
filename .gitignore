@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.tmp
+.gradle/
+build/
+local.properties
+*.jks
+*.keystore
+config.json
+prefs.json

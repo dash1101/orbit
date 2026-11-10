@@ -1,0 +1,1786 @@
+<!doctype html>
+<html lang="en" data-theme="tui">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbit</title>
+<link rel="icon" href="/icon.svg">
+<style>
+/* ---------------------------------------------------------------- themes
+   A theme is a set of tokens. Every theme here is a "tui" look: square boxes whose title sits in the
+   border, monospace text, a tiny square for status. New themes only need a new [data-theme] block. */
+:root, [data-theme="tui"] {
+  --bg: #1c1c1e; --panel: #1c1c1e; --raise: #262629; --line: #3d3d42; --line-hi: #5b5b62;
+  --text: #d6d6d8; --muted: #8c8c93; --legend: #9a9aa1; --accent: #f0668e; --accent-ink: #1c1c1e;
+  --ok: #23a55a; --warn: #f0b232; --down: #f23f43; --off: #6d6f78; --sel: #e8e8ea;
+  --radius: 0px; --glow: none;
+  --font: "JetBrains Mono", "Fira Code", "Cascadia Code", "Hack", "DejaVu Sans Mono", ui-monospace, monospace;
+}
+[data-theme="phosphor"] {
+  --bg: #070c08; --panel: #070c08; --raise: #0d1710; --line: #1d3a23; --line-hi: #2f6a3b;
+  --text: #a8ffb0; --muted: #4f9a5a; --legend: #62b96e; --accent: #39ff7a; --accent-ink: #04140a;
+  --ok: #39ff7a; --warn: #e6ff5c; --down: #ff5c5c; --off: #2f5a36; --sel: #a8ffb0;
+  --glow: 0 0 6px rgba(57,255,122,.35);
+}
+[data-theme="amber"] {
+  --bg: #120d05; --panel: #120d05; --raise: #1d1508; --line: #3e2e12; --line-hi: #6b4e1c;
+  --text: #ffcf7a; --muted: #a07a3c; --legend: #c4913f; --accent: #ffb000; --accent-ink: #120d05;
+  --ok: #ffd36b; --warn: #ff8a3d; --down: #ff4d3d; --off: #5e4722; --sel: #ffcf7a;
+  --glow: 0 0 6px rgba(255,176,0,.3);
+}
+[data-theme="paper"] {
+  --bg: #f3f0e8; --panel: #f3f0e8; --raise: #e9e5da; --line: #c4bdae; --line-hi: #8f877a;
+  --text: #2a2826; --muted: #77716a; --legend: #6a645c; --accent: #c2366b; --accent-ink: #fff;
+  --ok: #1d8a4a; --warn: #b7791f; --down: #c53030; --off: #a39d92; --sel: #2a2826;
+}
+[data-theme="frost"] {
+  --bg: #1b2028; --panel: #1b2028; --raise: #232a35; --line: #36404f; --line-hi: #4f5d72;
+  --text: #dbe3ee; --muted: #8592a6; --legend: #93a4bb; --accent: #7cc4e8; --accent-ink: #12171e;
+  --ok: #8fcf8a; --warn: #ebcb7d; --down: #e0707a; --off: #5d6879; --sel: #e6edf5;
+}
+[data-theme="ember"] {
+  --bg: #1a1412; --panel: #1a1412; --raise: #251c18; --line: #3f302a; --line-hi: #644a3f;
+  --text: #ecd9cf; --muted: #9a8276; --legend: #b08d7e; --accent: #ff7a45; --accent-ink: #1a1412;
+  --ok: #9ccc65; --warn: #ffc24b; --down: #ff4f4f; --off: #6b574e; --sel: #f3e3da;
+}
+[data-theme="ocean"] {
+  --bg: #0d1b24; --panel: #0d1b24; --raise: #13252f; --line: #20394a; --line-hi: #315670;
+  --text: #cfe6f0; --muted: #6f93a5; --legend: #7fa8bb; --accent: #2ec4b6; --accent-ink: #062027;
+  --ok: #3ddc97; --warn: #ffbf46; --down: #ff6b6b; --off: #3b5566; --sel: #d8eef7;
+}
+[data-theme="lilac"] {
+  --bg: #1d1a24; --panel: #1d1a24; --raise: #26222f; --line: #3b3448; --line-hi: #594e6d;
+  --text: #e4ddf0; --muted: #9389a6; --legend: #a596c2; --accent: #b794f6; --accent-ink: #1d1a24;
+  --ok: #7bd88f; --warn: #f2c66d; --down: #f7768e; --off: #625a73; --sel: #efe9f9;
+}
+[data-theme="mono"] {
+  --bg: #111111; --panel: #111111; --raise: #1c1c1c; --line: #333333; --line-hi: #555555;
+  --text: #e0e0e0; --muted: #8a8a8a; --legend: #9e9e9e; --accent: #ffffff; --accent-ink: #111111;
+  --ok: #cfcfcf; --warn: #a8a8a8; --down: #ffffff; --off: #4a4a4a; --sel: #ffffff;
+}
+
+/* ---------------------------------------------------------------- base */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); text-shadow: var(--glow);
+       -webkit-font-smoothing: antialiased; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; text-shadow: inherit; }
+a { color: var(--accent); }
+::selection { background: var(--accent); color: var(--accent-ink); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line); border: 3px solid var(--bg); }
+::-webkit-scrollbar-track { background: transparent; }
+:focus-visible { outline: 1px dashed var(--accent); outline-offset: 2px; }
+
+/* A box: a border with its title cut into the top edge. */
+.box { position: relative; border: 1px solid var(--line); border-radius: var(--radius);
+       padding: 16px 14px 12px; margin: 9px 0 0; min-width: 0; }
+.box > .lg { position: absolute; top: -.78em; left: 9px; padding: 0 5px; background: var(--bg);
+             color: var(--legend); line-height: 1.4; white-space: nowrap; }
+.box > .lg-r { left: auto; right: 9px; }
+.box.tight { padding: 12px 10px 10px; }
+
+/* ---------------------------------------------------------------- layout */
+#shell { display: grid; height: 100vh; padding: 6px 10px 8px; gap: 0 10px;
+         grid-template-columns: 92px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+         grid-template-areas: "top top" "nav main" "foot foot"; }
+#top { grid-area: top; display: flex; align-items: center; gap: 12px; padding: 4px 2px 2px; min-width: 0; }
+#top .brand { color: var(--text); font-weight: 700; letter-spacing: .5px; }
+#top .brand b { color: var(--accent); }
+#top .sum { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#top .sp { flex: 1; }
+.tag { border: 1px solid var(--warn); color: var(--warn); padding: 0 6px; font-size: 12px; white-space: nowrap; }
+#nav { grid-area: nav; display: flex; flex-direction: column; min-height: 0; padding: 14px 0 8px; }
+#nav .list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 2px 0; }
+#main { grid-area: main; overflow-y: auto; overflow-x: hidden; padding: 0 4px 6px 2px; min-height: 0; }
+#foot { grid-area: foot; }
+#foot .box { display: flex; gap: 14px; align-items: center; padding: 8px 12px 6px; }
+#msg { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#msg.err { color: var(--down); } #msg.ok { color: var(--ok); }
+#keys { color: var(--muted); white-space: nowrap; }
+#keys kbd { color: var(--text); font: inherit; }
+
+/* nav tiles, like a server rail: a square tile, a status square, a selection bar */
+.tile { position: relative; display: flex; justify-content: center; padding: 5px 0 5px; cursor: pointer;
+        background: none; border: 0; width: 100%; }
+.tile .sq { width: 54px; height: 54px; display: grid; place-items: center; font-weight: 700; font-size: 17px;
+            letter-spacing: 1px; color: var(--bg); background: var(--c, var(--muted)); border-radius: var(--radius);
+            text-shadow: none; transition: filter .15s; }
+.tile.dim .sq { filter: grayscale(.85) brightness(.6); }
+.tile:hover .sq { filter: brightness(1.12); }
+.tile .bar { position: absolute; left: 0; top: 50%; width: 4px; height: 8px; margin-top: -4px; background: var(--sel);
+             transition: height .15s, margin .15s; opacity: 0; }
+.tile:hover .bar { opacity: .6; height: 18px; margin-top: -9px; }
+.tile.on .bar { opacity: 1; height: 40px; margin-top: -20px; }
+.tile .st { position: absolute; right: calc(50% - 31px); bottom: 2px; width: 13px; height: 13px;
+            border: 3px solid var(--bg); background: var(--off); }
+.tile .badge { position: absolute; right: calc(50% - 32px); top: 1px; background: var(--accent); color: var(--accent-ink);
+               font-size: 10.5px; font-weight: 700; padding: 0 4px; line-height: 15px; border: 2px solid var(--bg); text-shadow: none; }
+.tile .sq.glyph { background: var(--raise); color: var(--text); border: 1px solid var(--line); font-size: 22px; font-weight: 400; }
+.sep { height: 1px; background: var(--line); margin: 6px 22px; }
+
+.dot { display: inline-block; width: 8px; height: 8px; background: var(--off); vertical-align: 1px; margin-right: 7px; flex: none; }
+.s-ok { background: var(--ok) !important; } .s-warn { background: var(--warn) !important; }
+.s-down { background: var(--down) !important; } .s-off, .s-unknown { background: var(--off) !important; }
+.t-ok { color: var(--ok); } .t-warn { color: var(--warn); } .t-down { color: var(--down); } .t-muted, .t-off { color: var(--muted); }
+
+/* ---------------------------------------------------------------- pages */
+.grid { display: grid; gap: 4px 12px; }
+.g2 { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.cards { display: grid; gap: 4px 12px; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+.card { cursor: pointer; transition: border-color .15s; }
+.card:hover { border-color: var(--line-hi); }
+.card .h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.mini { width: 34px; height: 34px; display: grid; place-items: center; background: var(--c); color: var(--bg); font-weight: 700;
+        font-size: 12.5px; flex: none; border-radius: var(--radius); text-shadow: none; }
+.card .name { font-weight: 700; }
+.card .ver { color: var(--muted); margin-left: auto; font-size: 12.5px; }
+.card .hl { display: flex; align-items: baseline; }
+.card .bl { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+.upd { background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; padding: 0 5px; text-shadow: none; }
+
+.hero { display: flex; gap: 14px; align-items: center; }
+.hero .mini { width: 52px; height: 52px; font-size: 17px; }
+.hero .name { font-size: 18px; font-weight: 700; }
+.hero .sub { color: var(--muted); }
+.headline { display: flex; align-items: baseline; margin: 12px 0 8px; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 16px; }
+.kv .k { color: var(--muted); }
+.kv .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv .v.warn { color: var(--warn); } .kv .v.muted { color: var(--muted); }
+
+.grp { margin-bottom: 9px; }
+.grp .gt { color: var(--muted); font-size: 12.5px; margin-bottom: 4px; }
+.btns { display: flex; flex-wrap: wrap; gap: 7px; }
+.btn { background: transparent; border: 1px solid var(--line-hi); padding: 4px 10px; cursor: pointer; border-radius: var(--radius);
+       white-space: nowrap; }
+.btn:hover { background: var(--raise); border-color: var(--text); }
+.btn:active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); text-shadow: none; }
+.btn.primary { border-color: var(--accent); color: var(--accent); }
+.btn.primary:hover { background: var(--accent); color: var(--accent-ink); text-shadow: none; }
+.btn.danger { border-color: var(--down); color: var(--down); }
+.btn.danger:hover { background: var(--down); color: var(--bg); }
+.btn.on::before { content: "[x] "; } .btn.off::before { content: "[ ] "; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.small { padding: 1px 7px; font-size: 12.5px; }
+
+table.units { width: 100%; border-collapse: collapse; }
+table.units th { text-align: left; color: var(--muted); font-weight: 400; padding: 0 10px 4px 0; border-bottom: 1px dashed var(--line); }
+table.units td { padding: 4px 10px 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+table.units td.m { color: var(--muted); }
+
+/* settings: one row per field */
+.fset .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; padding: 5px 0;
+             border-bottom: 1px dashed var(--line); align-items: center; }
+.fset .row:last-child { border-bottom: 0; }
+.fset .row.full { grid-template-columns: minmax(0, 1fr); }
+.fset .help { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+.fset .note { color: var(--muted); padding: 2px 0 4px; }
+.fset .sec { color: var(--legend); margin: 10px 0 2px; }
+.fset .sec:first-child { margin-top: 0; }
+.chk { background: none; border: 0; cursor: pointer; padding: 0 2px; color: var(--muted); white-space: nowrap; }
+.chk.on { color: var(--accent); }
+.chk::before { content: "[ ] "; color: var(--muted); } .chk.on::before { content: "[x] "; color: var(--accent); }
+.inp { background: var(--raise); border: 1px solid var(--line); padding: 3px 7px; min-width: 0; border-radius: var(--radius); }
+.inp:focus { border-color: var(--accent); outline: none; }
+.inp.num { width: 82px; text-align: right; }
+.inp.wide { width: 100%; }
+select.inp { padding: 3px 4px; }
+.seg { display: flex; flex-wrap: wrap; gap: 0; }
+.seg button { background: none; border: 1px solid var(--line); margin-left: -1px; padding: 2px 9px; cursor: pointer; color: var(--muted); }
+.seg button.on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); text-shadow: none; position: relative; }
+
+pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--font); color: var(--muted); white-space: pre-wrap;
+          word-break: break-all; }
+.lg .lnk { color: var(--muted); cursor: pointer; background: var(--bg); border: 0; padding: 0; }
+.lg .lnk:hover { color: var(--accent); }
+
+/* theme picker */
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.th { border: 1px solid var(--line); padding: 8px; cursor: pointer; background: none; text-align: left; }
+.th.on { border-color: var(--accent); }
+.th .pv { height: 58px; border: 1px solid; position: relative; margin-bottom: 6px; }
+.th .pv i { position: absolute; display: block; }
+.applist .row { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+.applist .row:last-child { border-bottom: 0; }
+.applist .row .mini { width: 26px; height: 26px; font-size: 10.5px; }
+.applist .row .n { flex: 1; min-width: 0; }
+.form2 { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 12px; align-items: center; }
+.form2 label { color: var(--muted); }
+
+/* dialog */
+#dlg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; place-items: center; z-index: 9; padding: 16px; }
+#dlg.open { display: grid; }
+#dlg .box { background: var(--bg); width: min(560px, 100%); max-height: 80vh; overflow: auto; }
+#dlg .body { margin: 2px 0 14px; white-space: pre-wrap; }
+#dlg pre { margin: 0 0 12px; max-height: 50vh; overflow: auto; font-size: 12.5px; color: var(--muted); white-space: pre-wrap; }
+.empty { color: var(--muted); padding: 30px 0; text-align: center; }
+.blink::after { content: "▌"; animation: bl 1s steps(1) infinite; color: var(--accent); }
+@keyframes bl { 50% { opacity: 0; } }
+
+/* ---------------------------------------------------------------- installer */
+.plat { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); }
+.plat > span { white-space: nowrap; }
+.plat .here { color: var(--text); }
+.plat .here::after { content: " ◂ this computer"; color: var(--accent); font-size: 11.5px; }
+.ic { display: inline-block; width: 7px; height: 7px; margin-right: 6px; vertical-align: 1px; background: var(--off); }
+.ic.full { background: var(--ok); } .ic.limited { background: var(--warn); }
+.ic.none { background: transparent; box-shadow: inset 0 0 0 1px var(--off); }
+.icard { animation: rise .45s cubic-bezier(.2,.8,.2,1) both; }
+.icard .h { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.icard .name { font-weight: 700; }
+.icard .ver { color: var(--muted); margin-left: auto; font-size: 12.5px; text-align: right; }
+.icard .bl { color: var(--muted); font-size: 12.5px; margin-bottom: 8px; }
+.icard .stl { display: flex; align-items: baseline; margin: 8px 0 2px; min-height: 1.45em; }
+.icard .nt { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+.icard .acts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.mbar { height: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.mbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .5s cubic-bezier(.2,.8,.2,1); }
+.hostline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.hostline .os { font-weight: 700; }
+.spin { display: inline-block; width: 1ch; color: var(--accent); }
+
+#wiz { position: fixed; inset: 0; z-index: 8; display: none; place-items: center; padding: 16px; }
+#wiz.open { display: grid; }
+#wiz .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.62); animation: fadeIn .25s ease both; }
+#wiz .wpanel { position: relative; width: min(780px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column;
+               background: var(--bg); border-color: var(--line-hi); margin: 0; padding: 20px 18px 12px;
+               animation: popIn .38s cubic-bezier(.2,.9,.25,1.08) both; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+#wiz.closing .scrim { animation: fadeOut .2s ease both; }
+#wiz.closing .wpanel { animation: popOut .2s ease both; }
+.wpanel > .lg-r .lnk { font: inherit; }
+.whead { display: flex; gap: 14px; align-items: center; flex: none; }
+.whead .mini { width: 46px; height: 46px; font-size: 15px; }
+.whead .t { font-size: 17px; font-weight: 700; }
+.whead .s { color: var(--muted); font-size: 12.5px; }
+.whead .r { margin-left: auto; text-align: right; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.stepper { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); margin: 18px 0 4px; flex: none; }
+.stepper .track, .stepper .fill { position: absolute; left: 10%; top: 6px; height: 1px; }
+.stepper .track { right: 10%; background: var(--line); }
+.stepper .fill { width: 0; background: var(--accent); transition: width .55s cubic-bezier(.2,.8,.2,1); }
+.stepper .s { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted);
+              font-size: 12px; transition: color .3s, opacity .3s; }
+.stepper .s i { width: 13px; height: 13px; background: var(--bg); border: 1px solid var(--line-hi);
+                transition: background .3s, border-color .3s, transform .45s cubic-bezier(.2,.9,.3,1.4), box-shadow .3s; }
+.stepper .s.done i { background: var(--accent); border-color: var(--accent); }
+.stepper .s.cur { color: var(--text); }
+.stepper .s.cur i { border-color: var(--accent); transform: rotate(45deg) scale(1.15);
+                    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+.stepper .s.skip { opacity: .4; }
+.stepper .s.bad i { background: var(--down); border-color: var(--down); }
+.wbanner { flex: none; margin-top: 8px; color: var(--warn); font-size: 12.5px; text-align: center; }
+.stage-vp { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; margin: 6px -4px 0; padding: 0 4px; }
+.stage { padding: 12px 0 6px; }
+.stage .lead { margin: 0 0 10px; }
+.stage h4 { margin: 14px 0 6px; font-weight: 400; color: var(--legend); font-size: 12.5px; }
+.stage h4:first-child { margin-top: 0; }
+.wfoot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 12px; margin-top: 8px;
+         border-top: 1px dashed var(--line); flex: none; }
+.wfoot .sp { flex: 1; }
+.btn.big { padding: 6px 16px; }
+.btn.primary.go { background: var(--accent); color: var(--accent-ink); text-shadow: none; }
+.btn.primary.go:hover { filter: brightness(1.1); }
+.btn.danger.go { background: var(--down); color: var(--bg); border-color: var(--down); text-shadow: none; }
+.loading { color: var(--muted); padding: 26px 0; text-align: center; }
+
+.req { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 0 6px; padding: 5px 0; border-bottom: 1px dashed var(--line);
+       animation: rise .4s cubic-bezier(.2,.8,.2,1) both; }
+.req:last-child { border-bottom: 0; }
+.req .m { font-weight: 700; } .req .m.ok { color: var(--ok); } .req .m.bad { color: var(--down); } .req .m.soft { color: var(--warn); }
+.req .hint, .req .dt { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+.callout { border-left: 2px solid var(--accent); padding: 7px 11px; background: var(--raise); margin: 10px 0 4px;
+           animation: rise .4s cubic-bezier(.2,.8,.2,1) both; }
+.callout.warn { border-color: var(--warn); } .callout.bad { border-color: var(--down); }
+.callout .hint { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 16px; }
+.facts .k { color: var(--muted); } .facts .v { overflow: hidden; text-overflow: ellipsis; }
+.will > div { position: relative; padding: 4px 0 4px 20px; animation: rise .4s cubic-bezier(.2,.8,.2,1) both; }
+.will > div::before { content: "›"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+.iopt { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 9px 8px; cursor: pointer; border: 1px solid transparent;
+       margin: 0 -8px; animation: rise .4s cubic-bezier(.2,.8,.2,1) both; background: none; text-align: left; width: calc(100% + 16px); }
+.iopt:hover { border-color: var(--line); background: var(--raise); }
+.iopt .box2 { color: var(--muted); transition: color .2s; }
+.iopt.on .box2 { color: var(--accent); }
+.iopt .box2 b { display: inline-block; width: 1ch; transition: transform .25s cubic-bezier(.2,.9,.3,1.6); }
+.iopt.on .box2 b { transform: scale(1.25); }
+.iopt .lab { font-weight: 700; }
+.iopt .help { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+
+.pbar { position: relative; height: 18px; border: 1px solid var(--line-hi); padding: 2px; }
+.pbar i { position: relative; display: block; height: 100%; width: 0; background: var(--accent); overflow: hidden;
+          transition: width .6s cubic-bezier(.2,.8,.2,1), background .4s; }
+.pbar i::after { content: ""; position: absolute; top: 0; bottom: 0; left: -46px; right: 0;
+                 background: repeating-linear-gradient(-45deg, transparent 0 8px, rgba(255,255,255,.2) 8px 16px);
+                 animation: stripes .8s linear infinite; }
+.pbar.still i::after { display: none; }
+.pbar.ok i { background: var(--ok); } .pbar.bad i { background: var(--down); }
+.pinfo { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0 12px; color: var(--muted); font-size: 12.5px; }
+.pinfo b { color: var(--text); }
+.steps { border: 1px solid var(--line); }
+.steps .row { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 0 8px; padding: 6px 10px;
+              align-items: baseline; overflow: hidden; color: var(--muted); border-bottom: 1px dashed var(--line);
+              transition: background .3s, color .3s; animation: rise .35s cubic-bezier(.2,.8,.2,1) both; }
+.steps .row:last-child { border-bottom: 0; }
+.steps .row.active { color: var(--text); background: var(--raise); }
+.steps .row.active::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+     background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 12%, transparent), transparent);
+     animation: sweep 1.8s ease-in-out infinite; }
+.steps .row.done, .steps .row.failed { color: var(--text); }
+.steps .ico { text-align: center; font-weight: 700; }
+.steps .done .ico { color: var(--ok); animation: pop .4s cubic-bezier(.2,.9,.3,1.6) both; }
+.steps .skipped .ico { color: var(--muted); animation: pop .4s both; }
+.steps .failed .ico { color: var(--down); animation: shake .4s both; }
+.steps .active .ico { color: var(--accent); }
+.steps .det { grid-column: 2 / -1; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 0; }
+.steps .det:empty { display: none; }
+.steps .tm { font-size: 12px; color: var(--muted); }
+.steps .sbar { grid-column: 2 / -1; height: 2px; background: var(--line); margin-top: 5px; overflow: hidden; }
+.steps .sbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+.logwrap { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .35s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+.logwrap.open { grid-template-rows: 1fr; opacity: 1; }
+.logwrap > div { overflow: hidden; }
+.logwrap pre { margin: 10px 0 0; height: 200px; overflow: auto; border: 1px solid var(--line); padding: 6px 8px; font-size: 12px;
+               color: var(--muted); white-space: pre-wrap; word-break: break-all; background: var(--raise); }
+
+.result { text-align: center; padding: 6px 0 2px; }
+.result .art { position: relative; width: 96px; height: 96px; margin: 4px auto 0; }
+.result svg { width: 96px; height: 96px; overflow: visible; }
+.result .ring { fill: none; stroke: var(--ok); stroke-width: 3; stroke-dasharray: 265; stroke-dashoffset: 265;
+                transform: rotate(-90deg); transform-origin: 48px 48px; animation: draw .75s cubic-bezier(.6,0,.2,1) .05s forwards; }
+.result .mark { fill: none; stroke: var(--ok); stroke-width: 5; stroke-linecap: square; stroke-linejoin: miter;
+                stroke-dasharray: 70; stroke-dashoffset: 70; animation: draw .35s ease-out .7s forwards; }
+.result.bad .ring, .result.bad .mark { stroke: var(--down); }
+.result.warn .ring, .result.warn .mark { stroke: var(--warn); }
+.result .burst i { position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px; background: var(--c, var(--accent));
+                   opacity: 0; animation: burst .9s cubic-bezier(.15,.7,.3,1) .78s both; }
+.result h3 { margin: 12px 0 4px; font-size: 17px; animation: rise .45s cubic-bezier(.2,.8,.2,1) .45s both; }
+.result p { color: var(--muted); margin: 0 auto 6px; max-width: 540px; animation: rise .45s cubic-bezier(.2,.8,.2,1) .55s both; }
+.result .callout { text-align: left; }
+
+.icard.still { animation: none; }
+
+/* app icons (falls back to the coloured glyph square) */
+.mini.img, .tile .sq.img { background: none; padding: 0; overflow: hidden; }
+.mini.img img, .tile .sq.img img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.tile.dim .sq.img { filter: grayscale(.9) brightness(.55); }
+
+/* dragging tiles in the nav */
+.tile[data-app] { touch-action: none; }
+#navlist.dragging .tile { transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+#navlist.dragging .tile.lift { transition: none; z-index: 2; cursor: grabbing; }
+.tile.lift .sq { box-shadow: 0 10px 24px rgba(0,0,0,.45), 0 0 0 2px var(--accent); transform: scale(1.08); transition: transform .15s; }
+.tile.drop .sq { animation: pop .35s cubic-bezier(.2,.9,.3,1.6); }
+
+/* terminal drawer */
+body.has-term #main { padding-bottom: min(58vh, 540px); }
+#term { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; display: none; padding: 0 10px 8px; pointer-events: none; }
+#term.open { display: block; }
+#term .tbox { pointer-events: auto; background: var(--bg); margin: 0; padding: 14px 10px 8px; height: min(56vh, 520px); display: flex;
+              flex-direction: column; border-color: var(--line-hi); box-shadow: 0 -18px 40px rgba(0,0,0,.4);
+              animation: slideUp .3s cubic-bezier(.2,.8,.2,1) both; }
+#term.min .tbox { height: auto; }
+#term.min .tscreen, #term.min .tkeys { display: none; }
+#term.closing .tbox { animation: slideDown .2s ease both; }
+.ttabs { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.ttab { background: none; border: 1px solid var(--line); color: var(--muted); padding: 1px 8px; cursor: pointer; white-space: nowrap;
+        max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.ttab.on { color: var(--text); border-color: var(--accent); }
+.ttab .x { margin-left: 8px; color: var(--muted); }
+.ttab .x:hover { color: var(--down); }
+.ttab .run { display: inline-block; width: 6px; height: 6px; background: var(--ok); margin-right: 6px; vertical-align: 1px; }
+.ttab .run.done { background: var(--off); }
+.tscreen { position: relative; flex: 1; min-height: 0; overflow: auto; background: var(--raise); border: 1px solid var(--line);
+           padding: 6px 8px; cursor: text; }
+.tscreen:focus-within { border-color: var(--accent); }
+.tscreen pre { margin: 0; font: 13px/1.3 var(--font); white-space: pre; color: var(--text); text-shadow: none; }
+.tscreen pre a { color: var(--accent); }
+.tscreen .cur { background: var(--accent); color: var(--accent-ink); }
+.tscreen:not(:focus-within) .cur { background: none; outline: 1px solid var(--accent); color: inherit; }
+.tscreen textarea { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; resize: none; border: 0; padding: 0; }
+.tkeys { display: flex; gap: 6px; align-items: center; margin-top: 7px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.tkeys .sp { flex: 1; }
+.tprompt { color: var(--warn); }
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0; } }
+@keyframes slideDown { to { transform: translateY(30px); opacity: 0; } }
+
+/* theme editor */
+.ted { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 14px; margin: 10px 0; }
+.ted label { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+input[type=range] { accent-color: var(--accent); }
+.ted input[type=color] { width: 34px; height: 24px; padding: 0; border: 1px solid var(--line-hi); background: none; cursor: pointer; flex: none; }
+.ted .hex { width: 84px; }
+.th .acts { display: flex; gap: 6px; margin-top: 6px; }
+.th .tag2 { color: var(--accent); font-size: 11.5px; }
+
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes fadeOut { to { opacity: 0; } }
+@keyframes popIn { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+@keyframes popOut { to { opacity: 0; transform: translateY(10px) scale(.98); } }
+@keyframes rise { from { opacity: 0; transform: translateY(7px); } }
+@keyframes pop { 0% { transform: scale(.2); opacity: 0; } 65% { transform: scale(1.4); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes shake { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes stripes { to { transform: translateX(22.63px); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes burst { 0% { opacity: 1; transform: rotate(var(--a)) translateX(30px) scale(1); }
+                   100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d, 70px)) scale(.2); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
+                           transition-duration: .01ms !important; }
+}
+
+/* phones and narrow windows: the rail becomes a strip along the top */
+@media (max-width: 760px) {
+  #wiz { padding: 12px 0 0; }
+  #wiz .wpanel { width: 100%; height: 100%; max-height: none; border-width: 1px 0 0; padding: 18px 16px 12px; }
+  .whead .r { display: none; }
+  .stepper .s { font-size: 11px; }
+  body { overflow: auto; }
+  #shell { height: auto; min-height: 100vh; grid-template-columns: minmax(0, 1fr);
+           grid-template-areas: "top" "nav" "main" "foot"; padding: 6px 16px 10px; }
+  #nav { padding: 14px 0 4px; }
+  #nav.box { padding-top: 12px; }
+  #nav .list { display: flex; overflow-x: auto; overflow-y: hidden; }
+  .tile { width: 62px; flex: none; }
+  .tile .sq { width: 48px; height: 48px; font-size: 15px; }
+  .tile .st { right: calc(50% - 28px); } .tile .badge { right: calc(50% - 29px); }
+  table.units .opt { display: none; }
+  .tile .bar { left: 50%; top: auto; bottom: -4px; width: 8px; height: 3px; margin: 0 0 0 -4px; }
+  .tile.on .bar { width: 36px; height: 3px; margin: 0 0 0 -18px; }
+  .tile:hover .bar { width: 18px; height: 3px; margin: 0 0 0 -9px; }
+  .sep { display: none; }
+  .g2 { grid-template-columns: minmax(0, 1fr); }
+  #main { overflow: visible; }
+  #keys { display: none; }
+  table.units td { max-width: 140px; }
+}
+</style>
+</head>
+<body>
+<div id="shell">
+  <div id="top">
+    <span class="brand">[<b>orbit</b>]</span>
+    <span class="sum" id="sum">connecting…</span>
+    <span class="sp"></span>
+    <span class="tag" id="dry" hidden title="Orbit was started with --dry-run: nothing is changed">dry run</span>
+  </div>
+  <nav id="nav" class="box"><span class="lg">nav</span><div class="list" id="navlist"></div></nav>
+  <main id="main"></main>
+  <div id="foot"><div class="box tight"><span class="lg">status</span>
+    <span id="msg">ready</span>
+    <span id="keys"><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>r</kbd> refresh · <kbd>t</kbd> theme · <kbd>i</kbd> install · <kbd>,</kbd> settings · <kbd>?</kbd> help</span>
+  </div></div>
+</div>
+<div id="wiz"><div class="scrim"></div></div>
+<div id="term"></div>
+<div id="dlg" role="dialog" aria-modal="true"><div class="box"><span class="lg" id="dlgt">confirm</span><div id="dlgb"></div></div></div>
+
+<script>
+"use strict";
+// ------------------------------------------------------------------ tiny helpers
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style") el.setAttribute("style", v);
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "text") el.textContent = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat(9)) if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return el;
+}
+const box = (legend, ...kids) => h("section", { class: "box" }, h("span", { class: "lg" }, legend), ...kids);
+// An app's own icon, or its coloured glyph square when it has none.
+function mark(a, cls = "mini") {
+  return a.icon ? h("span", { class: cls + " img" }, h("img", { src: a.icon, alt: "", draggable: "false" }))
+                : h("span", { class: cls, style: `--c:${a.color}` }, a.glyph);
+}
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  const ct = r.headers.get("content-type") || "";
+  const data = ct.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((data && data.error) || r.statusText);
+  return data;
+}
+function say(text, kind) {
+  const m = $("#msg");
+  m.textContent = "> " + text;
+  m.className = kind || "";
+  clearTimeout(say.t);
+  if (kind !== "err") say.t = setTimeout(() => { m.textContent = "> ready"; m.className = ""; }, 6000);
+}
+const STATE_WORD = { ok: "ok", warn: "attention", down: "down", off: "off", unknown: "unknown" };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("orbit." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("orbit." + k, JSON.stringify(v)); } catch {} },
+};
+
+// ------------------------------------------------------------------ state
+const S = { hub: null, apps: [], view: store.get("view", "overview"), detail: null, timer: null, editing: false, navIdx: 0 };
+
+function setTheme(id) {
+  document.documentElement.dataset.theme = id;
+  store.set("theme", id);
+}
+// paint the last theme at once (custom ones too); the server's copy wins after load
+document.head.append(h("style", { id: "ctheme" }, store.get("ctheme", "")));
+setTheme(store.get("theme", "tui"));
+
+// ------------------------------------------------------------------ nav
+function navItems() {
+  return [{ id: "overview", glyph: "◎", name: "overview" }, ...S.apps.filter(a => a.enabled),
+          { id: "install", glyph: "+", name: "install apps" }, { id: "hub", glyph: "⚙", name: "orbit settings" }];
+}
+function renderNav() {
+  // Tiles are built once per set of apps and then only updated, so a click never lands on a tile
+  // that a refresh just replaced.
+  const list = $("#navlist");
+  const items = navItems();
+  const sig = items.map(x => x.id + ":" + (x.glyph || "") + ":" + (x.color || "") + ":" + (x.icon || "")).join("|");
+  if (list.dataset.sig !== sig) {
+    list.replaceChildren();
+    items.forEach((it, i) => {
+      if (it.id === "install" || i === 1) list.append(h("div", { class: "sep" }));
+      const isApp = !!it.color;
+      list.append(h("button", { class: "tile", "data-id": it.id, "data-app": isApp ? "1" : null, "aria-label": it.name,
+          onclick: () => { if (!S.dragged) go(it.id); } },
+        h("span", { class: "bar" }),
+        isApp ? mark(it, "sq") : h("span", { class: "sq glyph" }, it.glyph),
+        isApp ? h("span", { class: "st" }) : null,
+        isApp || it.id === "install" ? h("span", { class: "badge", hidden: true }, "UPD") : null));
+    });
+    list.dataset.sig = sig;
+  }
+  for (const it of items) {
+    const t = list.querySelector(`.tile[data-id="${CSS.escape(it.id)}"]`);
+    const isApp = !!it.color;
+    t.classList.toggle("on", S.view === it.id);
+    t.classList.toggle("dim", isApp && (it.state === "off" || it.state === "down"));
+    t.title = isApp ? `${it.name} — ${it.headline || ""}` : it.name;
+    if (isApp) {
+      t.querySelector(".st").className = "st s-" + (it.state || "unknown");
+      t.querySelector(".badge").hidden = !it.update;
+    }
+    if (it.id === "install") {
+      const n = S.apps.filter(a => a.install && a.install.update).length;
+      const b = t.querySelector(".badge");
+      b.hidden = !n; b.textContent = n > 1 ? n + " UPD" : "UPD";
+      t.title = n ? `install apps — ${n} update${n > 1 ? "s" : ""} ready` : "install apps";
+    }
+  }
+  S.navIdx = Math.max(0, items.findIndex(x => x.id === S.view));
+}
+// Drag an app's tile up or down the side bar (left or right on a phone) to reorder; the order is saved.
+function enableNavDrag() {
+  const list = $("#navlist");
+  let d = null;
+  list.addEventListener("pointerdown", e => {
+    const t = e.target.closest(".tile[data-app]");
+    if (t && e.button === 0) d = { t, x: e.clientX, y: e.clientY, id: e.pointerId, on: false };
+  });
+  list.addEventListener("pointermove", e => {
+    if (!d || e.pointerId !== d.id) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.on) {
+      if (Math.hypot(dx, dy) < 7) return;
+      d.on = true;
+      d.horiz = getComputedStyle(list).display === "flex";
+      d.tiles = [...list.querySelectorAll(".tile[data-app]")];
+      d.from = d.to = d.tiles.indexOf(d.t);
+      const r = d.tiles.map(x => x.getBoundingClientRect());
+      d.size = r.length > 1 ? (d.horiz ? r[1].left - r[0].left : r[1].top - r[0].top) : 1;
+      list.classList.add("dragging");
+      d.t.classList.add("lift");
+      try { d.t.setPointerCapture(e.pointerId); } catch {}
+    }
+    e.preventDefault();
+    const off = Math.max(-d.from * d.size, Math.min((d.tiles.length - 1 - d.from) * d.size, d.horiz ? dx : dy));
+    const tr = v => v ? (d.horiz ? `translateX(${v}px)` : `translateY(${v}px)`) : "";
+    d.t.style.transform = tr(off);
+    d.to = Math.max(0, Math.min(d.tiles.length - 1, d.from + Math.round(off / d.size)));
+    d.tiles.forEach((x, i) => {
+      if (x === d.t) return;
+      const shift = d.from < d.to && i > d.from && i <= d.to ? -d.size : d.from > d.to && i >= d.to && i < d.from ? d.size : 0;
+      x.style.transform = tr(shift);
+    });
+  });
+  const end = async e => {
+    if (!d || e.pointerId !== d.id) return;
+    const dd = d; d = null;
+    if (!dd.on) return;
+    S.dragged = true; setTimeout(() => { S.dragged = false; }, 60);
+    list.classList.remove("dragging");
+    dd.t.classList.remove("lift");
+    dd.tiles.forEach(x => { x.style.transform = ""; });
+    if (dd.to === dd.from || !S.hub) return;
+    const vis = dd.tiles.map(x => x.dataset.id);
+    const [moved] = vis.splice(dd.from, 1);
+    vis.splice(dd.to, 0, moved);
+    const shown = new Set(vis);
+    let k = 0;
+    const order = S.hub.apps.map(a => shown.has(a.id) ? vis[k++] : a.id);   // hidden apps keep their places
+    S.apps.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    renderNav();
+    const t = list.querySelector(`.tile[data-id="${CSS.escape(moved)}"]`);
+    if (t) { t.classList.add("drop"); setTimeout(() => t.classList.remove("drop"), 400); }
+    if (S.view === "overview") renderOverview();
+    try { await api("/api/hub", { order }); await loadHub(); say("order saved", "ok"); if (S.view === "hub") renderHub(); }
+    catch (err) { say(err.message, "err"); poll(); }
+  };
+  list.addEventListener("pointerup", end);
+  list.addEventListener("pointercancel", end);
+}
+function renderSummary() {
+  const shown = S.apps.filter(a => a.enabled);
+  const n = k => shown.filter(a => a.state === k).length;
+  const parts = [`${shown.length} apps`];
+  if (n("ok")) parts.push(`${n("ok")} ok`);
+  if (n("warn")) parts.push(`${n("warn")} need attention`);
+  if (n("down")) parts.push(`${n("down")} down`);
+  if (n("off")) parts.push(`${n("off")} off`);
+  const upd = shown.filter(a => a.update).length;
+  if (upd) parts.push(`${upd} update${upd > 1 ? "s" : ""}`);
+  $("#sum").textContent = "── " + parts.join(" · ");
+}
+
+// ------------------------------------------------------------------ routing + polling
+function go(view) {
+  if (view !== S.view) { S.view = view; S.detail = null; store.set("view", view); $("#main").scrollTop = 0; }
+  renderNav();
+  render(true);
+}
+async function poll() {
+  try {
+    const d = await api("/api/apps");
+    S.apps = d.apps;
+    $("#dry").hidden = !d.dryRun;
+    renderSummary();
+    renderNav();
+    if (S.view === "overview") renderOverview();
+    else if (S.view === "install") { if (!W.open) await renderInstall(false); }
+    else if (S.view !== "hub") await loadDetail(false);
+  } catch (e) { say("can't reach Orbit's server: " + e.message, "err"); }
+  clearTimeout(S.timer);
+  S.timer = setTimeout(poll, 1000 * ((S.hub && S.hub.settings.refreshSec) || 3));
+}
+function render(full) {
+  if (!navItems().some(x => x.id === S.view)) S.view = "overview";
+  if (S.view === "overview") return renderOverview();
+  if (S.view === "hub") return renderHub();
+  if (S.view === "install") return renderInstall(full);
+  loadDetail(full);
+}
+
+// ------------------------------------------------------------------ overview
+function renderOverview() {
+  const main = $("#main");
+  const shown = S.apps.filter(a => a.enabled);
+  const cards = shown.map(a => h("section", { class: "box card", tabindex: 0, onclick: () => go(a.id),
+      onkeydown: e => { if (e.key === "Enter") go(a.id); } },
+    h("span", { class: "lg" }, a.id),
+    h("div", { class: "h" }, mark(a),
+      h("span", { class: "name" }, a.name), a.update ? h("span", { class: "upd" }, "UPDATE") : null,
+      h("span", { class: "ver" }, a.version || "")),
+    h("div", { class: "hl" }, h("span", { class: "dot s-" + a.state }), h("span", {}, a.headline || STATE_WORD[a.state])),
+    h("div", { class: "bl" }, a.blurb),
+    installHint(a)));
+  main.replaceChildren(
+    shown.length ? h("div", { class: "cards" }, cards) : box("overview", h("div", { class: "empty" }, "No apps shown. Turn some on in orbit settings.")));
+}
+
+function installHint(a) {
+  const i = a.install;
+  if (!i || i.supported === "none" || (i.installed && !i.update && !i.busy)) return null;
+  const label = i.busy ? "installing…" : !i.installed ? "install" : "update to " + i.latest;
+  return h("div", { class: "btns", style: "margin-top:10px" }, h("button", { class: "btn small primary", onclick: e => {
+    e.stopPropagation(); openWizard(a.id, "install", i.busy || null); } }, i.busy ? [spin(), " " + label] : label));
+}
+
+// ------------------------------------------------------------------ one app
+async function loadDetail(full) {
+  const id = S.view;
+  try {
+    const d = await api("/api/apps/" + encodeURIComponent(id));
+    if (S.view !== id) return;
+    const first = !S.detail || S.detail.id !== id;
+    S.detail = d;
+    renderDetail(first || full);
+  } catch (e) {
+    if (S.view === id) $("#main").replaceChildren(box(id, h("div", { class: "empty" }, e.message)));
+  }
+}
+function renderDetail(full) {
+  const d = S.detail, s = d.status, main = $("#main");
+  const statusBox = box("status",
+    h("div", { class: "hero" }, mark(d),
+      h("div", {}, h("div", { class: "name" }, d.name, " ", h("span", { class: "sub" }, s.version || "")), h("div", { class: "sub" }, d.blurb))),
+    h("div", { class: "headline" }, h("span", { class: "dot s-" + s.state }), h("span", { class: "t-" + s.state }, s.headline || STATE_WORD[s.state])),
+    s.detail ? h("div", { class: "t-muted", style: "margin:-4px 0 8px;font-size:12.5px" }, s.detail) : null,
+    h("div", { class: "kv" }, (s.facts || []).flatMap(([k, v, tone]) => [h("span", { class: "k" }, k), h("span", { class: "v " + (tone || ""), title: v }, v)]),
+      s.update ? [h("span", { class: "k" }, "release"), h("span", { class: "v " + (s.update.available ? "" : "muted") },
+        s.update.error ? "can't check: " + s.update.error :
+        s.update.available ? h("span", {}, h("span", { class: "upd" }, "NEW"), " ", s.update.latest, " is out") : "up to date (" + (s.update.latest || "?") + ")")] : null));
+
+  const groups = {};
+  for (const a of d.actions) (groups[a.group || "actions"] ||= []).push(a);
+  const actBox = box("actions", Object.entries(groups).map(([g, list]) => h("div", { class: "grp" },
+    h("div", { class: "gt" }, g),
+    h("div", { class: "btns" }, list.map(a => h("button", {
+      class: "btn" + (a.primary ? " primary" : "") + (a.danger ? " danger" : "") + (a.toggle === true ? " on" : a.toggle === false ? " off" : ""),
+      onclick: () => runAction(d, a) }, a.toggle !== undefined ? a.label.replace(/: (on|off)$/, "") : a.label))))));
+  const ins = d.install;
+  if (ins && ins.supported !== "none") {
+    const b = [];
+    if (ins.busy) b.push(h("button", { class: "btn primary", onclick: () => openWizard(d.id, "install", ins.busy) }, spin(), " show progress"));
+    else if (!ins.installed) b.push(h("button", { class: "btn primary", onclick: () => openWizard(d.id, "install") }, "install"));
+    else {
+      b.push(h("button", { class: "btn" + (ins.update ? " primary" : ""), onclick: () => openWizard(d.id, "install") }, ins.update ? "update to " + ins.latest : "reinstall"));
+      b.push(h("button", { class: "btn danger", onclick: () => openWizard(d.id, "uninstall") }, "remove"));
+    }
+    actBox.append(h("div", { class: "grp" }, h("div", { class: "gt" }, "installer"), h("div", { class: "btns" }, b)));
+  }
+  if (!d.actions.length && !(ins && ins.supported !== "none")) actBox.append(h("div", { class: "t-muted" }, "nothing to do here"));
+
+  const units = s.units || [];
+  const unitBox = units.length ? box("services", h("table", { class: "units" },
+    h("tr", {}, h("th", {}, "unit"), h("th", {}, "state"), h("th", { class: "opt" }, "at login"), h("th", { class: "opt" }, "since")),
+    units.map(u => h("tr", {},
+      h("td", { title: u.description || u.unit }, u.label || u.unit.replace(/\.service$/, "")),
+      h("td", {}, h("span", { class: "dot s-" + ({ running: "ok", failed: "down", missing: "unknown", stopped: "off", starting: "warn" }[u.state] || "unknown") }), u.state || u.error || "?"),
+      h("td", { class: "m opt" }, u.enabled || "—"),
+      h("td", { class: "m opt", title: u.since }, (u.since || "").replace(/^\w{3} /, "").replace(/ [A-Z]{2,5}$/, "")))))) : null;
+
+  const moreBox = s.more && s.more.length ? box("details", h("div", { class: "kv" },
+    s.more.flatMap(([k, v]) => [h("span", { class: "k" }, k), h("span", { class: "v", title: v }, v)]))) : null;
+  const lower = [unitBox, moreBox].filter(Boolean);
+  const lowerKids = lower.length === 2 ? [h("div", { class: "grid g2" }, lower)] : lower;
+  if (!full && main.querySelector("[data-part=top]")) {
+    // live refresh: replace status/actions/services/details, keep the settings form and log as they are
+    main.querySelector("[data-part=top]").replaceChildren(statusBox, actBox);
+    main.querySelector("[data-part=units]").replaceChildren(...lowerKids);
+    return;
+  }
+  const logBox = box("log", h("pre", { class: "log", id: "log" }, "…"));
+  logBox.append(h("span", { class: "lg lg-r" }, h("button", { class: "lnk", onclick: loadLog }, "[ reload ]")));
+  main.replaceChildren(
+    h("div", { class: "grid g2", "data-part": "top" }, statusBox, actBox),
+    h("div", { "data-part": "units" }, lowerKids),
+    h("div", { class: "grid g2" }, settingsBox(d), logBox));
+  loadLog();
+}
+async function loadLog() {
+  const id = S.view, el = $("#log");
+  if (!el) return;
+  el.textContent = "…";
+  try {
+    const t = await api("/api/apps/" + encodeURIComponent(id) + "/logs");
+    if (S.view !== id) return;
+    const lines = String(t).trimEnd().split("\n");
+    el.textContent = lines.slice(-120).join("\n") || "(nothing logged)";
+    el.scrollTop = el.scrollHeight;
+  } catch (e) { el.textContent = "(" + e.message + ")"; }
+}
+
+// ------------------------------------------------------------------ settings form (generic: drawn from the app's schema)
+function settingsBox(d) {
+  const b = box("settings");
+  const f = h("div", { class: "fset" });
+  if (!d.settings.length) f.append(h("div", { class: "note" }, "nothing to set"));
+  for (const g of d.settings) {
+    if (d.settings.length > 1) f.append(h("div", { class: "sec" }, "── " + g.title));
+    for (const fld of g.fields) f.append(fieldRow(d.id, fld));
+  }
+  b.append(f);
+  return b;
+}
+function fieldRow(appId, f) {
+  const save = async (v, el) => {
+    try {
+      const r = await api(`/api/apps/${encodeURIComponent(appId)}/settings`, { [f.key]: v });
+      f.value = v;
+      say(`saved · ${f.label} = ${Array.isArray(v) ? v.join(", ") || "(none)" : f.type === "secret" ? "••••" : v}` + (r.dryRun ? " (dry run: not sent)" : ""), "ok");
+      if (f.scope === "hub") setTimeout(() => loadDetail(true), 150);
+    } catch (e) {
+      say(f.label + ": " + e.message, "err");
+      if (el) el.value = Array.isArray(f.value) ? f.value.join(", ") : f.value;
+    }
+  };
+  const help = f.help ? h("div", { class: "help" }, f.help) : null;
+  if (f.type === "note") return h("div", { class: "note" }, f.value);
+  if (f.type === "bool") {
+    const c = h("button", { class: "chk" + (f.value ? " on" : ""), role: "switch", "aria-checked": String(!!f.value),
+      onclick: () => { const v = !f.value; c.classList.toggle("on", v); c.setAttribute("aria-checked", String(v)); c.textContent = v ? "on" : "off"; save(v).then(() => { if (f.value !== v) { c.classList.toggle("on", f.value); c.textContent = f.value ? "on" : "off"; } }); } },
+      f.value ? "on" : "off");
+    return h("div", { class: "row" }, h("span", {}, f.label), c, help);
+  }
+  if (f.type === "choice") {
+    const seg = h("div", { class: "seg" }, f.options.map(([v, label]) => h("button", { class: v === f.value ? "on" : "",
+      onclick: e => { seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === e.currentTarget)); save(v); } }, label)));
+    return h("div", { class: "row" }, h("span", {}, f.label), seg, help);
+  }
+  const commit = el => {
+    let v = el.value;
+    if (f.type === "int") { if (v.trim() === "" || isNaN(+v)) { el.value = f.value; return; } v = Math.round(+v); }
+    if (f.type === "words") v = v.split(",").map(x => x.trim()).filter(Boolean);
+    const same = Array.isArray(v) ? v.join(",") === (f.value || []).join(",") : v === f.value;
+    if (!same) save(v, el);
+  };
+  const common = { class: "inp" + (f.type === "int" ? " num" : " wide"),
+    onkeydown: e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = Array.isArray(f.value) ? f.value.join(", ") : f.value; e.currentTarget.blur(); } },
+    onblur: e => commit(e.currentTarget), "aria-label": f.label };
+  const input = h("input", Object.assign({}, common, {
+    type: f.type === "int" ? "number" : f.type === "secret" ? "password" : "text",
+    min: f.min, max: f.max, spellcheck: "false", autocomplete: "off",
+    placeholder: f.type === "words" ? "word, another word" : "" }));
+  input.value = Array.isArray(f.value) ? f.value.join(", ") : f.value;
+  if (f.type === "int") return h("div", { class: "row" }, h("span", {}, f.label), input, help);
+  return h("div", { class: "row full" }, h("span", {}, f.label), input, help);
+}
+
+// ------------------------------------------------------------------ actions, jobs, dialogs
+async function runAction(d, a) {
+  if (a.confirm && !(await confirmDlg(a.confirm, a.danger))) return;
+  const args = {};
+  if (a.ask) { const v = await askDlg(a); if (v == null) return; args.value = v; }
+  say(a.label + "…");
+  try {
+    const size = termSize();
+    const r = await api(`/api/apps/${encodeURIComponent(d.id)}/action`, { action: a.id, args, cols: size.cols, rows: size.rows });
+    if (r.term) { openTerm(r.term, r.title); return say(r.message, "ok"); }
+    if (r.job) return followJob(r.job);
+    say(r.message || "done", "ok");
+    if (r.removed) { S.view = "overview"; await loadHub(); }
+    setTimeout(poll, 400);
+  } catch (e) { say(a.label + ": " + e.message, "err"); }
+}
+async function followJob(id) {
+  for (;;) {
+    let j;
+    try { j = await api("/api/jobs/" + id); } catch (e) { return say(e.message, "err"); }
+    if (j.state === "running") { say(j.title + " … " + Math.round(Date.now() / 1000 - j.started) + " s"); await new Promise(r => setTimeout(r, 900)); continue; }
+    say(j.title + (j.state === "done" ? ": done" : ": failed"), j.state === "done" ? "ok" : "err");
+    showDlg(j.title + " · " + j.state, h("pre", {}, j.output || "(no output)"), [["close", true]]);
+    return poll();
+  }
+}
+function showDlg(title, body, buttons) {
+  return new Promise(res => {
+    $("#dlgt").textContent = title;
+    const close = v => { $("#dlg").classList.remove("open"); document.removeEventListener("keydown", key, true); res(v); };
+    const key = e => { if (e.key === "Escape") { e.stopPropagation(); close(false); } };
+    const btns = h("div", { class: "btns", style: "justify-content:flex-end" },
+      buttons.map(([label, v, cls]) => h("button", { class: "btn " + (cls || ""), onclick: () => close(v) }, label)));
+    $("#dlgb").replaceChildren(typeof body === "string" ? h("div", { class: "body" }, body) : body, btns);
+    $("#dlg").classList.add("open");
+    document.addEventListener("keydown", key, true);
+    btns.lastChild.focus();
+  });
+}
+const confirmDlg = (text, danger) => showDlg("confirm", text, [["cancel", false], ["yes", true, danger ? "danger" : "primary"]]);
+async function askDlg(a) {
+  const inp = h("input", { class: "inp wide", type: a.ask.secret ? "password" : "text", autocomplete: "off", spellcheck: "false",
+                           "aria-label": a.ask.label });
+  const body = h("div", {}, h("div", { style: "margin-bottom:8px" }, a.ask.label), inp,
+    h("div", { class: "t-muted", style: "font-size:12.5px;margin:8px 0 14px" }, a.ask.help || ""));
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("#dlgb .btn.primary").click(); } });
+  setTimeout(() => inp.focus(), 40);
+  const ok = await showDlg(a.label, body, [["cancel", false], ["continue", true, "primary"]]);
+  return ok && inp.value.trim() ? inp.value.trim() : null;
+}
+
+// ------------------------------------------------------------------ installer
+// The install page lists every app Orbit can install, with the systems each one runs on. The wizard walks
+// through five stages — check this computer, choose, review, install, done — sliding between them, and
+// follows the install job live (step list, progress bar, log).
+const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EASE = "cubic-bezier(.2,.8,.2,1)";
+const SYS = { linux: "linux", darwin: "macos", windows: "windows" };
+const SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+setInterval(() => {
+  const f = SPIN[Math.floor(performance.now() / 80) % SPIN.length];
+  document.querySelectorAll(".spin").forEach(e => { e.textContent = f; });
+}, 80);
+const spin = () => h("span", { class: "spin" }, SPIN[0]);
+function ago(iso) {
+  const t = Date.parse(iso); if (!t) return "";
+  const s = (Date.now() - t) / 1000;
+  if (s < 90) return "just now";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  if (s < 129600) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " days ago";
+}
+function platBadges(p, here) {
+  const word = { full: "runs here", limited: "runs here, with limits", none: "doesn't run here" };
+  return h("span", { class: "plat" }, ["linux", "darwin", "windows"].map(k =>
+    h("span", { class: k === here ? "here" : "", title: (p[k] && p[k].note) || word[(p[k] || {}).level] || "" },
+      h("i", { class: "ic " + ((p[k] || {}).level || "none") }), SYS[k])));
+}
+
+S.inst = null;
+async function loadInstall(force) {
+  S.inst = await api(force ? "/api/install/refresh" : "/api/install", force ? {} : undefined);
+  return S.inst;
+}
+async function renderInstall(full) {
+  const main = $("#main");
+  if (!S.inst) main.replaceChildren(box("install", h("div", { class: "loading" }, spin(), " looking at this computer…")));
+  try { await loadInstall(false); } catch (e) { return main.replaceChildren(box("install", h("div", { class: "empty" }, e.message))); }
+  if (S.view !== "install") return;
+  const d = S.inst, sys = d.host.system;
+  const progress = {};
+  await Promise.all(d.apps.filter(a => a.busy).map(async a => {
+    try { progress[a.id] = await api(`/api/install/jobs/${a.busy}?from=999999999`); } catch {}
+  }));
+  if (S.view !== "install") return;
+  const cards = d.apps.map((a, i) => {
+    const sup = a.support.level, inst = a.installed, busy = progress[a.id];
+    let line, acts = [];
+    if (busy) {
+      line = [spin(), h("span", { style: "margin-left:8px" }, `${busy.op === "uninstall" ? "removing" : "installing"}… ${Math.round(busy.progress * 100)}%`)];
+      acts.push(h("button", { class: "btn primary", onclick: () => openWizard(a.id, busy.op, busy.id) }, "show progress"));
+    } else if (sup === "none") {
+      line = [h("span", { class: "dot s-off" }), h("span", { class: "t-muted" }, `not available on ${d.host.systemName}`)];
+    } else if (!inst.installed) {
+      line = [h("span", { class: "dot s-off" }), h("span", {}, "not installed"), a.latest ? h("span", { class: "t-muted" }, " · latest " + a.latest) : null];
+      acts.push(h("button", { class: "btn primary", onclick: () => openWizard(a.id, "install") }, "install"));
+    } else {
+      line = a.update
+        ? [h("span", { class: "dot s-warn" }), h("span", { class: "upd" }, "UPDATE"), h("span", {}, ` ${a.latest} is out`)]
+        : [h("span", { class: "dot s-ok" }), h("span", {}, "installed"), h("span", { class: "t-muted" }, a.latest ? " · up to date" : "")];
+      acts.push(h("button", { class: "btn" + (a.update ? " primary" : ""), onclick: () => openWizard(a.id, "install") }, a.update ? "update to " + a.latest : "reinstall"));
+      acts.push(h("button", { class: "btn danger", onclick: () => openWizard(a.id, "uninstall") }, "remove"));
+      if (S.apps.some(x => x.id === a.id && x.enabled)) acts.push(h("button", { class: "btn", onclick: () => go(a.id) }, "open"));
+    }
+    const card = h("section", { class: "box icard", style: `animation-delay:${full ? i * 70 : 0}ms`, "data-app": a.id,
+        "data-sig": JSON.stringify([a, busy ? [busy.op, Math.round(busy.progress * 100)] : 0, S.apps.some(x => x.id === a.id && x.enabled)]) },
+      h("span", { class: "lg" }, a.id),
+      h("div", { class: "h" }, mark(a), h("span", { class: "name" }, a.name),
+        h("span", { class: "ver" }, inst.installed ? (inst.version || "installed") : "")),
+      h("div", { class: "bl" }, a.blurb),
+      platBadges(a.platforms, sys),
+      h("div", { class: "stl" }, line),
+      busy ? h("div", { class: "mbar" }, h("i", { style: `width:${busy.progress * 100}%` })) : null,
+      sup === "limited" && a.support.note ? h("div", { class: "nt" }, a.support.note) : null,
+      sup === "none" && a.support.note ? h("div", { class: "nt" }, a.support.note) : null,
+      h("div", { class: "acts" }, acts));
+    return card;
+  });
+  const head = box("this computer",
+    h("div", { class: "hostline" }, h("span", { class: "os" }, d.host.label),
+      h("span", { class: "t-muted" }, "apps install just for you, unless they say they need the administrator"),
+      h("span", { class: "sp", style: "flex:1" }),
+      h("button", { class: "btn small", onclick: async e => {
+        const b = e.currentTarget; b.disabled = true; b.replaceChildren(spin(), " checking");
+        try { await loadInstall(true); say("checked GitHub for new versions", "ok"); } catch (err) { say(err.message, "err"); }
+        renderInstall(false);
+      } }, "check for new versions")),
+    d.dryRun ? h("div", { class: "t-warn", style: "margin-top:6px;font-size:12.5px" }, "dry run: installs play out step by step, but nothing is downloaded, written or run") : null);
+  head.dataset.sig = JSON.stringify([d.host, d.dryRun]);
+  const grid = main.querySelector("[data-part=icards]");
+  if (full || !grid) {
+    main.replaceChildren(head, h("div", { class: "cards", "data-part": "icards" }, cards));
+    return;
+  }
+  // refresh: only cards whose content changed are swapped, without replaying their entrance
+  if (main.firstElementChild.dataset.sig !== head.dataset.sig) main.firstElementChild.replaceWith(head);
+  const have = new Map([...grid.children].map(c => [c.dataset.app, c]));
+  cards.forEach((c, i) => {
+    const old = have.get(c.dataset.app);
+    if (old && old.dataset.sig === c.dataset.sig) { if (grid.children[i] !== old) grid.insertBefore(old, grid.children[i] || null); return; }
+    c.classList.add("still");
+    if (old) old.replaceWith(c); else grid.insertBefore(c, grid.children[i] || null);
+  });
+  const ids = new Set(cards.map(c => c.dataset.app));
+  [...grid.children].forEach(c => { if (!ids.has(c.dataset.app)) c.remove(); });
+}
+
+// ---- the wizard
+const STAGES = { install: ["check", "choose", "review", "install", "done"], uninstall: ["check", "choose", "review", "remove", "done"] };
+const W = { open: false };
+
+function openWizard(appId, op, jobId) {
+  if (W.open) closeWizard(true);
+  const meta = (S.inst && S.inst.apps.find(a => a.id === appId)) || S.apps.find(a => a.id === appId) || { id: appId, name: appId, glyph: "?", color: "#888" };
+  Object.assign(W, { open: true, app: appId, op, meta, stage: -1, info: null, opts: {}, job: null, logFrom: 0,
+                     shown: 0, target: 0, rows: [], logOpen: false, poll: null, failed: false, noOptions: false });
+  const wiz = $("#wiz");
+  wiz.classList.remove("closing");
+  const stepper = h("div", { class: "stepper", "aria-hidden": "true" }, h("span", { class: "track" }), h("span", { class: "fill" }),
+    STAGES[op].map(n => h("div", { class: "s" }, h("i"), h("span", {}, n))));
+  const panel = h("section", { class: "box wpanel", role: "dialog", "aria-modal": "true", "aria-label": (op === "uninstall" ? "remove " : "install ") + meta.name },
+    h("span", { class: "lg" }, (op === "uninstall" ? "remove · " : "install · ") + appId),
+    h("span", { class: "lg lg-r" }, h("button", { class: "lnk", onclick: () => closeWizard() }, "[ esc · close ]")),
+    h("div", { class: "whead" }, mark(meta),
+      h("div", {}, h("div", { class: "t", id: "wt" }, (op === "uninstall" ? "Remove " : "Install ") + meta.name), h("div", { class: "s" }, meta.blurb || "")),
+      h("div", { class: "r", id: "wr" })),
+    stepper,
+    S.inst && S.inst.dryRun || (S.hub && S.hub.dryRun) ? h("div", { class: "wbanner" }, "dry run · nothing will be downloaded, written or run") : null,
+    h("div", { class: "stage-vp", id: "wvp", "aria-live": "polite" }),
+    h("div", { class: "wfoot", id: "wfoot" }));
+  wiz.replaceChildren(h("div", { class: "scrim", onclick: () => closeWizard() }), panel);
+  wiz.classList.add("open");
+  W.el = { panel, stepper, vp: $("#wvp"), foot: $("#wfoot") };
+  if (jobId) { attachJob(jobId); return; }
+  setStage(0, 1, h("div", { class: "stage" }, h("div", { class: "loading" }, spin(), " looking at this computer and the latest release…")), []);
+  loadInfo();
+}
+
+function closeWizard(now) {
+  if (!W.open) return;
+  const running = W.job && W.job.state === "running";
+  W.open = false;
+  clearTimeout(W.poll);
+  const wiz = $("#wiz");
+  if (running) say(`${W.meta.name}: still ${W.op === "uninstall" ? "removing" : "installing"} in the background · see the install page`);
+  if (now || REDUCE) { wiz.classList.remove("open"); return; }
+  wiz.classList.add("closing");
+  setTimeout(() => { if (!W.open) wiz.classList.remove("open", "closing"); }, 200);
+  if (S.view === "install") renderInstall(false); else poll();
+}
+
+// Swap the stage content: the old one slides out, the new one in, and the panel eases to its new height.
+function setStage(n, dir, node, buttons) {
+  const { panel, vp, stepper, foot } = W.el;
+  const h0 = panel.getBoundingClientRect().height;
+  const old = vp.firstElementChild;
+  if (n !== W.stage) {
+    W.stage = n;
+    const names = STAGES[W.op];
+    stepper.querySelectorAll(".s").forEach((s, i) => {
+      s.classList.toggle("done", i < n || (n === names.length - 1 && i === n && !W.failed));
+      s.classList.toggle("cur", i === n && !(n === names.length - 1));
+      s.classList.toggle("bad", i === n && !!W.failed);
+      s.classList.toggle("skip", i === 1 && W.noOptions && n > 1);
+    });
+    stepper.querySelector(".fill").style.width = (n / (names.length - 1)) * 80 + "%";
+  }
+  foot.replaceChildren(...buttons);
+  vp.replaceChildren(node);
+  if (REDUCE || !old || old === node) return;
+  const h1 = panel.getBoundingClientRect().height;
+  if (Math.abs(h1 - h0) > 1) panel.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 340, easing: EASE });
+  node.animate([{ opacity: 0, transform: `translateX(${dir * 34}px)` }, { opacity: 1, transform: "none" }], { duration: 340, easing: EASE });
+  old.style.cssText = "position:absolute;left:4px;right:4px;top:0;pointer-events:none";
+  vp.prepend(old);
+  old.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${-dir * 34}px)` }], { duration: 260, easing: EASE })
+    .onfinish = () => old.remove();
+}
+const btn = (label, onclick, cls) => h("button", { class: "btn big " + (cls || ""), onclick }, label);
+const sp = () => h("span", { class: "sp" });
+
+async function loadInfo(opts) {
+  try {
+    W.info = await api(`/api/install/${encodeURIComponent(W.app)}/plan`, { op: W.op, options: opts || W.opts });
+  } catch (e) {
+    W.info = null;
+    return setStage(0, 1, h("div", { class: "stage" }, h("div", { class: "callout bad" }, e.message)),
+      [btn("close", () => closeWizard()), sp(), btn("try again", () => { openWizard(W.app, W.op); })]);
+  }
+  if (!W.open) return;
+  const i = W.info;
+  $("#wt").textContent = i.title;
+  $("#wr").replaceChildren(...(i.release ? [h("div", {}, i.release.tag), h("div", {}, [i.release.prerelease ? "pre-release" : "release", ago(i.release.published)].filter(Boolean).join(" · "))]
+    : i.installed.installed ? [h("div", {}, "installed " + (i.installed.version || ""))] : []));
+  for (const f of i.options) if (!(f.key in W.opts)) W.opts[f.key] = f.value;
+  W.noOptions = !i.options.length;
+  if (W.stage <= 0) stageCheck(1);
+}
+
+function stageCheck(dir) {
+  const i = W.info, sys = i.host.system, plat = i.platforms;
+  const inst = i.installed;
+  const reqs = i.requirements.map((r, k) => h("div", { class: "req", style: `animation-delay:${120 + k * 70}ms` },
+    h("span", { class: "m " + (r.ok ? "ok" : r.blocking ? "bad" : "soft") }, r.ok ? "[ok]" : r.blocking ? "[!!]" : "[--]"),
+    h("span", {}, r.label, r.detail && r.ok && r.detail.length <= 40 ? h("span", { class: "t-muted" }, " · " + r.detail) : null),
+    !r.ok && r.hint ? h("span", { class: "hint" }, r.hint) : null,
+    r.ok && r.detail && r.detail.length > 40 ? h("span", { class: "dt" }, r.detail) : null));
+  const body = h("div", { class: "stage" },
+    h("h4", {}, "── this computer"),
+    h("div", { class: "facts" },
+      h("span", { class: "k" }, "system"), h("span", { class: "v" }, i.host.label),
+      plat ? [h("span", { class: "k" }, "runs on"), h("span", { class: "v" }, platBadges(plat, sys))] : null,
+      h("span", { class: "k" }, W.meta.name), h("span", { class: "v" }, inst.installed
+        ? `installed ${inst.version || ""} · ${inst.how}` : "not installed yet"),
+      inst.installed && inst.where ? [h("span", { class: "k" }, "where"), h("span", { class: "v t-muted", title: inst.where }, inst.where)] : null,
+      i.release ? [h("span", { class: "k" }, "latest"), h("span", { class: "v" }, `${i.release.tag}`, h("span", { class: "t-muted" },
+        ` · ${ago(i.release.published)}${i.release.sizeText ? " · " + i.release.sizeText : ""}`))] : null),
+    i.support.level === "limited" ? h("div", { class: "callout warn" }, i.support.note) : null,
+    i.support.level === "none" ? h("div", { class: "callout bad" }, i.support.note) : null,
+    reqs.length ? [h("h4", {}, "── what " + W.meta.name + " needs"), h("div", {}, reqs)] : null,
+    i.blocked && i.support.level !== "none" ? h("div", { class: "callout bad", style: `animation-delay:${200 + reqs.length * 70}ms` },
+      i.blocked, i.blockedHint ? h("div", { class: "hint" }, i.blockedHint) : null) : null);
+  const buttons = [btn("cancel", () => closeWizard()), sp()];
+  if (i.blocked) {
+    if (i.support.level !== "none") buttons.push(btn("check again", () => { W.stage = -1; setStage(0, 1, h("div", { class: "stage" }, h("div", { class: "loading" }, spin(), " checking again…")), []); loadInfo(); }));
+  } else buttons.push(btn("continue →", () => W.noOptions ? stageReview(1) : stageChoose(1), "primary go"));
+  setStage(0, dir, body, buttons);
+}
+
+function stageChoose(dir) {
+  const body = h("div", { class: "stage" },
+    h("p", { class: "lead t-muted" }, W.op === "uninstall" ? "Before removing:" : "A few choices. The defaults suit most people."),
+    W.info.options.map((f, k) => {
+      const row = h("button", { class: "iopt" + (W.opts[f.key] ? " on" : ""), style: `animation-delay:${k * 70}ms`, role: "switch",
+        "aria-checked": String(!!W.opts[f.key]),
+        onclick: () => {
+          W.opts[f.key] = !W.opts[f.key];
+          row.classList.toggle("on", W.opts[f.key]);
+          row.setAttribute("aria-checked", String(W.opts[f.key]));
+          row.querySelector(".box2 b").textContent = W.opts[f.key] ? "x" : " ";
+        } },
+        h("span", { class: "box2" }, "[", h("b", {}, W.opts[f.key] ? "x" : " "), "]"),
+        h("span", { class: "lab" }, f.label),
+        f.help ? h("span", { class: "help" }, f.help) : null);
+      return row;
+    }));
+  setStage(1, dir, body, [btn("← back", () => stageCheck(-1)), sp(), btn("continue →", () => stageReview(1), "primary go")]);
+}
+
+async function stageReview(dir) {
+  const back = () => W.noOptions ? stageCheck(-1) : stageChoose(-1);
+  setStage(2, dir, h("div", { class: "stage" }, h("div", { class: "loading" }, spin(), " putting the plan together…")), [btn("← back", back), sp()]);
+  let i;
+  try { i = await api(`/api/install/${encodeURIComponent(W.app)}/plan`, { op: W.op, options: W.opts }); }
+  catch (e) { return setStage(2, 1, h("div", { class: "stage" }, h("div", { class: "callout bad" }, e.message)), [btn("← back", back)]); }
+  if (!W.open || W.stage !== 2) return;
+  W.info = i;
+  const del = W.op === "uninstall";
+  const body = h("div", { class: "stage" },
+    h("p", { class: "lead" }, del ? "Orbit will:" : `Orbit will install ${i.release ? i.release.tag : "the latest release"}:`),
+    h("div", { class: "will" }, i.summary.map((line, k) => h("div", { style: `animation-delay:${k * 60}ms` }, line))),
+    i.release && i.release.sizeText ? h("div", { class: "t-muted", style: "margin-top:10px;font-size:12.5px" }, `Download: ${i.release.sizeText} from github.com`) : null,
+    i.needsAdmin ? h("div", { class: "callout", style: `animation-delay:${i.summary.length * 60 + 80}ms` },
+      `🔑 Your computer will ask for the administrator password once (${i.needsAdmin === true ? "the system will ask" : i.needsAdmin}). Orbit never sees it.`) : null,
+    i.blocked ? h("div", { class: "callout bad" }, i.blocked) : null);
+  const label = del ? "remove " + W.meta.name : /^Update/.test(i.title) ? "update" : /^Reinstall/.test(i.title) ? "reinstall" : "install";
+  setStage(2, 0, body, [btn("← back", back), sp(),
+    btn(label, startJob, (del ? "danger" : "primary") + " go")]);
+}
+
+async function startJob() {
+  let snap;
+  W.el.foot.querySelectorAll("button").forEach(b => { b.disabled = true; });
+  try { snap = await api(`/api/install/${encodeURIComponent(W.app)}/start`, { op: W.op, options: W.opts }); }
+  catch (e) { say(e.message, "err"); return stageReview(0); }
+  W.job = snap;
+  buildProgress(1);
+  followJob2();
+}
+
+async function attachJob(jobId) {
+  try { W.job = await api(`/api/install/jobs/${jobId}`); } catch (e) { say(e.message, "err"); return closeWizard(true); }
+  W.logFrom = 0;
+  $("#wt").textContent = W.job.title;
+  if (W.job.state !== "running") { buildProgress(1); return finishJob(); }
+  buildProgress(1);
+  followJob2();
+}
+
+function buildProgress(dir) {
+  const j = W.job;
+  W.rows = j.steps.map((s, k) => {
+    const r = h("div", { class: "row", style: `animation-delay:${k * 45}ms` },
+      h("span", { class: "ico" }, "·"), h("span", { class: "lab" }, s.label), h("span", { class: "tm" }),
+      h("span", { class: "det" }), h("span", { class: "sbar", hidden: true }, h("i")));
+    r._state = "";
+    return r;
+  });
+  W.el.bar = h("div", { class: "pbar" }, h("i"));
+  W.el.pct = h("b", {}, "0%");
+  W.el.now = h("span", {}, "starting…");
+  W.el.log = h("pre", {});
+  W.el.logwrap = h("div", { class: "logwrap" + (W.logOpen ? " open" : "") }, h("div", {}, W.el.log));
+  const body = h("div", { class: "stage" }, W.el.bar, h("div", { class: "pinfo" }, W.el.now, W.el.pct),
+    h("div", { class: "steps" }, W.rows), W.el.logwrap);
+  W.el.logBtn = btn(W.logOpen ? "hide details" : "show details", toggleLog);
+  W.el.cancel = btn(W.op === "uninstall" ? "stop" : "cancel install", async () => {
+    if (!(await confirmDlg(`Stop ${W.op === "uninstall" ? "removing" : "installing"} ${W.meta.name}? Steps already finished stay as they are.`, true))) return;
+    try { await api(`/api/install/jobs/${W.job.id}/cancel`, {}); } catch (e) { say(e.message, "err"); }
+  }, "danger");
+  W.shown = 0;
+  setStage(3, dir, body, [W.el.cancel, sp(), W.el.logBtn, btn("hide", () => closeWizard())]);
+  paintJob();
+  tweenPct();
+}
+function toggleLog() {
+  W.logOpen = !W.logOpen;
+  W.el.logwrap.classList.toggle("open", W.logOpen);
+  W.el.logBtn.textContent = W.logOpen ? "hide details" : "show details";
+  if (W.logOpen) setTimeout(() => { W.el.log.scrollTop = W.el.log.scrollHeight; }, 50);
+}
+function tweenPct(now) {
+  // eases toward the real progress over ~0.3 s of wall time, however few frames the window gets
+  if (!W.open || !W.el.pct) return;
+  now = now || performance.now();
+  const dt = Math.min(1000, now - (W.lastT || now));
+  W.lastT = now;
+  W.shown += (W.target - W.shown) * (REDUCE ? 1 : 1 - Math.exp(-dt / 110));
+  if (Math.abs(W.target - W.shown) < 0.002) W.shown = W.target;
+  W.el.pct.textContent = Math.round(W.shown * 100) + "%";
+  if (W.stage === 3) requestAnimationFrame(tweenPct); else W.lastT = 0;
+}
+function fmtBytes(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + " MB" : n >= 1e3 ? Math.round(n / 1e3) + " KB" : n + " B"; }
+
+function paintJob() {
+  const j = W.job;
+  W.target = j.state === "done" ? 1 : j.progress;
+  W.el.bar.querySelector("i").style.width = (W.target * 100).toFixed(2) + "%";
+  W.el.bar.classList.toggle("still", j.state !== "running");
+  W.el.bar.classList.toggle("ok", j.state === "done");
+  W.el.bar.classList.toggle("bad", j.state === "failed" || j.state === "cancelled");
+  const cur = j.steps[j.current];
+  W.el.now.replaceChildren(...(j.state === "running" && cur ? [h("b", {}, cur.label), cur.detail ? " · " + cur.detail : ""] :
+    [j.state === "done" ? "finished" : j.state === "cancelled" ? "stopped" : j.state === "failed" ? "stopped with a problem" : "starting…"]));
+  j.steps.forEach((s, k) => {
+    const r = W.rows[k]; if (!r) return;
+    if (r._state !== s.state) {
+      r._state = s.state;
+      r.className = "row " + s.state;
+      const ico = r.querySelector(".ico");
+      ico.replaceChildren(s.state === "active" ? spin() : { done: "✓", failed: "✗", skipped: "↷", pending: "·" }[s.state] || "·");
+      if (s.state === "active" && !REDUCE) r.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    r.querySelector(".tm").textContent = s.ended && s.started && s.state !== "pending" ? ((s.ended - s.started) < 0.05 ? "" : (s.ended - s.started).toFixed(1) + " s") : "";
+    const det = s.state === "active" || s.state === "failed" || s.state === "skipped" ? (s.detail || "") : "";
+    if (r.querySelector(".det").textContent !== det) r.querySelector(".det").textContent = det;
+    const bar = r.querySelector(".sbar");
+    const showBar = s.state === "active" && s.progress != null && s.id === "download";
+    bar.hidden = !showBar;
+    if (showBar) {
+      bar.firstChild.style.width = (s.progress * 100).toFixed(1) + "%";
+      if (s.total) r.querySelector(".tm").textContent = `${fmtBytes(s.bytes || 0)} / ${fmtBytes(s.total)}`;
+    }
+  });
+  if (j.log && j.log.length) {
+    const atEnd = W.el.log.scrollTop + W.el.log.clientHeight >= W.el.log.scrollHeight - 8;
+    W.el.log.append(j.log.join("\n") + "\n");
+    if (atEnd) W.el.log.scrollTop = W.el.log.scrollHeight;
+  }
+  W.logFrom = j.logNext;
+}
+
+async function followJob2() {
+  clearTimeout(W.poll);
+  if (!W.open || !W.job) return;
+  const id = W.job.id;
+  try {
+    const j = await api(`/api/install/jobs/${id}?from=${W.logFrom}`);
+    if (!W.open || !W.job || W.job.id !== id) return;
+    W.job = j;
+    paintJob();
+    if (j.state !== "running") { setTimeout(finishJob, REDUCE ? 0 : 750); return; }
+  } catch (e) { say(e.message, "err"); }
+  W.poll = setTimeout(followJob2, 280);
+}
+
+function finishJob() {
+  if (!W.open) return;
+  const j = W.job, r = j.result || {};
+  const ok = j.state === "done";
+  W.failed = !ok;
+  const tone = ok ? "" : j.state === "cancelled" ? "warn" : "bad";
+  const burst = ok && !REDUCE ? h("div", { class: "burst" }, Array.from({ length: 14 }, (_, k) =>
+    h("i", { style: `--a:${k * (360 / 14) + (k % 2 ? 8 : 0)}deg;--d:${k % 2 ? 58 : 76}px;--c:${["var(--accent)", "var(--ok)", W.meta.color][k % 3]}` }))) : null;
+  const art = h("div", { class: "art" }, burst);
+  art.insertAdjacentHTML("beforeend", ok
+    ? '<svg viewBox="0 0 96 96"><circle class="ring" cx="48" cy="48" r="42"/><path class="mark" d="M30 50 L43 62 L67 36"/></svg>'
+    : '<svg viewBox="0 0 96 96"><circle class="ring" cx="48" cy="48" r="42"/><path class="mark" d="M34 34 L62 62 M62 34 L34 62"/></svg>');
+  const nexts = (r.next || []).map(n => btn(n.label, async () => {
+    if (n.kind === "app") { closeWizard(); return go(n.app); }
+    try { say((await api(`/api/install/jobs/${j.id}/next`, { id: n.id })).message, "ok"); } catch (e) { say(e.message, "err"); }
+  }, n.primary ? "primary go" : ""));
+  const body = h("div", { class: "stage" }, h("div", { class: "result " + tone }, art,
+    h("h3", {}, ok ? (r.headline || "Done.") : j.state === "cancelled" ? "Stopped." : "That didn't work."),
+    h("p", {}, ok ? (r.body || "") : j.error),
+    !ok && j.hint ? h("div", { class: "callout warn", style: "animation-delay:.6s;max-width:540px;margin:8px auto 0" }, j.hint) : null,
+    j.dryRun ? h("p", { class: "t-warn", style: "font-size:12.5px" }, "dry run: nothing was actually changed") : null),
+    W.el.logwrap);
+  const buttons = ok ? [btn("close", () => closeWizard()), sp(), W.el.logBtn, ...nexts.reverse()]
+    : [btn("close", () => closeWizard()), sp(), W.el.logBtn, btn("try again", () => { const a = W.app, o = W.op; closeWizard(true); openWizard(a, o); }, "primary go")];
+  setStage(4, 1, body, buttons);
+  if (!ok && !W.logOpen) toggleLog();
+  S.inst = null;
+  poll();
+}
+
+// ------------------------------------------------------------------ terminal
+// Apps' commands run inside Orbit: a small terminal emulator (colours, carriage returns, cursor moves,
+// clearing) over a real pseudo-terminal on the server. Type straight into it — passwords too.
+const T = { tabs: [], cur: null, timer: null, min: false, built: false };
+const ANSI = ["var(--raise)", "var(--down)", "var(--ok)", "var(--warn)", "#6aa8ff", "var(--accent)", "#4fd1c5", "var(--text)",
+              "var(--muted)", "var(--down)", "var(--ok)", "var(--warn)", "#8cbcff", "var(--accent)", "#7ee0d6", "var(--sel)"];
+
+class Screen {
+  constructor() { this.lines = [[]]; this.row = 0; this.col = 0; this.st = ""; this.attrs = null; this.pend = ""; this.rows = 24; }
+  ensure() { while (this.lines.length <= this.row) this.lines.push([]); }
+  top() { return Math.max(0, this.lines.length - this.rows); }
+  put(c) {
+    this.ensure();
+    const L = this.lines[this.row];
+    while (L.length < this.col) L.push([" ", ""]);
+    L[this.col++] = [c, this.st];
+  }
+  write(text) {
+    const s = this.pend + text;
+    this.pend = "";
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === "\x1b") {
+        const rest = s.slice(i, i + 64);
+        let m = rest.match(/^\x1b\[([0-9;?>=]*)[ -\/]*([@-~])/);
+        if (m) { this.csi(m[1], m[2]); i += m[0].length - 1; continue; }
+        m = s.slice(i).match(/^\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/);
+        if (m) { i += m[0].length - 1; continue; }
+        if (/^\x1b[()*+][0-9A-Za-z]/.test(rest)) { i += 2; continue; }
+        if (/^\x1b[=>78DEMc]/.test(rest)) { i += 1; continue; }
+        if (rest.length < 3 || /^\x1b(\[[0-9;?>=]*|\][^\x07]*)$/.test(s.slice(i))) { this.pend = s.slice(i); break; }
+        continue;
+      }
+      if (c === "\r") this.col = 0;
+      else if (c === "\n") { this.row++; this.ensure(); }
+      else if (c === "\b") this.col = Math.max(0, this.col - 1);
+      else if (c === "\t") this.col = (Math.floor(this.col / 8) + 1) * 8;
+      else if (c >= " " && c !== "\x7f") this.put(c);
+    }
+    if (this.lines.length > 5000) { const cut = this.lines.length - 5000; this.lines.splice(0, cut); this.row = Math.max(0, this.row - cut); }
+  }
+  csi(p, f) {
+    const n = p.replace(/[?>=]/g, "").split(";").map(x => parseInt(x, 10));
+    const a = isNaN(n[0]) ? 0 : n[0];
+    if (f === "m") return this.sgr(p === "" ? [0] : n.map(x => isNaN(x) ? 0 : x));
+    this.ensure();
+    const L = this.lines[this.row];
+    if (f === "K") { if (a === 0) L.length = Math.min(L.length, this.col); else if (a === 1) for (let i = 0; i < Math.min(this.col + 1, L.length); i++) L[i] = [" ", ""]; else L.length = 0; }
+    else if (f === "J") { if (a >= 2) { this.lines = [[]]; this.row = this.col = 0; } else if (a === 0) { L.length = Math.min(L.length, this.col); this.lines.length = this.row + 1; } }
+    else if (f === "A") this.row = Math.max(this.top(), this.row - (a || 1));
+    else if (f === "B") { this.row += a || 1; this.ensure(); }
+    else if (f === "C") this.col += a || 1;
+    else if (f === "D") this.col = Math.max(0, this.col - (a || 1));
+    else if (f === "G") this.col = Math.max(0, (a || 1) - 1);
+    else if (f === "H" || f === "f") { this.row = this.top() + Math.max(0, (n[0] || 1) - 1); this.col = Math.max(0, (n[1] || 1) - 1); this.ensure(); }
+    else if (f === "P") L.splice(this.col, a || 1);
+    else if (f === "X") for (let i = 0; i < (a || 1); i++) if (L[this.col + i]) L[this.col + i] = [" ", ""];
+  }
+  sgr(codes) {
+    let s = Object.assign({ fg: "", bg: "", b: 0, d: 0, inv: 0, u: 0 }, this.attrs);
+    for (let i = 0; i < codes.length; i++) {
+      const c = codes[i];
+      if (c === 0) s = { fg: "", bg: "", b: 0, d: 0, inv: 0, u: 0 };
+      else if (c === 1) s.b = 1; else if (c === 2) s.d = 1; else if (c === 22) s.b = s.d = 0;
+      else if (c === 4) s.u = 1; else if (c === 24) s.u = 0; else if (c === 7) s.inv = 1; else if (c === 27) s.inv = 0;
+      else if (c >= 30 && c <= 37) s.fg = c - 30; else if (c >= 90 && c <= 97) s.fg = c - 82; else if (c === 39) s.fg = "";
+      else if (c >= 40 && c <= 47) s.bg = c - 40; else if (c >= 100 && c <= 107) s.bg = c - 92; else if (c === 49) s.bg = "";
+      else if ((c === 38 || c === 48) && codes[i + 1] === 5) { s[c === 38 ? "fg" : "bg"] = codes[i + 2] | 0; i += 2; }
+      else if ((c === 38 || c === 48) && codes[i + 1] === 2) {
+        s[c === 38 ? "fg" : "bg"] = "#" + [codes[i + 2], codes[i + 3], codes[i + 4]].map(x => Math.max(0, Math.min(255, x | 0)).toString(16).padStart(2, "0")).join("");
+        i += 4;
+      }
+    }
+    this.attrs = s;
+    this.st = s.fg !== "" || s.bg !== "" || s.b || s.d || s.inv || s.u ? JSON.stringify(s) : "";
+  }
+}
+function xcolor(v) {
+  if (typeof v === "string") return v;                       // "#rrggbb", built from numbers only
+  if (v < 16) return ANSI[v];
+  if (v < 232) { const k = v - 16, f = x => [0, 95, 135, 175, 215, 255][x]; return `rgb(${f(Math.floor(k / 36))},${f(Math.floor(k / 6) % 6)},${f(k % 6)})`; }
+  const g = 8 + (v - 232) * 10; return `rgb(${g},${g},${g})`;
+}
+function cellCss(st) {
+  const s = JSON.parse(st);
+  let fg = s.fg === "" ? "" : xcolor(s.fg), bg = s.bg === "" ? "" : xcolor(s.bg);
+  if (s.inv) { [fg, bg] = [bg || "var(--raise)", fg || "var(--text)"]; }
+  return (fg ? `color:${fg};` : "") + (bg ? `background:${bg};` : "") + (s.b ? "font-weight:700;" : "") + (s.d ? "opacity:.65;" : "") + (s.u ? "text-decoration:underline;" : "");
+}
+const escH = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const linkify = t => t.replace(/https?:\/\/[^\s<>"'`]+[^\s<>"'`.,;:!?)\]]/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+function paintScreen(tab) {
+  const sc = tab.screen, rows = [];
+  const showCur = tab.running;
+  for (let r = 0; r < sc.lines.length; r++) {
+    let L = sc.lines[r];
+    const cur = showCur && r === sc.row;
+    if (cur) { L = L.slice(); while (L.length <= sc.col) L.push([" ", ""]); }
+    let html = "", run = "", st = "";
+    const flush = () => { if (run) html += st ? `<span style="${cellCss(st)}">${linkify(escH(run))}</span>` : linkify(escH(run)); run = ""; };
+    for (let c = 0; c < L.length; c++) {
+      const [ch, cs] = L[c] || [" ", ""];
+      if (cur && c === sc.col) { flush(); html += `<span class="cur">${escH(ch)}</span>`; continue; }
+      if (cs !== st) { flush(); st = cs; }
+      run += ch;
+    }
+    flush();
+    rows.push(html);
+  }
+  const box = T.el.screen, atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  T.el.pre.innerHTML = rows.join("\n");
+  if (atEnd) box.scrollTop = box.scrollHeight;
+}
+
+function termSize() {
+  if (!termSize.cw) {
+    const probe = h("pre", { style: "position:absolute;visibility:hidden;font:13px/1.3 var(--font);margin:0" }, "M".repeat(40));
+    document.body.append(probe);
+    termSize.cw = probe.getBoundingClientRect().width / 40 || 7.8;
+    termSize.lh = probe.getBoundingClientRect().height || 17;
+    probe.remove();
+  }
+  const sc = T.el && T.el.screen && T.el.screen.clientWidth ? T.el.screen : null;
+  const w = sc ? sc.clientWidth - 20 : Math.max(300, window.innerWidth - 60);
+  const hgt = sc ? sc.clientHeight - 14 : Math.min(window.innerHeight * 0.56, 520) - 90;
+  return { cols: Math.max(30, Math.min(300, Math.floor(w / termSize.cw))), rows: Math.max(8, Math.min(200, Math.floor(hgt / termSize.lh))) };
+}
+function buildTerm() {
+  if (T.built) return;
+  T.built = true;
+  const ta = h("textarea", { autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "terminal input" });
+  const pre = h("pre", {});
+  const screen = h("div", { class: "tscreen", onmouseup: () => { if (!String(getSelection())) ta.focus({ preventScroll: true }); } }, pre, ta);
+  const tabs = h("div", { class: "ttabs" });
+  const hint = h("span", {}, "type into the terminal · ctrl+c stops the command");
+  const box_ = h("section", { class: "box tbox" }, h("span", { class: "lg" }, "terminal"),
+    h("span", { class: "lg lg-r" },
+      h("button", { class: "lnk", onclick: () => { T.min = !T.min; $("#term").classList.toggle("min", T.min); if (!T.min) { paintCur(); ta.focus(); } } }, "[ _ ]"), " ",
+      h("button", { class: "lnk", onclick: hideTerm, title: "hide (commands keep running)" }, "[ hide ]")),
+    tabs, screen,
+    h("div", { class: "tkeys" }, hint, h("span", { class: "sp" }),
+      h("button", { class: "btn small", onclick: () => { sendKeys("\x03"); ta.focus(); } }, "ctrl+c"),
+      h("button", { class: "btn small", onclick: () => { const t = curTab(); if (t) { t.screen = new Screen(); t.screen.rows = termSize().rows; paintScreen(t); } ta.focus(); } }, "clear"),
+      h("button", { class: "btn small danger", onclick: () => { const t = curTab(); if (t) closeTab(t.id); } }, "close")));
+  $("#term").replaceChildren(box_);
+  T.el = { pre, screen, ta, tabs, hint };
+  ta.addEventListener("keydown", e => {
+    const map = { Enter: "\r", Backspace: "\x7f", Tab: "\t", Escape: "\x1b", ArrowUp: "\x1b[A", ArrowDown: "\x1b[B", ArrowRight: "\x1b[C",
+                  ArrowLeft: "\x1b[D", Home: "\x1b[H", End: "\x1b[F", Delete: "\x1b[3~", PageUp: "\x1b[5~", PageDown: "\x1b[6~" };
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.length === 1 && /[a-z@\[\\\]^_]/i.test(e.key)) {
+      e.preventDefault(); return sendKeys(String.fromCharCode(e.key.toUpperCase().charCodeAt(0) & 31));
+    }
+    if (map[e.key] && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sendKeys(map[e.key]); }
+  });
+  ta.addEventListener("input", () => { const v = ta.value; ta.value = ""; if (v) sendKeys(v.replace(/\r?\n/g, "\r")); });
+  let rt;
+  window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(resizeCur, 200); });
+}
+const curTab = () => T.tabs.find(t => t.id === T.cur);
+async function sendKeys(text) {
+  const t = curTab();
+  if (!t || !t.running) return;
+  try { await api(`/api/term/${t.id}/input`, { text }); } catch (e) { say(e.message, "err"); }
+  clearTimeout(T.timer); T.timer = setTimeout(pollTerm, 30);
+}
+function resizeCur() {
+  const t = curTab();
+  if (!t || !t.running || T.min) return;
+  const z = termSize();
+  t.screen.rows = z.rows;
+  api(`/api/term/${t.id}/resize`, z).catch(() => {});
+}
+function renderTabs() {
+  T.el.tabs.replaceChildren(...T.tabs.map(t => h("button", { class: "ttab" + (t.id === T.cur ? " on" : ""), title: t.title,
+      onclick: e => { if (e.target.classList.contains("x")) return closeTab(t.id); T.cur = t.id; renderTabs(); paintCur(); T.el.ta.focus(); } },
+    h("span", { class: "run" + (t.running ? "" : " done") }), t.title, h("span", { class: "x", title: "close" }, "×"))));
+  const t = curTab();
+  T.el.hint.replaceChildren(t && !t.running ? h("span", {}, t.code === 0 ? "finished" : `stopped (code ${t.code})`)
+    : h("span", {}, "type into the terminal · ", h("b", {}, "ctrl+c"), " stops the command"));
+}
+function paintCur() { const t = curTab(); if (t) paintScreen(t); }
+function openTerm(id, title) {
+  buildTerm();
+  if (!T.tabs.some(t => t.id === id)) {
+    const sc = new Screen();
+    sc.rows = termSize().rows;
+    T.tabs.push({ id, title, offset: 0, screen: sc, running: true, code: null });
+  }
+  T.cur = id;
+  T.min = false;
+  const el = $("#term");
+  el.classList.remove("min", "closing");
+  el.classList.add("open");
+  document.body.classList.add("has-term");
+  renderTabs();
+  paintCur();
+  setTimeout(() => { T.el.ta.focus({ preventScroll: true }); resizeCur(); }, 60);
+  clearTimeout(T.timer);
+  pollTerm();
+}
+function hideTerm() {
+  const el = $("#term");
+  if (REDUCE) { el.classList.remove("open"); document.body.classList.remove("has-term"); return; }
+  el.classList.add("closing");
+  setTimeout(() => { el.classList.remove("open", "closing"); document.body.classList.remove("has-term"); }, 190);
+  if (T.tabs.some(t => t.running)) say("commands keep running · reopen them with the terminal button below");
+  renderTermButton();
+}
+async function closeTab(id) {
+  const t = T.tabs.find(x => x.id === id);
+  if (t && t.running && !(await confirmDlg(`Stop “${t.title}” and close it?`, true))) return;
+  try { await api(`/api/term/${id}/close`, {}); } catch {}
+  T.tabs = T.tabs.filter(x => x.id !== id);
+  if (T.cur === id) T.cur = T.tabs.length ? T.tabs[T.tabs.length - 1].id : null;
+  if (!T.tabs.length) return hideTerm();
+  renderTabs(); paintCur();
+}
+async function pollTerm() {
+  clearTimeout(T.timer);
+  const open = $("#term").classList.contains("open") && !T.min;
+  for (const t of T.tabs) {
+    if (!t.running && t.offset) continue;
+    if (t.id !== T.cur && Date.now() - (t.polled || 0) < 1000) continue;
+    t.polled = Date.now();
+    try {
+      const r = await api(`/api/term/${t.id}?from=${t.offset}`);
+      if (r.reset) { t.screen = new Screen(); t.screen.rows = termSize().rows; }
+      if (r.data) t.screen.write(r.data);
+      const was = t.running;
+      t.offset = r.offset; t.running = r.running; t.code = r.code;
+      if (r.data && t.id === T.cur && open) paintScreen(t);
+      if (was !== t.running) { renderTabs(); if (t.id === T.cur) paintScreen(t); renderTermButton(); }
+    } catch (e) {
+      t.running = false; renderTabs();
+    }
+  }
+  if (T.tabs.some(t => t.running)) T.timer = setTimeout(pollTerm, open ? 120 : 1000);
+}
+function renderTermButton() {
+  let b = $("#termbtn");
+  const n = T.tabs.length, running = T.tabs.filter(t => t.running).length;
+  if (!b) { b = h("button", { class: "btn small", id: "termbtn", onclick: () => { if (T.cur) openTerm(T.cur, curTab().title); } }); $("#foot .box").insertBefore(b, $("#keys")); }
+  b.hidden = !n || $("#term").classList.contains("open");
+  b.textContent = `terminal · ${n}` + (running ? ` (${running} running)` : "");
+}
+async function restoreTerms() {
+  try {
+    const r = await api("/api/term");
+    for (const t of r.terminals) {
+      buildTerm();
+      T.tabs.push({ id: t.id, title: t.title, offset: 0, screen: Object.assign(new Screen(), { rows: termSize().rows }), running: t.running, code: null });
+      T.cur = t.id;
+    }
+    if (T.tabs.length) { renderTabs(); renderTermButton(); pollTerm(); }
+  } catch {}
+}
+
+// ------------------------------------------------------------------ orbit settings
+async function loadHub() {
+  S.hub = await api("/api/hub");
+  applyCustomThemes();
+  if (!S.themeEdit) setTheme(S.hub.settings.theme);
+  $("#dry").hidden = !S.hub.dryRun;
+}
+
+// ---- themes: built-in ones are CSS blocks above; custom ones are tokens saved in Orbit's settings
+const TOKEN_NAMES = { bg: "background", raise: "raised", line: "borders", "line-hi": "bright borders", text: "text", muted: "quiet text",
+  legend: "box titles", accent: "accent", "accent-ink": "text on accent", ok: "ok", warn: "attention", down: "down", off: "off", sel: "selection bar" };
+const themeCss = (id, tk, keys) => `[data-theme="${id}"]{` + keys.map(k => `--${k}:${tk[k]};`).join("") +
+  `--panel:${tk.bg};--radius:${tk.radius | 0}px;--glow:${tk.glow ? "0 0 6px " + tk.accent + "59" : "none"}}`;
+function applyCustomThemes() {
+  const keys = S.hub.themeTokens;
+  const css = S.hub.themes.filter(t => t.custom).map(t => themeCss(t.id, t.tokens, keys)).join("\n");
+  let st = $("#ctheme");
+  if (!st) { st = h("style", { id: "ctheme" }); document.head.append(st); }
+  st.textContent = css;
+  store.set("ctheme", css);
+}
+function themeTokens(id) {
+  const t = S.hub.themes.find(x => x.id === id);
+  if (t && t.custom) return JSON.parse(JSON.stringify(t.tokens));
+  const probe = h("div", { "data-theme": id, style: "display:none" });
+  document.body.append(probe);
+  const cs = getComputedStyle(probe), out = {};
+  for (const k of S.hub.themeTokens) out[k] = cs.getPropertyValue("--" + k).trim().toLowerCase();
+  out.radius = parseInt(cs.getPropertyValue("--radius"), 10) || 0;
+  out.glow = cs.getPropertyValue("--glow").trim() !== "none" && cs.getPropertyValue("--glow").trim() !== "";
+  probe.remove();
+  return out;
+}
+function previewTheme(draft) {
+  let st = $("#tpreview");
+  if (!st) { st = h("style", { id: "tpreview" }); document.head.append(st); }
+  st.textContent = themeCss("custom-preview", draft.tokens, S.hub.themeTokens);
+  document.documentElement.dataset.theme = "custom-preview";
+}
+function endThemeEdit() {
+  S.themeEdit = null;
+  const st = $("#tpreview"); if (st) st.remove();
+  setTheme(S.hub.settings.theme);
+  renderHub();
+}
+function themeEditor(setHub) {
+  const d = S.themeEdit, hub = S.hub;
+  previewTheme(d);
+  const fields = {};
+  const sync = () => previewTheme(d);
+  const colorRow = k => {
+    const col = h("input", { type: "color", value: d.tokens[k], "aria-label": TOKEN_NAMES[k] });
+    const hex = h("input", { class: "inp hex", value: d.tokens[k], spellcheck: "false", maxlength: 7 });
+    col.addEventListener("input", () => { d.tokens[k] = col.value; hex.value = col.value; sync(); });
+    hex.addEventListener("input", () => { if (/^#[0-9a-f]{6}$/i.test(hex.value)) { d.tokens[k] = hex.value.toLowerCase(); col.value = d.tokens[k]; sync(); } });
+    fields[k] = [col, hex];
+    return h("label", {}, col, hex, TOKEN_NAMES[k] || k);
+  };
+  const name = h("input", { class: "inp", value: d.label, maxlength: 40, placeholder: "my theme", oninput: e => { d.label = e.currentTarget.value; } });
+  const from = h("select", { class: "inp", onchange: e => {
+      Object.assign(d.tokens, themeTokens(e.currentTarget.value));
+      for (const [k, [c, x]] of Object.entries(fields)) { c.value = x.value = d.tokens[k]; }
+      radius.value = d.tokens.radius; glow.classList.toggle("on", d.tokens.glow); glow.textContent = d.tokens.glow ? "on" : "off"; sync();
+    } }, h("option", { value: "" }, "start from…"), hub.themes.map(t => h("option", { value: t.id }, t.label)));
+  const radius = h("input", { type: "range", min: 0, max: 14, value: d.tokens.radius, oninput: e => { d.tokens.radius = +e.currentTarget.value; sync(); } });
+  const glow = h("button", { class: "chk" + (d.tokens.glow ? " on" : ""), onclick: () => { d.tokens.glow = !d.tokens.glow; glow.classList.toggle("on", d.tokens.glow); glow.textContent = d.tokens.glow ? "on" : "off"; sync(); } }, d.tokens.glow ? "on" : "off");
+  const save = async () => {
+    if (!d.label.trim()) return say("give the theme a name", "err");
+    const others = hub.themes.filter(t => t.custom && t.id !== d.id).map(({ id, label, tokens }) => ({ id, label, tokens }));
+    const mine = { id: d.id, label: d.label.trim(), tokens: d.tokens };
+    try {
+      S.hub = Object.assign(S.hub, await api("/api/hub", { themes: [...others, mine], theme: d.id }));
+      applyCustomThemes();
+      say("theme saved · " + mine.label, "ok");
+      endThemeEdit();
+    } catch (e) { say(e.message, "err"); }
+  };
+  return h("div", {},
+    h("div", { class: "form2" }, h("label", {}, "name"), name, h("label", {}, "colours"), from),
+    h("div", { class: "ted" }, hub.themeTokens.map(colorRow)),
+    h("div", { class: "form2" }, h("label", {}, "corners"), h("div", { style: "display:flex;gap:10px;align-items:center" }, radius, h("span", { class: "t-muted" }, "square → round")),
+      h("label", {}, "glow"), h("div", {}, glow)),
+    h("div", { class: "btns", style: "justify-content:flex-end;margin-top:12px" },
+      h("button", { class: "btn", onclick: endThemeEdit }, "cancel"), h("button", { class: "btn primary", onclick: save }, "save theme")),
+    h("div", { class: "t-muted", style: "font-size:12.5px;margin-top:8px" }, "The whole window previews your changes as you make them."));
+}
+function renderHub() {
+  const hub = S.hub, main = $("#main");
+  if (!hub) return;
+  const setHub = async (patch, msg) => {
+    try { S.hub = Object.assign(S.hub, await api("/api/hub", patch)); say(msg, "ok"); }
+    catch (e) { say(e.message, "err"); }
+  };
+  const pick = async t => { setTheme(t.id); hub.settings.theme = t.id; await setHub({ theme: t.id }, "theme · " + t.label); renderHub(); };
+  const startEdit = t => {
+    const base = t && t.custom ? t : null;
+    S.themeEdit = { id: base ? base.id : "custom-" + Date.now().toString(36), label: base ? base.label : "my theme",
+                    tokens: themeTokens(t ? t.id : hub.settings.theme) };
+    renderHub();
+    $("#main").scrollTop = 0;
+  };
+  const themes = h("div", { class: "themes" }, hub.themes.map(t => {
+    const tk = themeTokens(t.id);
+    return h("div", { class: "th" + (hub.settings.theme === t.id ? " on" : ""), role: "button", tabindex: 0,
+        onclick: e => { if (!e.target.closest(".acts")) pick(t); }, onkeydown: e => { if (e.key === "Enter") pick(t); } },
+      h("div", { class: "pv", style: `background:${tk.bg};border-color:${tk.line};border-radius:${tk.radius}px` },
+        h("i", { style: `left:8px;top:10px;width:30px;height:30px;background:${tk.accent};border-radius:${tk.radius}px` }),
+        h("i", { style: `left:31px;top:33px;width:9px;height:9px;background:${tk.ok};outline:2px solid ${tk.bg}` }),
+        h("i", { style: `left:50px;top:12px;width:60%;height:5px;background:${tk.text};opacity:.85` }),
+        h("i", { style: `left:50px;top:24px;width:40%;height:5px;background:${tk.line}` }),
+        h("i", { style: `left:50px;top:36px;width:25%;height:5px;background:${tk.accent}` })),
+      h("span", {}, (hub.settings.theme === t.id ? "(•) " : "( ) ") + t.label, t.custom ? h("span", { class: "tag2" }, "  custom") : null),
+      h("div", { class: "acts" },
+        h("button", { class: "btn small", onclick: () => startEdit(t) }, t.custom ? "edit" : "copy & edit"),
+        t.custom ? h("button", { class: "btn small danger", onclick: async () => {
+          if (!(await confirmDlg(`Delete the theme “${t.label}”?`, true))) return;
+          const left = hub.themes.filter(x => x.custom && x.id !== t.id).map(({ id, label, tokens }) => ({ id, label, tokens }));
+          try { S.hub = Object.assign(S.hub, await api("/api/hub", { themes: left })); applyCustomThemes(); setTheme(S.hub.settings.theme); say("theme deleted", "ok"); renderHub(); }
+          catch (e) { say(e.message, "err"); } } }, "delete") : null));
+  }));
+  const themeBox = S.themeEdit
+    ? box("theme editor · " + (hub.themes.some(t => t.id === S.themeEdit.id) ? "edit" : "new"), themeEditor(setHub))
+    : box("theme", themes, h("div", { class: "btns", style: "margin-top:10px" },
+        h("button", { class: "btn", onclick: () => startEdit(null) }, "+ new theme"),
+        h("span", { class: "t-muted", style: "font-size:12.5px;align-self:center" }, "start from the current one and change any colour")));
+
+  const general = h("div", { class: "fset" },
+    h("div", { class: "row" }, h("span", {}, "Refresh every (seconds)"),
+      (() => { const i = h("input", { class: "inp num", type: "number", min: 1, max: 60,
+        onchange: e => setHub({ refreshSec: Math.round(+e.currentTarget.value) || 3 }, "refresh · " + e.currentTarget.value + " s") }); i.value = hub.settings.refreshSec; return i; })()),
+    h("div", { class: "row" }, h("span", {}, "Check GitHub for new releases"),
+      (() => { const c = h("button", { class: "chk" + (hub.settings.checkUpdates ? " on" : ""), onclick: async () => {
+        const v = !hub.settings.checkUpdates; await setHub({ checkUpdates: v }, "release checks · " + (v ? "on" : "off")); renderHub(); } },
+        hub.settings.checkUpdates ? "on" : "off"); return c; })(),
+      h("div", { class: "help" }, "At most every 12 hours, one request per app to api.github.com. Nothing else leaves this computer.")),
+    h("div", { class: "row" }, h("span", {}, "Check for releases now"),
+      h("button", { class: "btn small", onclick: async () => { try { say((await api("/api/hub/check-updates", {})).message); setTimeout(poll, 2500); } catch (e) { say(e.message, "err"); } } }, "check")));
+
+  const order = hub.apps.map(a => a.id);
+  const move = async (i, dir) => {
+    const o = order.slice(); const j = i + dir; if (j < 0 || j >= o.length) return;
+    [o[i], o[j]] = [o[j], o[i]];
+    await setHub({ order: o }, "order saved"); await loadHub(); await poll(); renderHub();
+  };
+  const appsList = h("div", { class: "applist" }, h("div", { class: "t-muted", style: "font-size:12.5px;padding-bottom:4px" }, "Tip: drag an app's tile in the side bar to move it."),
+    hub.apps.map((a, i) => h("div", { class: "row" },
+    mark(a),
+    h("span", { class: "n" }, a.name, a.custom ? h("span", { class: "t-muted" }, "  · added here") : null),
+    h("button", { class: "btn small", disabled: i === 0, onclick: () => move(i, -1), "aria-label": "move up" }, "↑"),
+    h("button", { class: "btn small", disabled: i === hub.apps.length - 1, onclick: () => move(i, 1), "aria-label": "move down" }, "↓"),
+    h("button", { class: "chk" + (a.enabled ? " on" : ""), onclick: async () => {
+      await setHub({ enabled: { [a.id]: !a.enabled } }, a.name + (a.enabled ? " hidden" : " shown")); await loadHub(); await poll(); renderHub(); } },
+      a.enabled ? "shown" : "hidden"))));
+
+  const F = {};
+  const inp = (k, ph) => (F[k] = h("input", { class: "inp wide", placeholder: ph || "", spellcheck: "false", autocomplete: "off" }));
+  F.scope = h("select", { class: "inp" }, h("option", { value: "user" }, "user service"), h("option", { value: "system" }, "system service (read-only)"));
+  const add = h("div", {},
+    h("div", { class: "t-muted", style: "margin-bottom:10px" }, "Any app with a systemd service, a health address or a web page. Built-in support for more of your apps comes with Orbit updates."),
+    h("div", { class: "form2" },
+      h("label", {}, "name"), inp("name", "My app"),
+      h("label", {}, "service"), h("div", { style: "display:flex;gap:8px" }, inp("unit", "myapp.service"), F.scope),
+      h("label", {}, "health"), inp("healthUrl", "http://127.0.0.1:8080/health"),
+      h("label", {}, "web page"), inp("openUrl", "http://127.0.0.1:8080/")),
+    h("div", { class: "btns", style: "margin-top:12px;justify-content:flex-end" },
+      h("button", { class: "btn primary", onclick: async () => {
+        const spec = Object.fromEntries(Object.entries(F).map(([k, el]) => [k, el.value.trim()]));
+        try { const r = await api("/api/hub/custom", spec); say("added " + spec.name, "ok"); await loadHub(); await poll(); go(r.id); }
+        catch (e) { say(e.message, "err"); } } }, "add app")));
+
+  main.replaceChildren(
+    themeBox,
+    h("div", { class: "grid g2" }, box("general", general), box("apps", appsList)),
+    box("add an app", add),
+    box("about", h("div", { class: "t-muted" }, `Orbit ${hub.version} · local only (127.0.0.1) · `, h("span", {}, "keys: "),
+      "j/k or ↑/↓ move, 1–9 jump, r refresh, t next theme, , settings, o overview")));
+}
+
+// ------------------------------------------------------------------ keyboard
+document.addEventListener("keydown", e => {
+  if ($("#dlg").classList.contains("open")) return;
+  if (W.open) {
+    if (e.key === "Escape") { e.preventDefault(); closeWizard(); }
+    else if (e.key === "Enter" && !/^(button|input|textarea)$/i.test(e.target.tagName || "")) {
+      const go = W.el.foot.querySelector(".btn.go:not(:disabled)"); if (go) { e.preventDefault(); go.click(); }
+    }
+    return;
+  }
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const items = navItems();
+  const k = e.key;
+  if (k === "j" || k === "ArrowDown") { go(items[Math.min(items.length - 1, S.navIdx + 1)].id); e.preventDefault(); }
+  else if (k === "k" || k === "ArrowUp") { go(items[Math.max(0, S.navIdx - 1)].id); e.preventDefault(); }
+  else if (/^[1-9]$/.test(k)) { const a = S.apps.filter(x => x.enabled)[+k - 1]; if (a) go(a.id); }
+  else if (k === "o") go("overview");
+  else if (k === ",") go("hub");
+  else if (k === "i") go("install");
+  else if (k === "r") { poll(); if (S.view !== "overview" && S.view !== "hub") { loadDetail(true); } say("refreshed"); }
+  else if (k === "t" && S.hub) {
+    const ids = S.hub.themes.map(t => t.id), next = ids[(ids.indexOf(S.hub.settings.theme) + 1) % ids.length];
+    S.hub.settings.theme = next; setTheme(next); api("/api/hub", { theme: next }).catch(() => {});
+    say("theme · " + S.hub.themes.find(t => t.id === next).label); if (S.view === "hub") renderHub();
+  }
+  else if (k === "?") showDlg("help", h("div", { class: "kv" },
+    ["j / ↓", "next", "k / ↑", "previous", "1–9", "jump to an app", "o", "overview", "i", "install apps", ",", "orbit settings", "r", "refresh", "t", "next theme", "esc", "close a dialog"]
+      .map((x, i) => h("span", { class: i % 2 ? "v" : "k" }, x))), [["close", true]]);
+});
+
+// ------------------------------------------------------------------ start
+(async () => {
+  enableNavDrag();
+  try { await loadHub(); } catch (e) { say("can't reach Orbit's server: " + e.message, "err"); }
+  await poll();
+  render(true);
+  restoreTerms();
+})();
+</script>
+</body>
+</html>

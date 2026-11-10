@@ -1,0 +1,30 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    strategy:
+      matrix:
+        python: ["3.9", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - name: Tests (fakes and stub servers only)
+        run: python -W error::ResourceWarning -m unittest discover -s tests -t . -v
+      - name: Page script parses
+        run: |
+          python - <<'PY'
+          import re, pathlib
+          s = pathlib.Path("orbit/static/index.html").read_text()
+          pathlib.Path("page.mjs").write_text(re.search(r"<script>(.*)</script>", s, re.S).group(1))
+          PY
+          node --check page.mjs

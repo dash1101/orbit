@@ -1,0 +1,163 @@
+# Orbit
+
+One place for all your apps: install them, see at a glance whether each one is running, start and stop it,
+change its settings, read its log and update it when a new release is out. It comes with support for
+[Pocketfader](https://github.com/dash1101/pocketfader), [Nova](https://github.com/dash1101/Nova) and
+[YTM Beacon](https://github.com/dash1101/ytm-beacon), and you can add any other app from Orbit's settings.
+
+Orbit is a small Python program (standard library only) with its own window. It runs on Linux, Windows and
+macOS, only listens on `127.0.0.1`, and only asks for the administrator password when an app has to be installed
+system-wide (Nova), through your system's own password window.
+
+## Install
+
+```bash
+./install.sh            # adds Orbit to your apps menu and an `orbit` command
+orbit                   # opens the window
+```
+
+For the native window you need `python3-gi` and `gir1.2-webkit2-4.1` (Debian/Ubuntu). Without them Orbit opens in
+a browser window instead. Remove it with `./install.sh --uninstall`.
+
+Run from the source folder without installing: `python3 -m orbit` (on Windows: `py -m orbit`). On Windows and
+macOS, Orbit opens as an app window in Edge, Chrome or Brave, or as a tab in your default browser.
+
+| Option | |
+|---|---|
+| `--dry-run` | Read everything, change nothing: actions and settings are recorded instead of applied, and installs play out step by step without downloading, writing or running anything. |
+| `--no-window` | Only run the server and print its address. |
+| `--port N` | Use another port (default 8790). |
+
+## Installing apps
+
+Open **install** in the side bar (or press `i`). Each app shows the systems it runs on and whether it's installed
+here. Installing, updating and removing all go through the same five steps:
+
+1. **check**: what this computer is, what is already installed, the latest release, and anything the app still
+   needs (with how to get it);
+2. **choose**: a few plain choices, such as starting at login (skipped when there's nothing to choose);
+3. **review**: exactly what will happen, before anything does;
+4. **install**: each step ticks off as it finishes, with the download's progress; *show details* has the full log;
+   you can cancel, or hide the window and let it carry on;
+5. **done**: what to do next (open the app, set it up, add its browser extension), or what went wrong and how to fix it.
+
+| | Linux | Windows | macOS |
+|---|---|---|---|
+| **Pocketfader** | its own Python environment in `~/.local/share/pocketfader`, apps-menu entry, systemd user service | the standalone program in `%LOCALAPPDATA%\Programs\Pocketfader`, Start-menu entry, starts at logon | its own Python environment and a LaunchAgent. The YouTube Music remote works; controlling the Mac's volume and other players isn't available on macOS yet |
+| **YTM Beacon** | Beacon's own installer (`ytm-beacon install`): program, browser extension, start at login | same | same |
+| **Nova** | the `.deb` on Debian/Ubuntu (so apt keeps it updated), Nova's one-file installer elsewhere; needs systemd | not available: Nova's server runs on Linux | not available |
+
+Only Nova needs the administrator password, and Orbit never sees it: your desktop's password window asks for it
+(`pkexec`), or a terminal with `sudo` when there's no such window.
+
+**What Orbit checks.** Downloads only come from the app's own GitHub releases. Each file is checked against the
+SHA-256 checksums published with the release before it is unpacked or run. Nova's checksums are also checked against
+Nova's release signing key, which is built into Orbit rather than downloaded. Archives can't write outside their
+folder.
+
+**Private repositories** work when this computer is signed in to GitHub (`gh auth login`) or has `GITHUB_TOKEN`
+set. The token goes only to `api.github.com`, never to the file host a download is redirected to.
+
+**Removing** keeps your settings unless you tick the box to delete them. An app installed some other way (with pip,
+or run from its source folder) is shown but left alone.
+
+## Orbit for Android
+
+`android/` is Orbit for phones and tablets (Android 5.0 and newer). It installs, updates, opens and removes the
+Android apps of **Pocketfader** and **Nova**, and lists **YTM Beacon** as not available on Android yet (it runs on
+your computer, next to Discord).
+
+Installing works like the desktop installer: review what will happen, then each step ticks off with the download's
+progress, then a result. The APK comes from the app's GitHub release and is checked before Android sees it: its
+SHA-256 against the release's checksums, Nova's checksums against Nova's release key (built into Orbit) where the
+phone can check ed25519 signatures, and that the file really is that app. Android's own installer then asks you to
+confirm. The first time, Android asks you to allow Orbit to install apps.
+
+A private repository's releases need a GitHub token, which you can add in Orbit's settings on the phone. It stays
+in Orbit's private storage and is only sent to `api.github.com`. The app has the same themes as the desktop.
+
+Build it with Gradle 8.9 and JDK 17 (`cd android && gradle :app:assembleRelease`), or let the `android` workflow in
+`.github/workflows` build it. A `v*` tag publishes the APK and its `SHA256SUMS` as a release. To install updates over
+an earlier copy, give the workflow a signing key as repository secrets: `ORBIT_KEYSTORE_B64`,
+`ORBIT_KEYSTORE_PASSWORD` and `ORBIT_KEY_ALIAS`. Without them it signs with a throwaway key.
+
+## What each app gets
+
+| | Status | Settings | Actions |
+|---|---|---|---|
+| **Pocketfader** | running or not, output device, volume, what's playing, YouTube Music extension, EQ, release | *Pause other players*; address and access token | open web app, desktop window, start/stop/restart, start at login |
+| **YTM Beacon** | what Discord shows and why, Discord connection, extension last seen, what's playing, release; details: Discord user and app (Discord, Vesktop…), application ID, extension build, version, uptime, files | everything on the Discord card: show/hide, private mode, name in member list, album art, progress, badge, button, when paused, words never to show, and the Discord application ID | dashboard, hide for 30 min / 1 h / 3 h, show now, doctor, check for update, update, extension folders, start/stop/restart, start at login |
+| **Nova** | answering or not, version and API level, every Nova service and timer, failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web; status, doctor, recent actions; pair a phone or a view-only device, paired devices, approve a browser; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API |
+| **Your own apps** | the service's state and/or a health address | name, service, health address, web page | open, start/stop/restart, start at login, remove |
+
+**Why Nova is mostly read-only here.** Every Nova request except `/ping` must be signed by a paired phone, and risky
+ones are approved on it. Orbit doesn't get around that. It shows Nova's health and opens Nova web or a terminal for
+`sudo nova …` instead.
+
+**Commands run inside Orbit.** Actions such as `sudo nova status` or `ytm-beacon doctor` open in Orbit's own terminal
+(a drawer at the bottom): type straight into it, including `sudo`'s password and any questions; `ctrl+c` stops a
+command, and you can hide the drawer while commands keep running. Only the commands an app offers can be run; the page
+can't send its own. In a dry run, commands that would change something are shown instead of run.
+
+**The Cloudflare API token** for Nova's auto-setup is saved the way Nova saves it itself (root-only), passed through a
+private temporary file that is deleted afterwards, so it never appears on a command line.
+
+**System services** (like Nova's) are never started or stopped directly by Orbit; their actions go through `sudo` in
+Orbit's terminal, so you approve each one with your password.
+
+## Themes
+
+Orbit's look is a theme. All of the first ones are text-interface themes: square boxes with the title set into the
+border, monospace type and a small square for each app's status. Pick one in **orbit settings**, or press `t` to cycle.
+
+- **tui · dusk** (default): charcoal with a pink accent
+- **tui · phosphor**: green screen
+- **tui · amber**: amber screen
+- **tui · paper**: light
+- **tui · frost**, **ember**, **ocean**, **lilac**, **mono**
+
+**Your own themes:** *+ new theme* (or *copy & edit* on any theme) opens an editor with every colour, the corner
+rounding and glow, and the whole window previews your changes as you make them. Custom themes are saved in Orbit's
+settings.
+
+A theme is a block of colour and shape tokens in `orbit/static/index.html` (`[data-theme="…"]`), plus an entry in
+`THEMES` in `orbit/server.py`.
+
+## Keys
+
+`j`/`k` or `↓`/`↑` move · `1`–`9` jump to an app · `o` overview · `i` install · `,` settings · `r` refresh · `t` next theme · `?` help
+
+In the installer: `Enter` continues, `Esc` closes (an install keeps going in the background).
+
+Drag an app's tile in the side bar to reorder your apps. Apps that don't run on this computer's system stay in the
+list, marked "not available on … yet".
+
+## Adding an app to Orbit
+
+- **Without code:** orbit settings → *add an app*, with a systemd service, a health address (any page that answers
+  while the app is up) and/or a web page.
+- **Built in:** write a subclass of `orbit.apps.base.App` (see `pocketfader.py`, the simplest full one) and list it in
+  `BUILTIN` in `orbit/apps/__init__.py`. An app answers four things: `status()`, `settings()` (fields the window draws
+  for you), `actions()` and `logs()`.
+- **Installable:** add a recipe in `orbit/install/recipes/` (see `beacon.py`, the simplest) with the same `id` and list
+  it in `ALL`. A recipe says which systems the app runs on, how to tell it's installed, what the computer needs, the
+  choices to offer, and the steps; the engine does the downloading, checking, progress and dry run.
+
+## Privacy and safety
+
+- Orbit's server listens on `127.0.0.1` only. Requests must use a loopback host name, come from Orbit's own page (or no
+  page at all) and send JSON, so websites you visit can't use it.
+- It talks to your apps on this computer only. The exceptions are the release check (at most every 12 hours, one
+  request per app to `api.github.com`), which you can turn off, and installing or updating an app, which downloads
+  that app's release from GitHub.
+- Settings are kept in `~/.config/orbit/config.json`.
+
+## Tests
+
+```bash
+python3 -W error::ResourceWarning -m unittest discover -s tests -t .
+```
+
+The tests use fakes and small stub servers, so they never touch real services. The installer tests run real
+downloads, checksum and signature checks against a stub GitHub, with fake `pkexec`, `apt-get`, `python3` and
+`systemctl` in a temporary home folder, and the Windows and macOS installs as dry runs.
