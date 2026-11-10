@@ -99,8 +99,9 @@ class Login:
                              "expires": time.time() + int(r.get("expires_in", 900))}
             self._error = ""
             self._cancel = False
+        st = self.state()      # read before polling starts: with a very short interval the sign-in can finish first, leaving nothing pending to show
         threading.Thread(target=self._poll, daemon=True, name="orbit-github-login").start()
-        return self.state()
+        return st
 
     def cancel(self):
         with self._lock:
