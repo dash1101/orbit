@@ -3,7 +3,7 @@
 1. Bump `__version__` in `orbit/__init__.py`.
 2. Tag and push: `git tag -a v0.2.0 -m "Orbit v0.2.0" && git push origin v0.2.0`.
 
-The `android` workflow builds the APK. What happens next depends on where the signing key is.
+The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel), starts each one on its own system as a check, and publishes a pre-release with all of them. The programs bundle Python, so nothing needs installing to run them. The Android app is the one piece that depends on where the signing key is.
 
 ## The signing key
 
@@ -18,12 +18,12 @@ gh secret set ORBIT_KEYSTORE_PASSWORD < password.txt
 printf '%s' orbit | gh secret set ORBIT_KEY_ALIAS
 ```
 
-Each tag then publishes a pre-release with the signed APK, the desktop archive and `SHA256SUMS`. If the release
+Each tag then publishes everything, the signed APK included. If the release
 already exists, its files are replaced and the checksums updated. To sign an existing tag's APK after adding the
-secrets, re-run that tag's `android` workflow.
+secrets, re-run that tag's `build` workflow.
 
-**Kept on your own computer.** Without the secrets, a tag build is left unsigned (the `orbit-android` artifact,
-`orbit-android-unsigned.apk`). Sign it with `tools/sign-apk/Sign.java`, which uses Google's `apksig` library
+**Kept on your own computer.** Without the secrets, the release is published without the Android app, and a tag build
+leaves it unsigned (the `android` artifact, `orbit-android-unsigned.apk`). Sign it with `tools/sign-apk/Sign.java`, which uses Google's `apksig` library
 (`com.android.tools.build:apksig` from Google's Maven repository) and verifies the result:
 
 ```bash

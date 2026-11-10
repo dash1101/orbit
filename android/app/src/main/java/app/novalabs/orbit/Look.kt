@@ -1,4 +1,4 @@
-package app.orbit.hub
+package app.novalabs.orbit
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

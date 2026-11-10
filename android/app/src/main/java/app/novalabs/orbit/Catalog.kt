@@ -1,4 +1,4 @@
-package app.orbit.hub
+package app.novalabs.orbit
 
 /**
  * The apps Orbit knows. For each: its GitHub repository, its Android package (null when it has no Android

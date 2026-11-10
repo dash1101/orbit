@@ -1,4 +1,4 @@
-package app.orbit.hub
+package app.novalabs.orbit
 
 import android.util.Base64
 import java.security.KeyFactory

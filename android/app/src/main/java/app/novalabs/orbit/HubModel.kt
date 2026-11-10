@@ -1,4 +1,4 @@
-package app.orbit.hub
+package app.novalabs.orbit
 
 import android.app.Application
 import android.app.PendingIntent

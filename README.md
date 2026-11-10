@@ -1,5 +1,7 @@
 # Orbit
 
+By NovaLabs. Standalone downloads for Linux, Windows, macOS and Android are on the [releases page](../../releases): nothing needs installing first.
+
 One place for all your apps: install them, see at a glance whether each one is running, start and stop it,
 change its settings, read its log and update it when a new release is out. It comes with support for
 [Pocketfader](https://github.com/dash1101/pocketfader), [Nova](https://github.com/dash1101/Nova) and
@@ -76,10 +78,10 @@ confirm. The first time, Android asks you to allow Orbit to install apps.
 A private repository's releases need a GitHub token, which you can add in Orbit's settings on the phone. It stays
 in Orbit's private storage and is only sent to `api.github.com`. The app has the same themes as the desktop.
 
-Build it with Gradle 8.9 and JDK 17 (`cd android && gradle :app:assembleRelease`), or let the `android` workflow in
-`.github/workflows` build it. A `v*` tag publishes the APK and its `SHA256SUMS` as a release. To install updates over
+Build it with Gradle 8.9 and JDK 17 (`cd android && gradle :app:assembleRelease`), or let the `build` workflow in
+`.github/workflows` build it. A `v*` tag publishes a release. The app id is `app.novalabs.orbit`. To install updates over
 an earlier copy, give the workflow a signing key as repository secrets: `ORBIT_KEYSTORE_B64`,
-`ORBIT_KEYSTORE_PASSWORD` and `ORBIT_KEY_ALIAS`. Without them it signs with a throwaway key.
+`ORBIT_KEYSTORE_PASSWORD` and `ORBIT_KEY_ALIAS`. Without them a release leaves the Android app out.
 
 ## What each app gets
 

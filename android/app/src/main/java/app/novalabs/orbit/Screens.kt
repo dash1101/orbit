@@ -1,4 +1,4 @@
-package app.orbit.hub
+package app.novalabs.orbit
 
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -528,7 +528,7 @@ private fun SettingsScreen(model: HubModel) {
             }
         }
         LegendBox("about") {
-            Txt("Orbit for Android installs and updates the Android apps of Pocketfader and Nova. Orbit for desktop " +
+            Txt("Orbit for Android (by NovaLabs) installs and updates the Android apps of Pocketfader and Nova. Orbit for desktop " +
                 "(Linux, Windows, macOS) manages the programs on your computer.", color = t.muted, size = 12.5.sp)
         }
         Spacer(Modifier.height(24.dp))

@@ -42,7 +42,7 @@ def main(argv=None):
         return 0
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     from .gui import open_window
-    return open_window(url)
+    return open_window(url, hub=hub)
 
 
 if __name__ == "__main__":

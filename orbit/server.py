@@ -120,6 +120,7 @@ class Hub:
         self._cache = {}
         self._pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="orbit-status")
         self.terminals = Terminals()
+        self.last_seen = time.time()   # when a page last asked for anything
         self.host = host or Host()
         sources = sources or Sources()
         self.installer = Installer(self.host, sources,
@@ -429,6 +430,7 @@ def make_handler(hub, port_ref):
         def do_GET(self):
             if not self._allowed():
                 return
+            hub.last_seen = time.time()
             path = self.path.split("?", 1)[0]
             try:
                 if path in ("/", "/index.html"):

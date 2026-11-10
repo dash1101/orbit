@@ -1,4 +1,4 @@
-package app.orbit.hub
+package app.novalabs.orbit
 
 /** "v0.1.4", "0.9.13-alpha", "0.1.0a9", "v0.1.0-alpha.10" -> comparable lists (the same rules as Orbit for desktop). */
 object Versions {

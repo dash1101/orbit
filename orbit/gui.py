@@ -4,24 +4,49 @@ Links that leave Orbit (release pages and so on) open in the normal browser, not
 """
 import shutil
 import subprocess
+import time
 import webbrowser
 
 
-def open_window(url, title="Orbit"):
+def open_window(url, title="Orbit", hub=None):
+    """Show Orbit. Returns when the person closes the window, so a program with no terminal doesn't linger."""
     try:
         return _gtk(url, title)
     except (ImportError, ValueError):
         pass
     for exe in _app_browsers():
         if exe:
-            p = subprocess.Popen([exe, f"--app={url}", "--class=Orbit", "--window-size=1180,760"])
+            # Its own browser profile makes this a separate browser process that lives exactly as long as the
+            # Orbit window, instead of handing the window to a browser that is already running.
+            from .config import config_dir
+            profile = config_dir() / "browser-profile"
+            started = time.time()
             try:
-                p.wait()  # most chromium builds hand off to a running browser and return at once
+                p = subprocess.Popen([exe, f"--app={url}", "--class=Orbit", "--window-size=1180,760",
+                                      f"--user-data-dir={profile}", "--no-first-run", "--no-default-browser-check"])
+                p.wait()
             except KeyboardInterrupt:
-                pass
-            return _wait_forever()
+                return 0
+            except OSError:
+                continue
+            if time.time() - started > 3:
+                return 0           # the window was open and has been closed
+            return _wait_for_page(hub)   # it handed off to a running browser; follow the page instead
     webbrowser.open(url)
-    return _wait_forever()
+    return _wait_for_page(hub)
+
+
+def _wait_for_page(hub, idle=300):
+    """Without a window to watch (a browser tab), stop once the page has not been seen for a while."""
+    if hub is None:
+        return _wait_forever()
+    print("Orbit is running. Close the tab and it stops by itself, or press Ctrl+C.", flush=True)
+    try:
+        while time.time() - hub.last_seen < idle:
+            time.sleep(5)
+    except KeyboardInterrupt:
+        pass
+    return 0
 
 
 def _app_browsers():

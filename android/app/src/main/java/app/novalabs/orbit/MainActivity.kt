@@ -1,4 +1,4 @@
-package app.orbit.hub
+package app.novalabs.orbit
 
 import android.os.Build
 import android.os.Bundle

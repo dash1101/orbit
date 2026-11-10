@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "app.orbit.hub"
+    namespace = "app.novalabs.orbit"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "app.orbit.hub"
+        applicationId = "app.novalabs.orbit"
         // Android 5.0, like Pocketfader's app: the oldest release Jetpack Compose supports.
         minSdk = 21
         targetSdk = 34
