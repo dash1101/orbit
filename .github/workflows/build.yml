@@ -119,14 +119,25 @@ jobs:
           done
           kill $pid || true
           echo "smoke test passed"
+      # One file per download, nothing to unpack: the .exe and the Linux program as they are; on macOS the app is a
+      # folder (Orbit.app), so it goes in a disk image with an Applications shortcut to drag it onto.
       - name: Package
         shell: bash
         run: |
           mkdir -p out
           case "$RUNNER_OS" in
-            Windows) (cd dist && 7z a -tzip ../out/orbit-windows-x64.zip orbit.exe) ;;
-            macOS) ditto -c -k --keepParent dist/Orbit.app "out/orbit-${{ matrix.name }}.zip" ;;
-            *) tar -C dist -czf out/orbit-linux-x86_64.tar.gz orbit ;;
+            Windows) cp dist/orbit.exe out/orbit-windows-x64.exe ;;
+            macOS)
+              mkdir -p dmg && cp -R dist/Orbit.app dmg/ && ln -s /Applications dmg/Applications
+              hdiutil create -volname Orbit -srcfolder dmg -ov -format UDZO "out/orbit-${{ matrix.name }}.dmg"
+              # open it like a person would and check the app inside is there and runnable
+              hdiutil attach "out/orbit-${{ matrix.name }}.dmg" -nobrowse -readonly -mountpoint "$RUNNER_TEMP/orbit-dmg"
+              test -x "$RUNNER_TEMP/orbit-dmg/Orbit.app/Contents/MacOS/Orbit"
+              test -L "$RUNNER_TEMP/orbit-dmg/Applications"
+              "$RUNNER_TEMP/orbit-dmg/Orbit.app/Contents/MacOS/Orbit" --version
+              hdiutil detach "$RUNNER_TEMP/orbit-dmg"
+              ;;
+            *) cp dist/orbit out/orbit-linux-x86_64 ;;
           esac
           ls -la out
       - uses: actions/upload-artifact@v4

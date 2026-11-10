@@ -95,8 +95,10 @@ an earlier copy, give the workflow a signing key as repository secrets: `ORBIT_K
 
 ## The standalone programs
 
-The downloads on the releases page run without installing anything. On Linux and Windows, *orbit settings → Orbit in
-your apps menu* adds a launcher for the copy you unpacked; on macOS, drag `Orbit.app` into Applications.
+Each download on the releases page is the program itself, with nothing to unpack and nothing else to install: the `.exe`
+on Windows, a `.dmg` on macOS (open it and drag Orbit onto Applications), and the program file on Linux (allow it to
+run once with `chmod +x`, since browsers don't keep that). On Linux and Windows, *orbit settings → Orbit in your apps
+menu* adds a launcher for the copy you downloaded.
 
 ## What each app gets
 

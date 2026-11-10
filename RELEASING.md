@@ -5,7 +5,7 @@
    and Android copies differ). Orbit's own icon is drawn by `python3 tools/make-icon.py` (`packaging/icon/`).
 3. Tag and push: `git tag -a v0.2.0 -m "Orbit v0.2.0" && git push origin v0.2.0`.
 
-The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel), starts each one on its own system as a check, and publishes a pre-release with all of them. The programs bundle Python, so nothing needs installing to run them. The Android app is the one piece that depends on where the signing key is.
+The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel), starts each one on its own system as a check, and publishes a pre-release with all of them, each as a single file: the `.exe`, the Linux program, a `.dmg` per Mac type, and the `.apk`. The programs bundle Python, so nothing needs installing to run them. The Android app is the one piece that depends on where the signing key is.
 
 ## The signing key
 
