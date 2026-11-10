@@ -494,7 +494,7 @@ private fun SettingsScreen(model: HubModel) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 for ((id, label, tk) in THEMES) {
                     val on = model.theme == id
-                    Column(Modifier.width(140.dp).border(1.dp, if (on) t.accent else t.line).clickable { model.setTheme(id) }.padding(8.dp)) {
+                    Column(Modifier.width(140.dp).border(1.dp, if (on) t.accent else t.line).clickable { model.chooseTheme(id) }.padding(8.dp)) {
                         Box(Modifier.fillMaxWidth().height(46.dp).background(tk.bg).border(1.dp, tk.line)) {
                             Box(Modifier.padding(start = 7.dp, top = 8.dp).size(26.dp).background(tk.accent))
                             Box(Modifier.padding(start = 28.dp, top = 28.dp).size(8.dp).background(tk.ok))

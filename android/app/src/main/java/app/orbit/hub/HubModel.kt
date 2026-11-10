@@ -80,7 +80,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
 
     init { refresh() }
 
-    fun setTheme(id: String) { theme = id; prefs.edit().putString("theme", id).apply() }
+    fun chooseTheme(id: String) { theme = id; prefs.edit().putString("theme", id).apply() }
     fun saveToken(t: String) { token = t.trim(); prefs.edit().putString("token", token).apply(); refresh(force = true) }
 
     // ---- what's installed and what's out ----------------------------------------------------------
