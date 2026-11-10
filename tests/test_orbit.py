@@ -342,6 +342,84 @@ class NovaTests(unittest.TestCase):
         self.assertEqual(s["state"], "down")  # nothing answers /ping
         self.assertIn(["last run failed", "update check", "warn"], s["facts"])
 
+    UNITS = {u: RUNNING for u in ("nova-api.service", "nova-gate.service", "nova-helper.socket", "nova-alerts.timer",
+                                  "nova-backups.timer", "nova-labs.timer", "nova-update-check.timer")}
+
+    def _nova(self, status=None, units=None):
+        """A Nova whose monitor file holds [status] (None: no file) — as text when it isn't a dict."""
+        hub = make_hub(dict(self.UNITS if units is None else units), app_classes=())
+        n = Nova(hub.ctx, local_hosts=[])
+        n.status_file = Path(tempfile.mkdtemp()) / "status.json"
+        if status is not None:
+            n.status_file.write_text(status if isinstance(status, str) else json.dumps(status), encoding="utf-8")
+        return n
+
+    @staticmethod
+    def _monitor(level="ok", active=(), age=30, **metrics):
+        from datetime import datetime, timedelta, timezone
+        return {"updated": (datetime.now(timezone.utc) - timedelta(seconds=age)).isoformat(timespec="seconds"),
+                "level": level, "headline": "\U0001F7E2 All systems normal", "active": list(active), "metrics": metrics}
+
+    def test_health_from_the_monitor_file(self):
+        n = self._nova(self._monitor(containers="11/11 running", websites="3/3 up", data_backup="5h ago", uptime="0d 14h",
+                                     storage=[{"name": "System drive", "mount": "/", "pct": 84.8, "free": 18e9},
+                                              {"name": "Photos", "mount": "/mnt/p", "pct": 94.2, "free": 115e9}]))
+        hl = n.health()
+        self.assertEqual((hl["level"], hl["headline"], hl["issues"], hl["stale"]), ("ok", "All systems normal", [], False))
+        facts = n.status()["facts"]
+        self.assertIn(["containers", "11/11 running"], facts)
+        self.assertIn(["websites", "3/3 up"], facts)
+        self.assertIn(["storage", "Photos 94% · 115 GB free (fullest of 2)", "warn"], facts)
+        self.assertIn(["last backup", "5h ago"], facts)
+        self.assertIn(["up for", "0d 14h"], facts)
+
+    def test_health_lists_what_needs_attention(self):
+        active = [{"level": "warning", "title": "\u26a0\ufe0f Swap 87% used"}, {"level": "critical", "title": "\U0001F534 Drive sdb is failing"},
+                  {"level": "ok", "title": "\U0001F7E2 Nothing active"}]
+        n = self._nova(self._monitor("critical", active))
+        self.assertEqual(n.health()["issues"], ["Swap 87% used", "Drive sdb is failing"])
+        facts = n.status()["facts"]
+        self.assertIn(["needs attention", "Swap 87% used", "warn"], facts)
+        self.assertIn(["needs attention", "Drive sdb is failing", "warn"], facts)
+
+    def test_health_headlines_when_nova_answers(self):
+        from unittest import mock
+        answer = {"ok": True, "api": "0.9.14-alpha", "api_level": 3, "min_level": 0}
+        cases = ((self._monitor(), "ok", "Running · all systems normal"),
+                 (self._monitor("warning", [{"level": "warning", "title": "\u26a0\ufe0f Swap 87% used"}]), "warn",
+                  "Running · 1 needs attention: Swap 87% used"),
+                 (self._monitor("warning", [{"level": "warning", "title": "a"}, {"level": "warning", "title": "b"}]), "warn",
+                  "Running · 2 need attention: a"),
+                 (self._monitor(age=3 * 3600), "warn", "Running, but its alerts have stopped checking the server"),
+                 (None, "ok", "Running"))
+        for status, state, headline in cases:
+            n = self._nova(status)
+            with mock.patch.object(Nova, "address", return_value="https://127.0.0.1:8495"), \
+                    mock.patch("orbit.apps.nova.net.get_json", return_value=answer):
+                s = n.status()
+            self.assertEqual((s["state"], s["headline"]), (state, headline))
+            self.assertEqual(s["version"], "0.9.14-alpha")
+
+    def test_health_when_the_monitor_stopped_or_the_file_is_odd(self):
+        n = self._nova(self._monitor("warning", [{"level": "warning", "title": "old news"}], age=2 * 3600, containers="1/1 running"))
+        self.assertTrue(n.health()["stale"])
+        facts = n.status()["facts"]
+        self.assertIn(["monitor", "last checked 2h ago: Nova's alerts aren't running", "warn"], facts)
+        self.assertNotIn(["containers", "1/1 running"], facts)                 # old numbers aren't shown as current
+        for odd in ("not json", "[]", json.dumps({"level": "purple"}), json.dumps({"level": "ok", "metrics": "x", "active": "y"})):
+            n = self._nova(odd)
+            n.status()                                                         # never raises
+        self.assertIsNone(self._nova("[]").health())
+        self.assertIsNone(self._nova(None).health())
+        # not this computer's Nova (no units here): the file is ignored even if one is lying around
+        self.assertEqual([f for f in self._nova(self._monitor(containers="9/9 running"), units={}).status()["facts"]
+                          if f[0] == "containers"], [])
+
+    def test_optional_units_only_when_present(self):
+        labels = lambda n: [u["label"] for u in n.status()["units"]]
+        self.assertNotIn("assistant", labels(self._nova()))
+        self.assertIn("assistant", labels(self._nova(units={**self.UNITS, "nova-brain.service": RUNNING})))
+
     def test_no_privileged_actions(self):
         hub = make_hub(app_classes=())
         n = Nova(hub.ctx, local_hosts=[])

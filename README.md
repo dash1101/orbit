@@ -104,12 +104,15 @@ your apps menu* adds a launcher for the copy you unpacked; on macOS, drag `Orbit
 |---|---|---|---|
 | **Pocketfader** | running or not, output device, volume, what's playing, YouTube Music extension, EQ, release | *Pause other players*; address and access token | open web app, desktop window, start/stop/restart, start at login |
 | **YTM Beacon** | what Discord shows and why, Discord connection, extension last seen, what's playing, release; details: Discord user and app (Discord, Vesktop…), application ID, extension build, version, uptime, files | everything on the Discord card: show/hide, private mode, name in member list, album art, progress, badge, button, when paused, words never to show, and the Discord application ID | dashboard, hide for 30 min / 1 h / 3 h, show now, doctor, check for update, update, extension folders, start/stop/restart, start at login |
-| **Nova** | answering or not, version and API level, every Nova service and timer, failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web; status, doctor, recent actions; pair a phone or a view-only device, paired devices, approve a browser; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API |
+| **Nova** | answering or not, version and API level; how the server itself is doing: what needs attention, containers, websites, the fullest drive, the last backup, uptime; every Nova service and timer (the assistant and lighting when set up), failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web; status, doctor, recent actions; pair a phone, a view-only device or a phone that's away from home, paired devices, what's waiting for approval, approve a browser, remove a device; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API; linked servers, plugins |
 | **Your own apps** | the service's state and/or a health address | name, service, health address, web page | open, start/stop/restart, start at login, remove |
 
 **Why Nova is mostly read-only here.** Every Nova request except `/ping` must be signed by a paired phone, and risky
 ones are approved on it. Orbit doesn't get around that. It shows Nova's health and opens Nova web or a terminal for
-`sudo nova …` instead.
+`sudo nova …` instead. The server's own health (what needs attention, containers, drives, backups) is read from the
+status file Nova's monitor writes for dashboards (`/var/lib/nova-alerts/www/status.json`, readable by anyone on that
+computer), so it shows up when Orbit runs on the server itself; if that file stops being updated, Orbit says so
+rather than showing old numbers.
 
 **Commands run inside Orbit.** Actions such as `sudo nova status` or `ytm-beacon doctor` open in Orbit's own terminal
 (a drawer at the bottom): type straight into it, including `sudo`'s password and any questions; `ctrl+c` stops a

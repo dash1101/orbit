@@ -102,6 +102,14 @@ class NovaActionTests(unittest.TestCase):
         with self.assertRaises(BadRequest):
             n.term_command("term:approve", {"value": "x; rm -rf /"})
         self.assertEqual(n.term_command("term:approve", {"value": "AB12 CD34"})["argv"][-1], "AB12CD34")
+        self.assertEqual(n.term_command("term:add-remote", {})["argv"], ["sudo", "nova", "add", "--remote"])
+        self.assertEqual(n.term_command("term:approvals", {})["argv"], ["sudo", "nova", "approve"])
+        self.assertEqual(n.term_command("term:links", {})["argv"], ["sudo", "nova", "link"])
+        self.assertEqual(n.term_command("term:plugins", {})["argv"], ["sudo", "nova", "plugin", "list"])
+        self.assertEqual(n.term_command("term:remove", {"value": "Parker's S26"})["argv"], ["sudo", "nova", "remove", "Parker's S26"])
+        for bad in ("--all", "-x", "a; rm -rf /", "$(reboot)", ""):
+            with self.assertRaises(BadRequest, msg=bad):
+                n.term_command("term:remove", {"value": bad})
 
     @unittest.skipUnless(os.path.exists("/usr/lib/nova-api/cfsync.py"), "needs Nova installed")
     def test_cloudflare_token_goes_through_a_private_file(self):

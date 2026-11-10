@@ -3,7 +3,16 @@
 Orbit can't — and shouldn't — use Nova's API: every request except /ping must be signed by a paired device,
 and risky ones are approved on the phone. So here Nova gets: reachability and version (public /ping),
 the state of its systemd units, release checks, and doors into Nova web and the `sudo nova …` commands.
+
+How the *server* is doing (what needs attention, containers, drives, the last backup) comes from the file Nova's
+own monitor writes for dashboards, which anyone on this computer may read. It is only read, and only when Nova
+runs on this computer.
 """
+import json
+import re
+import time
+from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from .. import net
@@ -20,6 +29,17 @@ UNITS = (
     ("nova-labs.timer", "labs"),
     ("nova-update-check.timer", "update check"),
 )
+# Parts of Nova that are only there when you set them up: listed when present, never counted as missing.
+OPTIONAL_UNITS = (
+    ("nova-brain.service", "assistant"),
+    ("nova-ear.service", "assistant: voice"),
+    ("nova-rgb-anim.service", "lighting"),
+)
+# What Nova's monitor last saw (nova_alerts.py writes it for dashboards, world-readable).
+STATUS_FILE = Path("/var/lib/nova-alerts/www/status.json")
+STALE_AFTER = 15 * 60          # the monitor runs every few seconds to minutes; older than this, it has stopped
+_LEAD = re.compile(r"^[^\w/~]+\s*", re.UNICODE)          # the status emoji in front of a title
+
 # Oneshot jobs behind the timers: a failed last run is worth showing.
 JOBS = (("nova-update-check.service", "update check"), ("nova-backups.service", "backups"),
         ("nova-alerts.service", "alerts"), ("nova-labs.service", "labs"))
@@ -35,6 +55,7 @@ class Nova(App):
     repo = "dash1101/Nova"
     homepage = "https://github.com/dash1101/Nova"
     units = tuple((u, False) for u, _ in UNITS)
+    status_file = STATUS_FILE
 
     def __init__(self, ctx, local_hosts=None):
         super().__init__(ctx)
@@ -65,6 +86,61 @@ class Nova(App):
         self._found = None
         return None
 
+    def health(self):
+        """What Nova's monitor last wrote about the server, or None (not this computer, not readable, not Nova's).
+        {"level", "headline", "issues": [title…], "metrics": {…}, "age": seconds or None, "stale": bool}"""
+        try:
+            d = json.loads(self.status_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(d, dict) or d.get("level") not in ("ok", "info", "warning", "critical"):
+            return None
+        age = None
+        try:
+            age = max(0, time.time() - datetime.fromisoformat(str(d.get("updated"))).timestamp())
+        except (TypeError, ValueError):
+            pass
+        clean = lambda t: _LEAD.sub("", str(t or "")).strip()[:120]
+        issues = [clean(a.get("title")) for a in d.get("active") or []
+                  if isinstance(a, dict) and a.get("level") in ("warning", "critical") and clean(a.get("title"))]
+        m = d.get("metrics") if isinstance(d.get("metrics"), dict) else {}
+        return {"level": d["level"], "headline": clean(d.get("headline")), "issues": issues, "metrics": m,
+                "age": age, "stale": age is None or age > STALE_AFTER}
+
+    @staticmethod
+    def _ago(seconds):
+        s = int(seconds)
+        return f"{s // 86400}d ago" if s >= 86400 else f"{s // 3600}h ago" if s >= 3600 else f"{max(1, s // 60)} min ago"
+
+    def health_facts(self, hl):
+        """Rows for the status card: what needs attention first, then the server at a glance."""
+        m, out = hl["metrics"], []
+        if hl["stale"]:
+            out.append(["monitor", "last checked " + (self._ago(hl["age"]) if hl["age"] is not None else "a while ago")
+                        + ": Nova's alerts aren't running", "warn"])
+            return out
+        for t in hl["issues"][:4]:
+            out.append(["needs attention", t, "warn"])
+        if len(hl["issues"]) > 4:
+            out.append(["", f"and {len(hl['issues']) - 4} more (open Nova)", "muted"])
+        text = lambda k: m.get(k) if isinstance(m.get(k), str) and m.get(k).strip() else None
+        for key, label in (("containers", "containers"), ("websites", "websites")):
+            if text(key):
+                out.append([label, text(key)])
+        drives = [d for d in m.get("storage") or [] if isinstance(d, dict) and isinstance(d.get("pct"), (int, float))]
+        if drives:
+            d = max(drives, key=lambda x: x["pct"])
+            free = d.get("free")
+            left = f" · {free / 1e9:.0f} GB free" if isinstance(free, (int, float)) else ""
+            more = f" (fullest of {len(drives)})" if len(drives) > 1 else ""
+            out.append(["storage", f"{d.get('name') or d.get('mount') or 'drive'} {d['pct']:.0f}%{left}{more}",
+                        "warn" if d["pct"] >= 90 else None])
+        if text("data_backup"):
+            out.append(["last backup", text("data_backup")])
+        if text("uptime"):
+            out.append(["up for", text("uptime")])
+        return out
+
     def status(self):
         names = dict(UNITS)
         units = []
@@ -72,6 +148,11 @@ class Nova(App):
             st = systemd.show(self.ctx.runner, u, user=False)
             st["label"] = label
             units.append(st)
+        for u, label in OPTIONAL_UNITS:
+            st = systemd.show(self.ctx.runner, u, user=False)
+            if st.get("state") not in ("missing", None):
+                st["label"] = label
+                units.append(st)
         installed = any(u.get("state") not in ("missing", None) for u in units)
         s = {"units": units, "facts": []}
         failed_jobs = []
@@ -100,6 +181,9 @@ class Nova(App):
             f.append(["api level", f"{ping.get('api_level')} (oldest served {ping.get('min_level')})"])
         if failed_jobs:
             f.append(["last run failed", ", ".join(failed_jobs), "warn"])
+        hl = self.health() if installed else None
+        if hl:
+            f.extend(self.health_facts(hl))
         f.extend(self.remote_facts())
         if not ping:
             s.update(state="down", headline="Nova isn't answering" + (f" ({', '.join(core_bad)} not running)" if core_bad else ""))
@@ -107,6 +191,13 @@ class Nova(App):
             s.update(state="warn", headline="Answering, but " + ", ".join(core_bad) + " isn't running")
         elif failed_jobs:
             s.update(state="warn", headline=f"Running · last {failed_jobs[0]} run failed")
+        elif hl and hl["stale"]:
+            s.update(state="warn", headline="Running, but its alerts have stopped checking the server")
+        elif hl and hl["issues"]:
+            n = len(hl["issues"])
+            s.update(state="warn", headline=f"Running · {n} need{'s' if n == 1 else ''} attention: {hl['issues'][0]}")
+        elif hl:
+            s.update(state="ok", headline="Running · all systems normal")
         else:
             s.update(state="ok", headline="Running")
         rel = self.release_info(s.get("version", ""))
@@ -159,10 +250,16 @@ class Nova(App):
             t("term:log", "recent actions", "check"),
             t("term:add", "pair a phone", "phones & browsers", True),
             t("term:add-viewer", "pair a view-only device", "phones & browsers", True),
+            t("term:add-remote", "pair a phone that's away from home", "phones & browsers", True),
             t("term:devices", "paired devices", "phones & browsers"),
+            t("term:approvals", "waiting for approval", "phones & browsers"),
             t("term:approve", "approve a browser", "phones & browsers", True,
               ask={"label": "Code shown in the browser", "pattern": r"[A-Za-z0-9 -]{4,24}",
                    "patternHelp": "letters and numbers, as shown in the browser"}),
+            t("term:remove", "remove a device", "phones & browsers", True, danger=True,
+              ask={"label": "Name or ID of the device (see paired devices)", "pattern": r"[\w.'(][\w .'()-]{0,59}",
+                   "patternHelp": "its name or ID, as listed in paired devices",
+                   "help": "It can never connect again; pair it anew to bring it back."}),
             t("term:tailscale-status", "tailscale status", "away from home"),
             t("term:tailscale-up", "connect to tailscale", "away from home", True,
               confirm="Sign this computer in to Tailscale? A sign-in link appears in the terminal."),
@@ -180,6 +277,8 @@ class Nova(App):
             t("term:backup-now", "back up now", "maintenance", True),
             t("term:backup-list", "list backups", "maintenance"),
             t("term:restart", "restart api", "maintenance", True, confirm="Restart Nova's API? Phones reconnect by themselves."),
+            t("term:links", "linked servers", "more"),
+            t("term:plugins", "plugins", "more"),
         ]
 
     TERM = {
@@ -188,6 +287,10 @@ class Nova(App):
         "log": ["sudo", "nova", "log"],
         "add": ["sudo", "nova", "add"],
         "add-viewer": ["sudo", "nova", "add", "--viewer"],
+        "add-remote": ["sudo", "nova", "add", "--remote"],
+        "approvals": ["sudo", "nova", "approve"],
+        "links": ["sudo", "nova", "link"],
+        "plugins": ["sudo", "nova", "plugin", "list"],
         "devices": ["sudo", "nova", "devices"],
         "tailscale-status": ["tailscale", "status"],
         "tailscale-up": ["sudo", "tailscale", "up"],
@@ -211,6 +314,9 @@ class Nova(App):
         if key == "approve":
             code = self.ask_value(action, args)
             return {"argv": ["sudo", "nova", "approve", code.replace(" ", "")], "title": "Nova · approve a browser"}
+        if key == "remove":
+            who = self.ask_value(action, args)
+            return {"argv": ["sudo", "nova", "remove", who], "title": "Nova · remove a device"}
         if key == "cf-token":
             import os
             import tempfile
