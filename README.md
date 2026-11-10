@@ -57,8 +57,12 @@ SHA-256 checksums published with the release before it is unpacked or run. Nova'
 Nova's release signing key, which is built into Orbit rather than downloaded. Archives can't write outside their
 folder.
 
-**Private repositories** work when this computer is signed in to GitHub (`gh auth login`) or has `GITHUB_TOKEN`
-set. The token goes only to `api.github.com`, never to the file host a download is redirected to.
+**Private repositories** need a GitHub sign-in. Orbit uses, in this order: its own (orbit settings → *github* →
+*sign in with GitHub*), `GITHUB_TOKEN`/`GH_TOKEN`, or the GitHub command line's (`gh auth login`). Signing in from
+Orbit uses GitHub's device flow: Orbit shows a short code, you enter it at github.com/login/device, and no password
+passes through Orbit. The login belongs to the NovaLabs Orbit GitHub App, which can only *read* repository contents.
+The token is kept in Orbit's settings file (readable by you only) and only sent to `api.github.com`, never to the file
+host a download is redirected to. *check access* shows what the current sign-in can read, repository by repository.
 
 **Removing** keeps your settings unless you tick the box to delete them. An app installed some other way (with pip,
 or run from its source folder) is shown but left alone.
@@ -66,22 +70,33 @@ or run from its source folder) is shown but left alone.
 ## Orbit for Android
 
 `android/` is Orbit for phones and tablets (Android 5.0 and newer). It installs, updates, opens and removes the
-Android apps of **Pocketfader** and **Nova**, and lists **YTM Beacon** as not available on Android yet (it runs on
-your computer, next to Discord).
+Android apps of **Pocketfader** and **Nova**, and updates **Orbit** itself. YTM Beacon has no separate Android app:
+its Discord status controls are built into Pocketfader.
 
 Installing works like the desktop installer: review what will happen, then each step ticks off with the download's
 progress, then a result. The APK comes from the app's GitHub release and is checked before Android sees it: its
 SHA-256 against the release's checksums, Nova's checksums against Nova's release key (built into Orbit) where the
 phone can check ed25519 signatures, and that the file really is that app. Android's own installer then asks you to
-confirm. The first time, Android asks you to allow Orbit to install apps.
+confirm.
 
-A private repository's releases need a GitHub token, which you can add in Orbit's settings on the phone. It stays
-in Orbit's private storage and is only sent to `api.github.com`. The app has the same themes as the desktop.
+Android only lets an app install others once you allow it ("install unknown apps"). Orbit checks this first and says
+so on the review screen, before anything is downloaded, with a button that opens the right Settings page.
+
+A private repository's releases need a GitHub sign-in: *sign in with GitHub* in Orbit's settings on the phone (the
+same device flow as the desktop), or a fine-grained token with **Repository access → Only select repositories** and
+**Contents: Read-only** (the default, *Public repositories*, can't see private ones). *check access* shows what it can
+read. It stays in Orbit's private storage and is only sent to `api.github.com`. The app has the same themes as the
+desktop.
 
 Build it with Gradle 8.9 and JDK 17 (`cd android && gradle :app:assembleRelease`), or let the `build` workflow in
 `.github/workflows` build it. A `v*` tag publishes a release. The app id is `app.novalabs.orbit`. To install updates over
 an earlier copy, give the workflow a signing key as repository secrets: `ORBIT_KEYSTORE_B64`,
 `ORBIT_KEYSTORE_PASSWORD` and `ORBIT_KEY_ALIAS`. Without them a release leaves the Android app out.
+
+## The standalone programs
+
+The downloads on the releases page run without installing anything. On Linux and Windows, *orbit settings → Orbit in
+your apps menu* adds a launcher for the copy you unpacked; on macOS, drag `Orbit.app` into Applications.
 
 ## What each app gets
 
