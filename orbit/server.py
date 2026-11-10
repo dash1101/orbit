@@ -17,7 +17,10 @@ from . import __version__
 from . import apps as apps_mod
 from .apps.base import BadRequest
 from .apps.custom import validate as validate_custom
+from . import desktop_entry
+from . import net
 from .config import Config
+from .github_login import Login, LoginError
 from .install import recipes as recipes_mod
 from .install.engine import Failed, Installer, Sources
 from .install.host import Host
@@ -38,6 +41,8 @@ THEMES = [
     {"id": "mono", "label": "tui · mono"},
 ]
 THEME_IDS = {t["id"] for t in THEMES}
+ORBIT_REPO = "dash1101/orbit"
+ORBIT_RELEASES = f"https://github.com/{ORBIT_REPO}/releases"
 # What a custom theme may set (the same tokens the built-in ones use).
 THEME_COLORS = ("bg", "raise", "line", "line-hi", "text", "muted", "legend", "accent", "accent-ink",
                 "ok", "warn", "down", "off", "sel")
@@ -119,6 +124,8 @@ class Hub:
         self._lock = threading.Lock()
         self._cache = {}
         self._pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="orbit-status")
+        self.github = Login(self.ctx.config)
+        net.set_login_provider(self.github.token)
         self.terminals = Terminals()
         self.last_seen = time.time()   # when a page last asked for anything
         self.host = host or Host()
@@ -299,7 +306,8 @@ class Hub:
 
     def hub_info(self):
         c = self.ctx.config.get()
-        return {"name": "Orbit", "version": __version__, "dryRun": self.ctx.dry_run,
+        return {"name": "Orbit", "version": __version__, "dryRun": self.ctx.dry_run, "github": self.github.state(),
+                "orbitUpdate": self.orbit_update(), "menu": desktop_entry.state(),
                 "themes": THEMES + [dict(t, custom=True) for t in c.get("themes", [])], "themeTokens": THEME_COLORS,
                 "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"]},
                 "apps": [dict(a.describe(), enabled=self.enabled(i)) for i, a in self.apps.items()]}
@@ -356,6 +364,23 @@ class Hub:
         self.ctx.config.update({"custom": self.ctx.config.get("custom") + [spec]})
         self.reload()
         return {"ok": True, "id": spec["id"]}
+
+    def orbit_update(self):
+        """A newer Orbit on GitHub? Looked up in the background (with the release checks), never blocking."""
+        if not self.ctx.config.get("checkUpdates"):
+            return None
+        info = self.ctx.releases.cached(ORBIT_REPO)
+        if info is None:
+            self._pool.submit(self.ctx.releases.latest, ORBIT_REPO)
+            return None
+        rel = info.get("release") if info.get("ok") else None
+        if not rel or not net.is_newer(rel.get("tag", ""), __version__):
+            return None
+        return {"version": rel["tag"].lstrip("vV"), "url": rel.get("url") or ORBIT_RELEASES}
+
+    def github_access(self):
+        repos = [r.repo for r in self.installer.recipes.values()] + [ORBIT_REPO]
+        return {"access": self.github.access(repos), "state": self.github.state()}
 
     def check_updates(self):
         for a in self.apps.values():
@@ -453,6 +478,10 @@ def make_handler(hub, port_ref):
                     return self._send(200, (STATIC / "apps" / m.group(1)).read_bytes(), ctype)
                 if path == "/api/hub":
                     return self._send(200, hub.hub_info())
+                if path == "/api/github":
+                    return self._send(200, hub.github.state())
+                if path == "/api/github/access":
+                    return self._send(200, hub.github_access())
                 if path == "/api/apps":
                     return self._send(200, {"apps": hub.overview(), "dryRun": hub.ctx.dry_run})
                 if path == "/api/install":
@@ -509,7 +538,26 @@ def make_handler(hub, port_ref):
                 if path == "/api/hub/custom":
                     return self._send(200, hub.add_custom(body))
                 if path == "/api/hub/check-updates":
+                    hub._pool.submit(hub.ctx.releases.latest, ORBIT_REPO, True)
                     return self._send(200, hub.check_updates())
+                if path == "/api/hub/menu":
+                    return self._send(200, desktop_entry.add(hub.ctx.runner))
+                if path == "/api/hub/open-release":
+                    hub.ctx.runner.launch(open_argv((hub.orbit_update() or {}).get("url") or ORBIT_RELEASES))
+                    return self._send(200, {"ok": True, "message": "opened Orbit's releases"})
+                if path == "/api/github/login":
+                    try:
+                        return self._send(200, hub.github.start())
+                    except LoginError as e:
+                        raise BadRequest(str(e)) from None
+                if path == "/api/github/open":
+                    hub.ctx.runner.launch(open_argv("https://github.com/login/device"))
+                    return self._send(200, {"ok": True, "message": "opened github.com/login/device"})
+                if path == "/api/github/cancel":
+                    hub.github.cancel()
+                    return self._send(200, hub.github.state())
+                if path == "/api/github/logout":
+                    return self._send(200, hub.github.sign_out())
                 m = _TERM_RE.match(path)
                 if m and m.group(2):
                     t = hub.terminals.get(m.group(1))

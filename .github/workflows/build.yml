@@ -77,13 +77,13 @@ jobs:
       - name: "Build (bundles Python, so nothing needs installing to run it)"
         shell: bash
         run: |
-          pip install pyinstaller
+          pip install pyinstaller pillow   # Pillow turns the PNG icon into .ico / .icns
           sep=":"; [ "$RUNNER_OS" = Windows ] && sep=";"
           common=(--noconfirm --paths . --collect-submodules orbit --add-data "orbit/static${sep}orbit/static")
           if [ "$RUNNER_OS" = Windows ]; then
-            pyinstaller "${common[@]}" --onefile --windowed --name orbit packaging/entry.py
+            pyinstaller "${common[@]}" --onefile --windowed --name orbit --icon packaging/icon/orbit-1024.png packaging/entry.py
           elif [ "$RUNNER_OS" = macOS ]; then
-            pyinstaller "${common[@]}" --windowed --name Orbit --osx-bundle-identifier app.novalabs.orbit packaging/entry.py
+            pyinstaller "${common[@]}" --windowed --name Orbit --osx-bundle-identifier app.novalabs.orbit --icon packaging/icon/orbit-1024.png packaging/entry.py
           else
             pyinstaller "${common[@]}" --onefile --name orbit packaging/entry.py
           fi

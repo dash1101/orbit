@@ -90,7 +90,8 @@ class Releases:
         try:
             info = {"ok": True, "release": self._fetch(repo)}
         except HttpError as e:
-            info = {"ok": False, "error": "not found (private repository?)" if e.status == 404 else str(e) or "offline"}
+            info = {"ok": False, "error": "can't see it: if it's private, sign in with GitHub in Orbit's settings"
+                    if e.status == 404 else str(e) or "offline"}
         except (ValueError, TypeError):
             info = {"ok": False, "error": "unexpected reply"}
         info["checked"] = time.time()
@@ -111,23 +112,54 @@ def newest_release(items):
 
 
 _token = [None]
+_login = [None]   # callable() -> Orbit's own GitHub sign-in token, set by the hub
+
+
+def set_login_provider(fn):
+    _login[0] = fn
+    forget_token()
+
+
+def forget_token():
+    _token[0] = None
+
+
+def env_token():
+    import os
+    return os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+
+
+def gh_cli_token():
+    """The GitHub command line's sign-in, when it's installed and signed in (cached with the rest)."""
+    if _token[0] is not None and time.time() - _token[0][0] <= 600 and _token[0][2] == "gh":
+        return _token[0][1]
+    import shutil
+    import subprocess
+    if not shutil.which("gh"):
+        return ""
+    try:
+        p = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5,
+                           stdin=subprocess.DEVNULL)
+        return p.stdout.strip() if p.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
 
 
 def github_token():
-    """This computer's GitHub sign-in (GITHUB_TOKEN/GH_TOKEN, or the `gh` command's), cached for 10 minutes."""
+    """The GitHub token Orbit uses: its own sign-in, else GITHUB_TOKEN/GH_TOKEN, else the `gh` command's.
+    Only ever sent to api.github.com."""
+    if _login[0] is not None:
+        try:
+            own = _login[0]() or ""
+        except Exception:
+            own = ""
+        if own:
+            return own
     if _token[0] is None or time.time() - _token[0][0] > 600:
-        import os
-        import shutil
-        import subprocess
-        tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-        if not tok and shutil.which("gh"):
-            try:
-                p = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5,
-                                   stdin=subprocess.DEVNULL)
-                tok = p.stdout.strip() if p.returncode == 0 else ""
-            except (OSError, subprocess.TimeoutExpired):
-                tok = ""
-        _token[0] = (time.time(), tok)
+        tok, src = env_token(), "env"
+        if not tok:
+            tok, src = gh_cli_token(), "gh"
+        _token[0] = (time.time(), tok, src)
     return _token[0][1]
 
 

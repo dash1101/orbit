@@ -18,6 +18,7 @@ data class Listing(
     val apk: (Collection<String>) -> String? = { null },
     val note: String = "",
     val extra: String = "",        // shown on the app's card
+    val self: Boolean = false,     // Orbit itself: only ever updated, never opened or removed from here
 ) {
     val onAndroid get() = pkgs.isNotEmpty()
 }
@@ -43,6 +44,15 @@ object Catalog {
             sums = "SHA256SUMS", signature = "SHA256SUMS.sig", signingKey = NOVA_KEY,
             apk = { names -> names.firstOrNull { it == "nova-universal.apk" } ?: names.firstOrNull { it.endsWith("-universal.apk") } },
             note = "The Nova app pairs with a Nova server on Linux (sudo nova add shows the code).",
+        ),
+        Listing(
+            id = "orbit", name = "Orbit",
+            blurb = "This app",
+            repo = "dash1101/orbit", pkgs = listOf("app.novalabs.orbit"), icon = "orbit.svg", color = 0xFFF0668E,
+            sums = "SHA256SUMS",
+            apk = { names -> names.firstOrNull { Regex("""orbit-v[^/]*-android\.apk""").matches(it) } },
+            note = "Orbit updates itself from its GitHub releases. While its repository is private, sign in with GitHub first.",
+            self = true,
         ),
     )
 }

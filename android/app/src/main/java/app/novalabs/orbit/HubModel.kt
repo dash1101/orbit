@@ -71,17 +71,104 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     val cards = mutableStateMapOf<String, Card>()
     var theme by mutableStateOf(prefs.getString("theme", "tui") ?: "tui")
         private set
-    var token by mutableStateOf(prefs.getString("token", "") ?: "")
-        private set
     var job by mutableStateOf<InstallJob?>(null)
         private set
     private var running: Job? = null
     private val fetched = HashMap<String, Long>()
 
+    // GitHub: Orbit's own sign-in, or a token typed in by hand. Only ever sent to api.github.com.
+    var loginToken by mutableStateOf(prefs.getString("loginToken", "") ?: "")
+        private set
+    var login by mutableStateOf(prefs.getString("login", "") ?: "")
+        private set
+    var manualToken by mutableStateOf(prefs.getString("token", "") ?: "")
+        private set
+    val token: String get() = loginToken.ifBlank { manualToken }
+    var device by mutableStateOf<GitHubLogin.Device?>(null)
+        private set
+    var loginError by mutableStateOf("")
+        private set
+    private var loginJob: Job? = null
+    var access by mutableStateOf<Map<String, String>?>(null)
+        private set
+
+    /** Whether Android lets Orbit install apps yet ("install unknown apps"); re-read whenever Orbit comes back. */
+    var canInstall by mutableStateOf(true)
+        private set
+    /** Android's "install this app?" screen, when it couldn't open by itself. */
+    var pendingConfirm by mutableStateOf<Intent?>(null)
+        private set
+
     init { refresh() }
 
     fun chooseTheme(id: String) { theme = id; prefs.edit().putString("theme", id).apply() }
-    fun saveToken(t: String) { token = t.trim(); prefs.edit().putString("token", token).apply(); refresh(force = true) }
+    fun saveManualToken(t: String) {
+        manualToken = t.trim(); prefs.edit().putString("token", manualToken).apply(); access = null; refresh(force = true)
+    }
+
+    // ---- GitHub sign-in (device flow) -------------------------------------------------------------
+    fun signIn() {
+        if (!GitHubLogin.available || loginJob?.isActive == true) return
+        loginError = ""
+        loginJob = viewModelScope.launch {
+            try {
+                val d = withContext(Dispatchers.IO) { GitHubLogin.start() }
+                device = d
+                openUrl(d.uri)
+                while (true) {
+                    delay(d.interval * 1000L)
+                    when (val p = withContext(Dispatchers.IO) { GitHubLogin.poll(d) }) {
+                        is GitHubLogin.Poll.Pending -> continue
+                        is GitHubLogin.Poll.Failed -> { loginError = p.message; break }
+                        is GitHubLogin.Poll.Token -> {
+                            val who = withContext(Dispatchers.IO) { GitHubLogin.user(p.token) }
+                            loginToken = p.token
+                            login = who
+                            prefs.edit().putString("loginToken", p.token).putString("login", who).apply()
+                            access = null
+                            refresh(force = true)
+                            break
+                        }
+                    }
+                }
+            } catch (e: Problem) {
+                loginError = e.message ?: "Couldn't sign in."
+            } finally {
+                device = null
+            }
+        }
+    }
+
+    fun cancelSignIn() { loginJob?.cancel(); device = null }
+
+    fun signOut() {
+        loginToken = ""; login = ""
+        prefs.edit().remove("loginToken").remove("login").apply()
+        access = null
+        refresh(force = true)
+    }
+
+    /** What the current sign-in or token can read, repository by repository. */
+    fun checkAccess() {
+        viewModelScope.launch {
+            access = withContext(Dispatchers.IO) {
+                Catalog.apps.filter { it.onAndroid }.associate { it.repo to GitHub.access(it.repo, token) }
+            }
+        }
+    }
+
+    fun openUrl(url: String) {
+        try {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: RuntimeException) { }
+    }
+
+    /** Android's "install unknown apps" page for Orbit. */
+    fun openInstallPermission() {
+        if (Build.VERSION.SDK_INT < 26) return
+        ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     // ---- what's installed and what's out ----------------------------------------------------------
     fun installedVersion(a: Listing): String? = a.pkgs.firstNotNullOfOrNull { versionOf(it) }
@@ -102,6 +189,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
 
     /** Re-reads installed versions (cheap) and, at most every 10 minutes unless forced, the latest releases. */
     fun refresh(force: Boolean = false) {
+        canInstall = Build.VERSION.SDK_INT < 26 || ctx.packageManager.canRequestPackageInstalls()
         for (a in Catalog.apps) {
             val old = cards[a.id] ?: Card()
             cards[a.id] = old.copy(installed = installedVersion(a))
@@ -142,11 +230,11 @@ class HubModel(app: Application) : AndroidViewModel(app) {
         if (job?.state == JobState.RUNNING || !a.onAndroid) return
         val before = installedVersion(a)
         val steps = buildList {
+            add(Step("allow", "Allow Orbit to install apps"))   // first: nothing is downloaded before this
             add(Step("find", "Find the latest release"))
             if (a.signature != null) add(Step("signature", "Check the release's signature"))
             add(Step("download", "Download"))
             add(Step("verify", "Check the download"))
-            add(Step("allow", "Allow Orbit to install apps"))
             add(Step("install", "Install"))
         }
         val title = when {
@@ -171,58 +259,8 @@ class HubModel(app: Application) : AndroidViewModel(app) {
         var current: Step? = null
         fun step(id: String) = j.steps.first { it.id == id }.also { current = it; it.begin() }
         try {
-            // 1 · release
-            var s = step("find")
-            s.detail = "asking GitHub"
-            val rel = withContext(Dispatchers.IO) { GitHub.latest(a.repo, token) }
-            val apkName = a.apk(rel.assets.keys) ?: throw Problem("The ${rel.tag} release has no Android app.")
-            val apk = rel.assets[apkName]!!
-            val sumsAsset = rel.assets[a.sums] ?: throw Problem("The ${rel.tag} release has no checksum list, so Orbit won't install it.")
-            s.detail = "${rel.tag} · $apkName"
-            j.log += "Latest release: ${rel.tag}"
-            s.end()
-            val sums = withContext(Dispatchers.IO) { GitHub.text(sumsAsset, a.repo, token) }
-
-            // 2 · signature (Nova)
-            if (a.signature != null) {
-                s = step("signature")
-                val sigAsset = rel.assets[a.signature] ?: throw Problem("This release isn't signed, so Orbit won't install it.")
-                val sig = withContext(Dispatchers.IO) { GitHub.text(sigAsset, a.repo, token) }
-                when (Checks.ed25519(a.signingKey!!, sums.toByteArray(), sig)) {
-                    true -> { s.detail = "signed with ${a.name}'s release key"; s.end() }
-                    false -> throw Problem("The release's signature doesn't match ${a.name}'s release key, so it won't be installed.",
-                        "Don't install this download. Check the ${a.name} repository for news.")
-                    null -> { s.detail = "this Android can't check it; the checksum is still checked"; s.end(StepState.SKIPPED) }
-                }
-            }
-
-            // 3 · download
-            s = step("download")
-            s.detail = "$apkName · ${size(apk.size)}"
-            val out = File(dir, "${a.id}.apk").also { file = it; it.delete() }
-            val sha = withContext(Dispatchers.IO) {
-                GitHub.download(apk, a.repo, token, out, { got, total ->
-                    s.progress = if (total > 0) got.toFloat() / total else null
-                    s.detail = "${size(got)} / ${size(total)}"
-                }, { j.cancelled })
-            }
-            s.end()
-
-            // 4 · checks
-            s = step("verify")
-            val expected = Checks.parseSums(sums)[apkName]
-                ?: throw Problem("The release doesn't list a checksum for $apkName, so it won't be installed.")
-            if (expected != sha) throw Problem("$apkName doesn't match its published checksum, so it won't be installed.",
-                "The download may be damaged. Try again.")
-            val archived = if (Build.VERSION.SDK_INT >= 33)
-                ctx.packageManager.getPackageArchiveInfo(out.path, PackageManager.PackageInfoFlags.of(0))
-            else @Suppress("DEPRECATION") ctx.packageManager.getPackageArchiveInfo(out.path, 0)
-            if (archived == null || archived.packageName !in a.pkgs) throw Problem("The download isn't ${a.name}'s app, so it won't be installed.")
-            s.detail = "SHA-256 ${sha.take(12)}… · ${archived.versionName}"
-            s.end()
-
-            // 5 · permission to install
-            s = step("allow")
+            // 1 · permission to install (before anything is downloaded)
+            var s = step("allow")
             if (Build.VERSION.SDK_INT >= 26 && !ctx.packageManager.canRequestPackageInstalls()) {
                 s.detail = "turn on “Allow from this source”, then come back"
                 ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}"))
@@ -236,6 +274,56 @@ class HubModel(app: Application) : AndroidViewModel(app) {
                 s.end(StepState.SKIPPED)
             }
 
+            // 2 · release
+            s = step("find")
+            s.detail = "asking GitHub"
+            val rel = withContext(Dispatchers.IO) { GitHub.latest(a.repo, token) }
+            val apkName = a.apk(rel.assets.keys) ?: throw Problem("The ${rel.tag} release has no Android app.")
+            val apk = rel.assets[apkName]!!
+            val sumsAsset = rel.assets[a.sums] ?: throw Problem("The ${rel.tag} release has no checksum list, so Orbit won't install it.")
+            s.detail = "${rel.tag} · $apkName"
+            j.log += "Latest release: ${rel.tag}"
+            s.end()
+            val sums = withContext(Dispatchers.IO) { GitHub.text(sumsAsset, a.repo, token) }
+
+            // 3 · signature (Nova)
+            if (a.signature != null) {
+                s = step("signature")
+                val sigAsset = rel.assets[a.signature] ?: throw Problem("This release isn't signed, so Orbit won't install it.")
+                val sig = withContext(Dispatchers.IO) { GitHub.text(sigAsset, a.repo, token) }
+                when (Checks.ed25519(a.signingKey!!, sums.toByteArray(), sig)) {
+                    true -> { s.detail = "signed with ${a.name}'s release key"; s.end() }
+                    false -> throw Problem("The release's signature doesn't match ${a.name}'s release key, so it won't be installed.",
+                        "Don't install this download. Check the ${a.name} repository for news.")
+                    null -> { s.detail = "this Android can't check it; the checksum is still checked"; s.end(StepState.SKIPPED) }
+                }
+            }
+
+            // 4 · download
+            s = step("download")
+            s.detail = "$apkName · ${size(apk.size)}"
+            val out = File(dir, "${a.id}.apk").also { file = it; it.delete() }
+            val sha = withContext(Dispatchers.IO) {
+                GitHub.download(apk, a.repo, token, out, { got, total ->
+                    s.progress = if (total > 0) got.toFloat() / total else null
+                    s.detail = "${size(got)} / ${size(total)}"
+                }, { j.cancelled })
+            }
+            s.end()
+
+            // 5 · checks
+            s = step("verify")
+            val expected = Checks.parseSums(sums)[apkName]
+                ?: throw Problem("The release doesn't list a checksum for $apkName, so it won't be installed.")
+            if (expected != sha) throw Problem("$apkName doesn't match its published checksum, so it won't be installed.",
+                "The download may be damaged. Try again.")
+            val archived = if (Build.VERSION.SDK_INT >= 33)
+                ctx.packageManager.getPackageArchiveInfo(out.path, PackageManager.PackageInfoFlags.of(0))
+            else @Suppress("DEPRECATION") ctx.packageManager.getPackageArchiveInfo(out.path, 0)
+            if (archived == null || archived.packageName !in a.pkgs) throw Problem("The download isn't ${a.name}'s app, so it won't be installed.")
+            s.detail = "SHA-256 ${sha.take(12)}… · ${archived.versionName}"
+            s.end()
+
             // 6 · install
             s = step("install")
             s.detail = "Android asks you to confirm"
@@ -245,7 +333,8 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             s.end()
 
             j.headline = if (before == null) "${a.name} is installed." else "${a.name} is up to date."
-            j.body = a.note
+            if (a.self) j.body = "Orbit restarts on the new version."
+            if (!a.self) j.body = a.note
             j.state = JobState.DONE
         } catch (e: CancellationException) {
             current?.end(StepState.FAILED)
@@ -277,6 +366,12 @@ class HubModel(app: Application) : AndroidViewModel(app) {
         val wait = async(start = CoroutineStart.UNDISPATCHED) {
             InstallEvents.results.first { it.session == id && it.status != PackageInstaller.STATUS_PENDING_USER_ACTION }
         }
+        // Android's confirmation screen, kept so the sheet can offer it if it couldn't open by itself
+        val watch = launch(start = CoroutineStart.UNDISPATCHED) {
+            InstallEvents.results.collect {
+                if (it.session == id && it.status == PackageInstaller.STATUS_PENDING_USER_ACTION) pendingConfirm = it.confirm
+            }
+        }
         installer.openSession(id).use { session ->
             session.openWrite("base.apk", 0, apk.length()).use { out ->
                 apk.inputStream().use { it.copyTo(out) }
@@ -286,7 +381,12 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             val intent = Intent(ctx, InstallReceiver::class.java).setPackage(ctx.packageName)
             session.commit(PendingIntent.getBroadcast(ctx, id, intent, flags).intentSender)
         }
-        wait.await()
+        try {
+            wait.await()
+        } finally {
+            watch.cancel()
+            pendingConfirm = null
+        }
     }
 
     private fun installProblem(r: InstallResult, a: Listing) = when (r.status) {

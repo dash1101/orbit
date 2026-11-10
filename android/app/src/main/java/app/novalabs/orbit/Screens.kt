@@ -60,6 +60,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -82,7 +85,7 @@ fun OrbitApp(model: HubModel) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Txt("[", bold = true); Txt("orbit", color = t.accent, bold = true); Txt("]", bold = true)
             Spacer(Modifier.width(10.dp))
-            val n = Catalog.apps.count { it.onAndroid }
+            val n = Catalog.apps.count { it.onAndroid && !it.self }
             val upd = Catalog.apps.count { model.cards[it.id]?.update == true }
             Txt("── $n apps for android" + if (upd > 0) " · $upd update${if (upd > 1) "s" else ""}" else "",
                 Modifier.weight(1f), color = t.muted, maxLines = 1)
@@ -180,11 +183,12 @@ private fun AppCard(model: HubModel, app: Listing, review: () -> Unit) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val busy = model.job?.state == JobState.RUNNING
                 when {
+                    app.self -> if (card.update) TuiButton("update to ${card.release!!.version}", kind = Kind.PRIMARY, enabled = !busy) { review() }
                     card.installed == null -> TuiButton("install", kind = Kind.PRIMARY, enabled = !busy) { review() }
                     card.update -> TuiButton("update to ${card.release!!.version}", kind = Kind.PRIMARY, enabled = !busy) { review() }
                     else -> TuiButton("reinstall", enabled = !busy && card.release != null) { review() }
                 }
-                if (card.installed != null) {
+                if (card.installed != null && !app.self) {
                     TuiButton("open") { model.open(app) }
                     TuiButton("remove", kind = Kind.DANGER, enabled = !busy) { model.uninstall(app) }
                 }
@@ -243,17 +247,27 @@ fun InstallSheet(model: HubModel, app: Listing, onClose: () -> Unit) {
                             TuiButton("cancel", onClick = onClose)
                             Spacer(Modifier.weight(1f))
                             val card = model.cards[app.id] ?: Card()
-                            TuiButton(if (card.installed == null) "install" else if (card.update) "update" else "reinstall",
+                            if (!model.canInstall) TuiButton("allow installing apps", kind = Kind.GO) { model.openInstallPermission() }
+                            else TuiButton(if (card.installed == null) "install" else if (card.update) "update" else "reinstall",
                                 kind = Kind.GO, enabled = card.release != null) { model.install(app) }
                         }
                         1 -> {
                             TuiButton("cancel", kind = Kind.DANGER) { model.cancelJob() }
                             Spacer(Modifier.weight(1f))
+                            val confirm = model.pendingConfirm
+                            if (confirm != null) {
+                                // Android's "install?" screen couldn't open by itself (Orbit was in the background)
+                                val ctx = LocalContext.current
+                                TuiButton("confirm install", kind = Kind.GO) {
+                                    try { ctx.startActivity(confirm) } catch (e: RuntimeException) { }
+                                }
+                            }
                         }
                         else -> {
                             TuiButton("close", onClick = onClose)
                             Spacer(Modifier.weight(1f))
-                            if (job?.state == JobState.DONE) TuiButton("open ${app.name}", kind = Kind.GO) { model.open(app); onClose() }
+                            if (job?.state == JobState.DONE && !app.self) TuiButton("open ${app.name}", kind = Kind.GO) { model.open(app); onClose() }
+                            else if (job?.state == JobState.DONE) TuiButton("done", kind = Kind.GO, onClick = onClose)
                             else TuiButton("try again", kind = Kind.GO) { model.dismissJob(); model.install(app) }
                         }
                     }
@@ -303,6 +317,12 @@ private fun Review(model: HubModel, app: Listing) {
     val card = model.cards[app.id] ?: Card()
     val rel = card.release
     Spacer(Modifier.height(4.dp))
+    if (!model.canInstall) {
+        Callout("First, Android needs your OK for Orbit to install apps.",
+            "Tap “allow installing apps” below, turn on “Allow from this source” for Orbit, then come back here. " +
+                "Nothing is downloaded until you do.", t.warn)
+        Spacer(Modifier.height(10.dp))
+    }
     if (rel == null) {
         if (card.error.isNotEmpty()) {
             Callout(card.error, card.hint, t.down)
@@ -313,6 +333,7 @@ private fun Review(model: HubModel, app: Listing) {
         "this device" to "Android ${Build.VERSION.RELEASE}",
         app.name to (card.installed?.let { "installed $it" } ?: "not installed yet"),
         "latest" to "${rel.tag}${if (rel.prerelease) " · pre-release" else ""}",
+        "installing apps" to if (model.canInstall) "allowed for Orbit" else "not allowed yet (see above)",
     ))
     Spacer(Modifier.height(12.dp))
     Txt("Orbit will:")
@@ -514,27 +535,84 @@ private fun SettingsScreen(model: HubModel) {
                 }
             }
         }
-        LegendBox("github") {
-            var text by remember { mutableStateOf(model.token) }
-            Txt("Token for private repositories (optional)")
-            Txt("Only needed while an app's repository is private. Create a fine-grained token on github.com with read access " +
-                "to its contents. It's kept in Orbit's private storage and only sent to api.github.com.",
-                color = t.muted, size = 12.5.sp)
-            Spacer(Modifier.height(8.dp))
-            BasicTextField(text, { text = it }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
-                textStyle = TextStyle(fontFamily = Mono, fontSize = 14.sp, color = t.text), cursorBrush = SolidColor(t.accent),
-                modifier = Modifier.fillMaxWidth().background(t.raise, RoundedCornerShape(t.radius.dp))
-                    .border(1.dp, t.line, RoundedCornerShape(t.radius.dp)).padding(8.dp))
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TuiButton("save", kind = Kind.PRIMARY) { model.saveToken(text) }
-                if (model.token.isNotEmpty()) TuiButton("remove", kind = Kind.DANGER) { text = ""; model.saveToken("") }
-            }
-        }
+        LegendBox("github") { GitHubBox(model) }
         LegendBox("about") {
-            Txt("Orbit for Android (by NovaLabs) installs and updates the Android apps of Pocketfader and Nova. Orbit for desktop " +
-                "(Linux, Windows, macOS) manages the programs on your computer.", color = t.muted, size = 12.5.sp)
+            Txt("Orbit for Android, by NovaLabs, installs and updates the Android apps of Pocketfader and Nova, and itself. " +
+                "Orbit for desktop (Linux, Windows, macOS) manages the programs on your computer.", color = t.muted, size = 12.5.sp)
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GitHubBox(model: HubModel) {
+    val t = LocalTokens.current
+    val clip = LocalClipboardManager.current
+    var showToken by remember { mutableStateOf(model.manualToken.isNotEmpty() || !GitHubLogin.available) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Square(if (model.token.isNotEmpty()) t.ok else t.off)
+        Txt(when {
+            model.loginToken.isNotEmpty() -> "  signed in as " + (model.login.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "you")
+            model.manualToken.isNotEmpty() -> "  using your token"
+            else -> "  not signed in"
+        })
+    }
+    Txt("Public repositories need no sign-in. Signing in lets Orbit read releases from private ones: it can only read " +
+        "repository contents, and stays in Orbit's private storage, sent only to api.github.com.", color = t.muted, size = 12.5.sp)
+    Spacer(Modifier.height(10.dp))
+    val d = model.device
+    if (d != null) {
+        Column(Modifier.fillMaxWidth().border(1.dp, t.accent).padding(12.dp)) {
+            Txt("On github.com/login/device, enter:", color = t.muted, size = 12.5.sp)
+            Txt(d.userCode, color = t.accent, size = 28.sp, bold = true)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TuiButton("open GitHub", kind = Kind.PRIMARY) { model.openUrl(d.uri) }
+                TuiButton("copy code") { clip.setText(AnnotatedString(d.userCode)) }
+                TuiButton("cancel") { model.cancelSignIn() }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row { Spinner(); Txt(" waiting for you to approve it on GitHub…", color = t.muted, size = 12.5.sp) }
+        }
+    } else {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (GitHubLogin.available && model.loginToken.isEmpty()) TuiButton("sign in with GitHub", kind = Kind.PRIMARY) { model.signIn() }
+            if (model.loginToken.isNotEmpty()) TuiButton("sign out", kind = Kind.DANGER) { model.signOut() }
+            TuiButton("check access") { model.checkAccess() }
+            if (GitHubLogin.available) TuiButton(if (showToken) "hide token" else "use a token instead") { showToken = !showToken }
+        }
+    }
+    if (model.loginError.isNotEmpty()) { Spacer(Modifier.height(6.dp)); Txt(model.loginError, color = t.warn, size = 12.5.sp) }
+    model.access?.let { acc ->
+        Spacer(Modifier.height(10.dp))
+        for ((repo, st) in acc) Row(Modifier.padding(vertical = 2.dp)) {
+            Txt(repo, Modifier.width(170.dp), color = t.muted, size = 12.5.sp, maxLines = 1)
+            Txt(when (st) {
+                "no access" -> "✗ can't see it"
+                "offline" -> "? couldn't reach GitHub"
+                else -> "✓ $st"
+            }, color = if (st == "no access") t.warn else t.text, size = 12.5.sp)
+        }
+        if (acc.values.any { it == "no access" }) Txt("A private repository needs the sign-in (or a token) to have access to it.",
+            color = t.muted, size = 12.sp)
+    }
+    if (showToken) {
+        Spacer(Modifier.height(12.dp))
+        var text by remember { mutableStateOf(model.manualToken) }
+        Txt("Token (instead of signing in)")
+        Txt("On github.com: Settings → Developer settings → Fine-grained tokens → Generate. Under Repository access choose " +
+            "“Only select repositories” and pick the private ones (the default, “Public repositories”, can't see them). " +
+            "Under Permissions → Repository permissions set Contents to Read-only.", color = t.muted, size = 12.5.sp)
+        Spacer(Modifier.height(8.dp))
+        BasicTextField(text, { text = it }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+            textStyle = TextStyle(fontFamily = Mono, fontSize = 14.sp, color = t.text), cursorBrush = SolidColor(t.accent),
+            modifier = Modifier.fillMaxWidth().background(t.raise, RoundedCornerShape(t.radius.dp))
+                .border(1.dp, t.line, RoundedCornerShape(t.radius.dp)).padding(8.dp))
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TuiButton("save", kind = Kind.PRIMARY) { model.saveManualToken(text); model.checkAccess() }
+            if (model.manualToken.isNotEmpty()) TuiButton("remove", kind = Kind.DANGER) { text = ""; model.saveManualToken("") }
+        }
     }
 }

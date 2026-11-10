@@ -85,9 +85,13 @@ def _gtk(url, title):
     win.set_default_size(1180, 760)
     win.set_wmclass("orbit", "Orbit")
     try:
-        win.set_icon_name("utilities-system-monitor")
+        from pathlib import Path
+        win.set_icon_from_file(str(Path(__file__).parent / "static" / "icon.svg"))
     except Exception:
-        pass
+        try:
+            win.set_icon_name("orbit")
+        except Exception:
+            pass
     view = WebKit2.WebView()
     s = view.get_settings()
     s.set_enable_developer_extras(False)

@@ -1,6 +1,7 @@
 package app.novalabs.orbit
 
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -29,8 +30,10 @@ object GitHub {
         val body = try {
             when (c.responseCode) {
                 200 -> c.inputStream.bufferedReader().readText()
-                404 -> throw Problem("Couldn't find $repo on GitHub.",
-                    "If it's a private repository, add a GitHub token in Orbit's settings.")
+                404 -> throw Problem("Couldn't find $repo on GitHub.", if (token.isNullOrBlank())
+                    "If it's private, sign in with GitHub in Orbit's settings." else
+                    "Your sign-in or token can't see it. Settings → check access shows what it can read. A fine-grained " +
+                    "token needs Repository access → this repository, and Permissions → Contents: Read-only.")
                 401, 403 -> throw Problem("GitHub refused the request.",
                     "Wait a few minutes. If you added a token, check it's still valid.")
                 else -> throw Problem("GitHub answered ${c.responseCode}.", "Try again in a moment.")
@@ -56,6 +59,22 @@ object GitHub {
         }
         return Release(best.optString("tag_name"), best.optString("published_at"), best.optBoolean("prerelease"),
             best.optString("html_url"), map)
+    }
+
+    /** What [token] can see of [repo]: "public", "private", "no access" or "offline". */
+    fun access(repo: String, token: String?): String {
+        val c = open("$API/repos/$repo", token, "application/vnd.github+json")
+        return try {
+            when (c.responseCode) {
+                200 -> if (JSONObject(c.inputStream.bufferedReader().readText()).optBoolean("private")) "private" else "public"
+                401, 403, 404 -> "no access"
+                else -> "offline"
+            }
+        } catch (e: IOException) {
+            "offline"
+        } finally {
+            c.disconnect()
+        }
     }
 
     private fun open(url: String, token: String?, accept: String): HttpURLConnection {

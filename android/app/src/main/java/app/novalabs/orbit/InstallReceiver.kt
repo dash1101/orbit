@@ -8,7 +8,7 @@ import android.os.Build
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 /** What Android's installer reports back. */
-data class InstallResult(val session: Int, val status: Int, val message: String?)
+data class InstallResult(val session: Int, val status: Int, val message: String?, val confirm: Intent? = null)
 
 object InstallEvents {
     val results = MutableSharedFlow<InstallResult>(extraBufferCapacity = 16)
@@ -28,9 +28,10 @@ class InstallReceiver : BroadcastReceiver() {
             else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_INTENT)
             if (confirm != null) {
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(confirm)
+                // Android may refuse this while Orbit is in the background; the install sheet then offers a button
+                try { context.startActivity(confirm) } catch (e: RuntimeException) { }
             }
-            InstallEvents.results.tryEmit(InstallResult(session, status, null))
+            InstallEvents.results.tryEmit(InstallResult(session, status, null, confirm))
             return
         }
         InstallEvents.results.tryEmit(InstallResult(session, status,

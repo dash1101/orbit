@@ -358,6 +358,11 @@ pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--
 .result .callout { text-align: left; }
 
 .icard.still { animation: none; }
+#top .logo { display: block; flex: none; margin-right: -4px; }
+.upd-tag { border-color: var(--accent); color: var(--accent); background: none; cursor: pointer; font: inherit; font-size: 12px; }
+.upd-tag:hover { background: var(--accent); color: var(--accent-ink); }
+.ghcode { border: 1px dashed var(--accent); padding: 10px 12px; margin: 6px 0 4px; animation: rise .35s cubic-bezier(.2,.8,.2,1) both; }
+.ghcode .code { font-size: 26px; font-weight: 700; letter-spacing: 6px; color: var(--accent); margin: 4px 0 10px; }
 
 /* app icons (falls back to the coloured glyph square) */
 .mini.img, .tile .sq.img { background: none; padding: 0; overflow: hidden; }
@@ -459,9 +464,10 @@ input[type=range] { accent-color: var(--accent); }
 <body>
 <div id="shell">
   <div id="top">
-    <span class="brand">[<b>orbit</b>]</span>
+    <img class="logo" src="/icon.svg" alt="" width="22" height="22"><span class="brand">[<b>orbit</b>]</span>
     <span class="sum" id="sum">connecting…</span>
     <span class="sp"></span>
+    <button class="tag upd-tag" id="orbitupd" hidden title="A newer Orbit is out: open its download page"></button>
     <span class="tag" id="dry" hidden title="Orbit was started with --dry-run: nothing is changed">dry run</span>
   </div>
   <nav id="nav" class="box"><span class="lg">nav</span><div class="list" id="navlist"></div></nav>
@@ -1570,6 +1576,9 @@ async function loadHub() {
   applyCustomThemes();
   if (!S.themeEdit) setTheme(S.hub.settings.theme);
   $("#dry").hidden = !S.hub.dryRun;
+  const u = S.hub.orbitUpdate, ub = $("#orbitupd");
+  ub.hidden = !u;
+  if (u) { ub.textContent = `orbit ${u.version} is out ↗`; ub.onclick = () => api("/api/hub/open-release", {}).then(r => say(r.message, "ok")).catch(e => say(e.message, "err")); }
 }
 
 // ---- themes: built-in ones are CSS blocks above; custom ones are tokens saved in Orbit's settings
@@ -1700,7 +1709,12 @@ function renderHub() {
         hub.settings.checkUpdates ? "on" : "off"); return c; })(),
       h("div", { class: "help" }, "At most every 12 hours, one request per app to api.github.com. Nothing else leaves this computer.")),
     h("div", { class: "row" }, h("span", {}, "Check for releases now"),
-      h("button", { class: "btn small", onclick: async () => { try { say((await api("/api/hub/check-updates", {})).message); setTimeout(poll, 2500); } catch (e) { say(e.message, "err"); } } }, "check")));
+      h("button", { class: "btn small", onclick: async () => { try { say((await api("/api/hub/check-updates", {})).message); setTimeout(async () => { await loadHub(); poll(); }, 2500); } catch (e) { say(e.message, "err"); } } }, "check")),
+    hub.menu && hub.menu.supported ? h("div", { class: "row" }, h("span", {}, `Orbit in ${hub.menu.where}`),
+      h("button", { class: "btn small", onclick: async () => {
+        try { const r = await api("/api/hub/menu", {}); say(r.message, r.ok ? "ok" : "err"); await loadHub(); renderHub(); } catch (e) { say(e.message, "err"); } } },
+        hub.menu.added ? "refresh" : "add"),
+      h("div", { class: "help" }, hub.menu.added ? "Already there. Refresh it if you moved Orbit." : "Adds a launcher for this copy of Orbit.")) : null);
 
   const order = hub.apps.map(a => a.id);
   const move = async (i, dir) => {
@@ -1737,9 +1751,67 @@ function renderHub() {
   main.replaceChildren(
     themeBox,
     h("div", { class: "grid g2" }, box("general", general), box("apps", appsList)),
+    githubBox(),
     box("add an app", add),
     box("about", h("div", { class: "t-muted" }, `Orbit ${hub.version} · local only (127.0.0.1) · `, h("span", {}, "keys: "),
       "j/k or ↑/↓ move, 1–9 jump, r refresh, t next theme, , settings, o overview")));
+}
+
+// ------------------------------------------------------------------ github sign-in
+// GitHub's device flow: Orbit shows a code, you enter it on github.com, Orbit gets a read-only token.
+const GH = { access: null, timer: null };
+function githubBox() {
+  const g = (S.hub && S.hub.github) || {};
+  const b = box("github", h("div", { id: "ghbody" }));
+  paintGithub(b.querySelector("#ghbody"), g);
+  return b;
+}
+function paintGithub(el, g) {
+  if (!el) return;
+  const who = { orbit: `signed in as ${g.login ? "@" + g.login : "you"} (Orbit's own sign-in)`,
+                gh: "using the GitHub command line's sign-in (gh)", env: "using the GITHUB_TOKEN set on this computer" }[g.source];
+  const kids = [h("div", { class: "hl", style: "display:flex;align-items:baseline;margin-bottom:6px" },
+    h("span", { class: "dot " + (g.signedIn ? "s-ok" : "s-off") }), h("span", {}, who || "not signed in"))];
+  if (g.pending) {
+    const code = g.pending.user_code;
+    kids.push(h("div", { class: "ghcode" },
+      h("div", { class: "t-muted", style: "font-size:12.5px" }, "On github.com/login/device, enter:"),
+      h("div", { class: "code" }, code),
+      h("div", { class: "btns" },
+        h("button", { class: "btn primary", onclick: () => api("/api/github/open", {}).then(r => say(r.message, "ok")) }, "open github.com/login/device"),
+        h("button", { class: "btn", onclick: e => { const t = e.currentTarget; navigator.clipboard.writeText(code).then(() => { t.textContent = "copied ✓"; }, () => say("copy it by hand: " + code)); } }, "copy code"),
+        h("button", { class: "btn", onclick: async () => { S.hub.github = await api("/api/github/cancel", {}); paintGithub(el, S.hub.github); } }, "cancel")),
+      h("div", { class: "t-muted", style: "margin-top:8px" }, spin(), " waiting for you to approve it on GitHub…")));
+    clearTimeout(GH.timer);
+    GH.timer = setTimeout(async () => {
+      try { S.hub.github = await api("/api/github"); } catch { return; }
+      if (!S.hub.github.pending) { say(S.hub.github.signedIn ? "signed in with GitHub" : (S.hub.github.error || "sign-in stopped"), S.hub.github.signedIn ? "ok" : "err"); GH.access = null; }
+      if (S.view === "hub") paintGithub($("#ghbody"), S.hub.github);
+    }, 2000);
+  } else {
+    if (g.error) kids.push(h("div", { class: "t-warn", style: "margin-bottom:6px" }, g.error));
+    const btns = [];
+    if (g.available && g.source !== "orbit") btns.push(h("button", { class: "btn primary", onclick: async () => {
+      try { S.hub.github = await api("/api/github/login", {}); paintGithub(el, S.hub.github); if (S.hub.github.pending) api("/api/github/open", {}); }
+      catch (e) { say(e.message, "err"); } } }, "sign in with GitHub"));
+    if (g.source === "orbit") btns.push(h("button", { class: "btn danger", onclick: async () => {
+      if (!(await confirmDlg("Sign out of GitHub in Orbit? Private repositories' releases won't be readable until you sign in again.", true))) return;
+      S.hub.github = await api("/api/github/logout", {}); GH.access = null; paintGithub(el, S.hub.github); say("signed out", "ok"); } }, "sign out"));
+    btns.push(h("button", { class: "btn", onclick: async e => {
+      const t = e.currentTarget; t.disabled = true; t.replaceChildren(spin(), " checking");
+      try { GH.access = (await api("/api/github/access")).access; } catch (err) { say(err.message, "err"); }
+      paintGithub(el, S.hub.github); } }, "check access"));
+    kids.push(h("div", { class: "btns" }, btns));
+    if (!g.available) kids.push(h("div", { class: "t-muted", style: "font-size:12.5px;margin-top:6px" },
+      "Signing in from Orbit isn't set up in this build. Orbit uses the GitHub command line's sign-in (gh auth login) or GITHUB_TOKEN instead."));
+  }
+  if (GH.access) kids.push(h("div", { class: "kv", style: "margin-top:10px" }, Object.entries(GH.access).flatMap(([repo, st]) => [
+    h("span", { class: "k" }, repo), h("span", { class: "v " + (st === "no access" ? "warn" : "") },
+      st === "no access" ? "✗ can't see it (private, and this sign-in has no access)" : st === "offline" ? "? couldn't reach GitHub" : `✓ ${st}`)])));
+  kids.push(h("div", { class: "help t-muted", style: "font-size:12.5px;margin-top:8px" },
+    "Public repositories need no sign-in. Signing in lets Orbit read releases from private ones: the login can only read " +
+    "repository contents, and the token stays in Orbit's settings on this computer (readable by you only), sent only to api.github.com."));
+  el.replaceChildren(...kids);
 }
 
 // ------------------------------------------------------------------ keyboard

@@ -12,6 +12,7 @@ DEFAULTS = {
     "apps": {},               # per-app hub settings: {"<id>": {"enabled": true, ...}}
     "custom": [],             # apps added from the hub: [{"id","name","unit","scope","healthUrl","openUrl"}]
     "order": [],              # app ids in the order they appear in the side bar
+    "github": {},             # Orbit's own GitHub sign-in: {"token", "login", "since"} (this file is readable by you only)
     "themes": [],             # custom themes: [{"id": "custom-…", "label", "tokens": {name: "#rrggbb", "radius": 0-14}}]
 }
 
