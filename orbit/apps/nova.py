@@ -69,6 +69,9 @@ class Nova(App):
     def _candidates(self):
         if self._local_hosts is not None:
             return self._local_hosts
+        import sys
+        if not sys.platform.startswith("linux"):
+            return ["127.0.0.1"]
         rc, out = self.ctx.runner.read(["hostname", "-I"], timeout=2)
         hosts = ["127.0.0.1"] + [h for h in out.split() if rc == 0 and ":" not in h]
         return hosts

@@ -1,6 +1,7 @@
 """Small JSON HTTP client. Server-side requests send no Origin header (apps treat them like curl)."""
 import json
 import socket
+import threading
 import ssl
 import time
 import urllib.error
@@ -25,7 +26,51 @@ def _ctx(insecure):
     return c
 
 
+# ---- apps on this computer: know quickly when one isn't running ------------------------------
+# Connecting to a local port nothing listens on is instant on Linux and macOS, but takes about two seconds on
+# Windows (it retries the refused connection). An app page asks the same app several things at once, so Orbit
+# checks the port quickly first and remembers the answer for a few seconds.
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+_seen = {}          # (host, port) -> (valid until, listening?)
+_seen_lock = threading.Lock()
+UP_FOR, DOWN_FOR = 10.0, 3.0
+
+
+def _local(url):
+    from urllib.parse import urlsplit
+    u = urlsplit(url)
+    if u.hostname in LOOPBACK:
+        return u.hostname, u.port or (443 if u.scheme == "https" else 80)
+    return None
+
+
+def _note(key, up):
+    with _seen_lock:
+        _seen[key] = (time.time() + (UP_FOR if up else DOWN_FOR), up)
+
+
+def local_listening(host, port):
+    """Is something listening on this local port? Asked at most every few seconds per port."""
+    key = (host, port)
+    with _seen_lock:
+        hit = _seen.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    up = port_open(host, port, timeout=0.25)
+    _note(key, up)
+    return up
+
+
+def forget_ports():
+    """After starting or stopping something: look again instead of trusting what was seen."""
+    with _seen_lock:
+        _seen.clear()
+
+
 def request(method, url, body=None, timeout=2.0, headers=None, insecure=False, raw=False):
+    local = _local(url)
+    if local and not local_listening(*local):
+        raise HttpError(0, "not running")
     data = json.dumps(body).encode() if body is not None else None
     h = {"User-Agent": UA, "Accept": "application/json"}
     if data is not None:
@@ -42,6 +87,8 @@ def request(method, url, body=None, timeout=2.0, headers=None, insecure=False, r
             msg = e.reason
         raise HttpError(e.code, str(msg)) from None
     except (urllib.error.URLError, socket.timeout, ConnectionError, OSError) as e:
+        if local:
+            _note(local, False)
         raise HttpError(0, str(getattr(e, "reason", e))) from None
     if raw:
         return payload.decode("utf-8", "replace")
@@ -138,8 +185,9 @@ def gh_cli_token():
     if not shutil.which("gh"):
         return ""
     try:
+        from .proc import hidden
         p = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5,
-                           stdin=subprocess.DEVNULL)
+                           stdin=subprocess.DEVNULL, **hidden())
         return p.stdout.strip() if p.returncode == 0 else ""
     except (OSError, subprocess.TimeoutExpired):
         return ""

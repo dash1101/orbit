@@ -109,6 +109,14 @@ jobs:
           curl -sf http://127.0.0.1:8799/ -o page.html && grep -q "<title>Orbit</title>" page.html
           curl -sf http://127.0.0.1:8799/apps/nova.svg -o /dev/null
           curl -sf http://127.0.0.1:8799/api/install -o install.json && grep -q '"host"' install.json
+          # Pages must answer quickly although none of the apps run here (Windows takes ~2 s per refused connection).
+          for round in cold warm; do
+            for path in /api/apps /api/apps/pocketfader /api/apps/ytm-beacon /api/apps/nova /api/apps/pocketfader/logs /api/hub /api/install; do
+              t=$(curl -s -o /dev/null -w "%{time_total}" "http://127.0.0.1:8799$path")
+              echo "$round $path ${t}s"
+              awk -v t="$t" 'BEGIN { exit !(t < 3.0) }' || { echo "too slow: $path took ${t}s"; exit 1; }
+            done
+          done
           kill $pid || true
           echo "smoke test passed"
       - name: Package

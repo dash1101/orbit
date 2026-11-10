@@ -182,7 +182,7 @@ class App:
     def open_url(self, url):
         if not (url.startswith("http://") or url.startswith("https://")):
             raise BadRequest("not a web address")
-        if not self.ctx.runner.launch(open_argv(url)):
+        if not self.ctx.runner.open_url(url):
             raise BadRequest("couldn't open a browser")
         return {"ok": True, "message": "opened " + url}
 

@@ -3,6 +3,7 @@
 System units (like Nova's) are read-only here: changing them needs root, and Orbit never asks for it.
 """
 import re
+import sys
 
 PROPS = ["Id", "Description", "LoadState", "ActiveState", "SubState", "UnitFileState", "Result",
          "ActiveEnterTimestamp", "InactiveEnterTimestamp", "MainPID", "NRestarts"]
@@ -18,9 +19,16 @@ def _base(user):
     return ["systemctl", "--user"] if user else ["systemctl"]
 
 
+def here():
+    """systemd only exists on Linux: elsewhere Orbit doesn't run systemctl or journalctl at all."""
+    return sys.platform.startswith("linux")
+
+
 def show(runner, unit, user=True):
     if not valid_unit(unit):
         return {"unit": unit, "error": "not a unit name"}
+    if not here():
+        return {"unit": unit, "state": "missing"}
     rc, out = runner.read(_base(user) + ["show", unit, "--no-pager"] + [f"-p{p}" for p in PROPS])
     if rc != 0:
         return {"unit": unit, "error": out.strip() or f"systemctl exit {rc}"}
@@ -56,6 +64,8 @@ def summarize(unit, p, user=True):
 
 def act(runner, unit, verb, user=True):
     """start/stop/restart/enable/disable a *user* unit. Returns (ok, message)."""
+    if not here():
+        return False, "There are no systemd services on this system."
     if not user:
         return False, "System services need root; use the terminal command instead."
     if verb not in USER_VERBS or not valid_unit(unit):
@@ -67,6 +77,8 @@ def act(runner, unit, verb, user=True):
 def journal(runner, unit, user=True, lines=80):
     if not valid_unit(unit):
         return ""
+    if not here():
+        return "(this app's log isn't available here: there's no systemd journal on this system)"
     argv = ["journalctl", "--no-pager", "-q", "-o", "short-iso", "-n", str(int(lines))]
     argv += ["--user-unit", unit] if user else ["-u", unit]
     rc, out = runner.read(argv, timeout=8)

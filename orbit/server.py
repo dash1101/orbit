@@ -164,6 +164,7 @@ class Hub:
         return {"ok": True, "term": s.id, "title": s.title, "message": "running " + shown}
 
     def _installed(self, app_id):
+        net.forget_ports()
         self._cache.pop(app_id, None)
         a = self.apps.get(app_id)
         if a and hasattr(a, "_found"):
@@ -190,6 +191,11 @@ class Hub:
         hit = self._cache.get(a.id)
         if hit and time.time() - hit[0] < self.CACHE_S:
             return hit[1]
+        na = self.unavailable(a.id)
+        if na:   # it can't run on this system: nothing to look at (and nothing to run to look)
+            s = {"state": "off", "headline": na, "facts": [], "units": [], "checked": time.time()}
+            self._cache[a.id] = (time.time(), s)
+            return s
         try:
             s = a.status()
         except Exception as e:  # a broken adapter must not take the hub down
@@ -296,7 +302,7 @@ class Hub:
             url = item["url"]
             if not url.startswith(("http://127.0.0.1:", "https://127.0.0.1:", "http://localhost:")):
                 raise BadRequest("not a local address")
-            runner.launch(open_argv(url))
+            runner.open_url(url)
             return {"ok": True, "message": "opened " + url}
         argv = terminal_argv(item["argv"], job.app_name)
         if not argv:
@@ -543,7 +549,7 @@ def make_handler(hub, port_ref):
                 if path == "/api/hub/menu":
                     return self._send(200, desktop_entry.add(hub.ctx.runner))
                 if path == "/api/hub/open-release":
-                    hub.ctx.runner.launch(open_argv((hub.orbit_update() or {}).get("url") or ORBIT_RELEASES))
+                    hub.ctx.runner.open_url((hub.orbit_update() or {}).get("url") or ORBIT_RELEASES)
                     return self._send(200, {"ok": True, "message": "opened Orbit's releases"})
                 if path == "/api/github/login":
                     try:
@@ -551,7 +557,7 @@ def make_handler(hub, port_ref):
                     except LoginError as e:
                         raise BadRequest(str(e)) from None
                 if path == "/api/github/open":
-                    hub.ctx.runner.launch(open_argv("https://github.com/login/device"))
+                    hub.ctx.runner.open_url("https://github.com/login/device")
                     return self._send(200, {"ok": True, "message": "opened github.com/login/device"})
                 if path == "/api/github/cancel":
                     hub.github.cancel()
@@ -611,6 +617,7 @@ def make_handler(hub, port_ref):
                         cols, rows = body.get("cols", 100), body.get("rows", 30)
                         if not all(isinstance(x, int) and 10 <= x <= 500 for x in (cols, rows)):
                             cols, rows = 100, 30
+                        net.forget_ports()     # it may have started or stopped something: look again
                         res = hub.run_action(a, action, args, cols, rows)
                         if res.get("removed"):
                             hub.reload()

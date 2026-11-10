@@ -16,6 +16,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import threading
@@ -319,10 +320,9 @@ class Session:
             self.log(f"$ {shown}")
         full_env = dict(self.host.env if env is None else env)
         try:
-            kw = {}
-            if os.name == "nt":
-                kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-            else:
+            from ..proc import hidden
+            kw = hidden()
+            if sys.platform != "win32":
                 kw["start_new_session"] = True     # no terminal: installers that would ask a question don't hang
             p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  cwd=cwd, env=full_env, **kw)

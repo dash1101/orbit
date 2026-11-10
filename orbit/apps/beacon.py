@@ -1,6 +1,7 @@
 """YTM Beacon: YouTube Music as your Discord status (a user service, loopback API on 41713-41717)."""
 import os
 import shutil
+import time
 
 from .. import net
 from .base import App, BadRequest, field
@@ -76,8 +77,13 @@ class Beacon(App):
         return f"http://127.0.0.1:{port}{path}"
 
     def find_port(self):
+        # Not installed and not found a moment ago: don't scan five ports on every refresh.
+        if self._port is None and getattr(self, "_missed", 0) > time.time() and not self.binary():
+            return None
         order = ([self._port] if self._port else []) + [p for p in self.ports if p != self._port]
         for p in order:
+            if not net.local_listening("127.0.0.1", p):
+                continue
             try:
                 if (net.get_json(self._url(p, "/v1/ping"), timeout=0.6) or {}).get("app") == "ytm-beacon":
                     self._port = p
@@ -85,6 +91,7 @@ class Beacon(App):
             except net.HttpError:
                 continue
         self._port = None
+        self._missed = time.time() + 30
         return None
 
     def _call(self, method, path, body=None, timeout=2.0, raw=False):
@@ -100,7 +107,11 @@ class Beacon(App):
         exe = shutil.which("ytm-beacon")
         if exe:
             return exe
-        p = os.path.expanduser("~/.local/bin/ytm-beacon")
+        if os.name == "nt":
+            p = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local"),
+                             "ytm-beacon", "ytm-beacon.exe")
+        else:
+            p = os.path.expanduser("~/.local/bin/ytm-beacon")
         return p if os.path.exists(p) else None
 
     # ------------------------------------------------------------------------------------

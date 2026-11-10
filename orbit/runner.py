@@ -29,7 +29,9 @@ class Runner:
     def read(self, argv, timeout=5):
         """Run a command that only looks at things. Returns (exit code, combined output)."""
         try:
-            p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+            from .proc import hidden
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL,
+                               **hidden())
             return p.returncode, (p.stdout or "") + (p.stderr or "")
         except FileNotFoundError:
             return 127, f"{argv[0]}: not installed"
@@ -49,6 +51,18 @@ class Runner:
             self._record("spawn", argv)
             return True
         return self.launch(argv)
+
+    def open_url(self, url):
+        """Open a web address in the default browser. On Windows through the shell (ShellExecute), the way
+        Windows itself opens links; elsewhere with `open` / `xdg-open`."""
+        if sys.platform == "win32":
+            try:
+                import os
+                os.startfile(url)
+                return True
+            except OSError:
+                return False
+        return self.launch(open_argv(url))
 
     def launch(self, argv):
         """Open something for the person to look at (a browser, a window, a terminal). Changes nothing,

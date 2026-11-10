@@ -51,7 +51,8 @@ class Host:
             return self._probe([str(a) for a in argv])
         import subprocess
         try:
-            kw = {"creationflags": 0x08000000} if os.name == "nt" else {}
+            from ..proc import hidden
+            kw = hidden()
             p = subprocess.run([str(a) for a in argv], capture_output=True, text=True, timeout=timeout,
                                stdin=subprocess.DEVNULL, env=self.env, **kw)
             return p.returncode, (p.stdout or "") + (p.stderr or "")
