@@ -1,5 +1,10 @@
 **Orbit** by NovaLabs: one place for Pocketfader, Nova and YTM Beacon. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.3.4**
+
+- **Orbit updates itself on a Mac too.** The new Orbit.app comes out of the release's `.dmg`, is checked against the release's checksums and started once, and replaces the whole app when Orbit restarts. Checked on every build with real builds on Apple-chip and Intel Macs. (From 0.3.3 or older on a Mac, download this release's `.dmg` once by hand.)
+- When a new Orbit doesn't start during that check, what it printed goes in the installer's log.
+
 **New in 0.3.3**
 
 - **An app's card offers "update to …" as soon as Orbit opens**, not only after the install page has been visited.
@@ -14,7 +19,7 @@
 
 **New in 0.3.1**
 
-- **Orbit updates itself** on Linux and Windows. When a new version is out, the top bar says *update orbit to …*: Orbit downloads it, checks it against the release's checksums, starts it once to make sure it runs and is that version, and switches to it when you press *restart orbit* (or the next time you open Orbit). The old program is kept until the new one has started, so a failed update leaves Orbit as it was. This is checked on every build by updating a real Orbit to a newer one and restarting it, on Linux and on Windows. On a Mac, download the new `.dmg` as before.
+- **Orbit updates itself** on Linux and Windows. When a new version is out, the top bar says *update orbit to …*: Orbit downloads it, checks it against the release's checksums, starts it once to make sure it runs and is that version, and switches to it when you press *restart orbit* (or the next time you open Orbit). The old program is kept until the new one has started, so a failed update leaves Orbit as it was. This is checked on every build by updating a real Orbit to a newer one and restarting it, on Linux and on Windows. On a Mac, download the new `.dmg` as before (until 0.3.4).
 - **The overview shows what each app is doing**: the song Pocketfader is playing, what Beacon shows on Discord.
 - **Linux: programs Orbit opens use your computer's own libraries.** The standalone Orbit passed its own bundled copies of some system libraries (such as OpenSSL and zlib) on to the browsers, terminals and system tools it started, where older copies can clash with the system's. Now each program gets the computer's own.
 - Updating from 0.3.0 or older is still by hand, once: download this release's file in place of the old one.

@@ -102,13 +102,13 @@ on Windows, a `.dmg` on macOS (open it and drag Orbit onto Applications), and th
 run once with `chmod +x`, since browsers don't keep that). On Linux and Windows, *orbit settings → Orbit in your apps
 menu* adds a launcher for the copy you downloaded.
 
-**Orbit updates itself** on Linux and Windows. When a new release is out, the top bar says *update orbit to …*
+**Orbit updates itself** on Linux, Windows and macOS. When a new release is out, the top bar says *update orbit to …*
 (and Orbit's own card on the install page offers it). The new program is downloaded from Orbit's GitHub release,
 checked against the release's checksums, and started once to make sure it runs and is that version; only then does it
 wait next to the running one. *restart orbit* switches to it (the window closes and opens again on the new version);
 if you just close Orbit instead, it switches the next time it starts. The old program is kept until the new one has
-started, so a failed update leaves Orbit as it was. On a Mac, download the new `.dmg` instead; from the source folder,
-`git pull`.
+started, so a failed update leaves Orbit as it was. On a Mac the whole app is replaced: the new Orbit.app comes out of
+the release's `.dmg`. Running from the source folder, update with `git pull`.
 
 ## What each app gets
 
@@ -201,5 +201,5 @@ downloads, checksum and signature checks against a stub GitHub, with fake `pkexe
 The tests run on Linux, Windows and macOS. Two more checks run on real machines in CI: `tools/ci-nova-windows.py`
 installs the newest Nova, Pocketfader and YTM Beacon through the built `orbit.exe` on GitHub's Windows machines,
 checks each one answers, and removes them again (and installs Nova over itself through Orbit's Python code); and
-`tools/ci-selfupdate.py` has a real standalone Orbit update itself to a newer build and restart on it, on Linux and
-Windows.
+`tools/ci-selfupdate.py` has a real standalone Orbit update itself to a newer build and restart on it, on Linux,
+Windows and both kinds of Mac.
