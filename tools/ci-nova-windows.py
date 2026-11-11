@@ -4,6 +4,9 @@ Runs on GitHub's Windows machines (.github/workflows/nova-windows.yml), never on
 Nova's newest release (asking Windows for administrator rights the way it would on a PC, which GitHub's machines
 grant without a prompt), checks that Nova answers and that Orbit's Nova page sees it, installs again over
 itself (an update), then removes it with its settings and makes sure nothing is left.
+
+    python tools/ci-nova-windows.py                   through Orbit's Python code
+    python tools/ci-nova-windows.py --exe orbit.exe   through a built standalone Orbit, the way its window does it
 """
 import os
 import sys
@@ -121,5 +124,86 @@ def main():
     say("\nNova installed, answered, updated and was removed through Orbit.")
 
 
+def through_the_program(exe):
+    """The same, through the standalone program's own API (what its install window calls)."""
+    import json
+    import socket
+    import subprocess
+    import urllib.error
+    import urllib.request
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+    def call(path, body=None, timeout=15):
+        req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method="POST" if body is not None else "GET",
+                                     data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+
+    def until(what, check, seconds=300):
+        end = time.time() + seconds
+        while time.time() < end:
+            try:
+                got = check()
+                if got:
+                    return got
+            except (OSError, urllib.error.URLError, ValueError):
+                pass
+            time.sleep(2)
+        fail(f"timed out waiting for {what}")
+
+    def job(op, options):
+        say(f"\n===== {op} {options} (through {Path(exe).name})")
+        j = call("/api/install/nova/start", {"op": op, "options": options})
+        seen = 0
+        while True:
+            snap = call(f"/api/install/jobs/{j['id']}?from={seen}")
+            for line in snap["log"]:
+                say("  " + line)
+            seen = snap["logNext"]
+            if snap["state"] != "running":
+                break
+            time.sleep(1)
+        if snap["state"] != "done":
+            fail(f"{op} {snap['state']}: {snap['error']} {snap['hint']}")
+        say(f"  result: {snap['result'].get('headline')} {snap['result'].get('body')}")
+
+    home = Path(tempfile.mkdtemp())
+    env = dict(os.environ, APPDATA=str(home))
+    p = subprocess.Popen([exe, "--no-window", "--port", str(port)], env=env, stdin=subprocess.DEVNULL,
+                         stdout=open(home / "orbit.log", "w"), stderr=subprocess.STDOUT)
+    try:
+        hub = until("Orbit to start", lambda: call("/api/hub"), 90)
+        say(f"Orbit {hub['version']} on port {port}")
+        plan = call("/api/install/nova/plan", {"op": "install"})
+        say(f"{plan['title']} · {plan['support']['level']} · blocked: {plan['blocked'] or 'no'}")
+        if plan["blocked"]:
+            fail("blocked: " + plan["blocked"])
+        job("install", {"firewall": True})
+        page = until("Nova's page to show it running",
+                     lambda: (lambda d: d if d["status"]["state"] == "ok" else None)(call("/api/apps/nova")), 120)
+        say(f"Orbit's Nova page: {page['status']['state']} · {page['status']['headline']} · {page['status'].get('version')}")
+        acts = [a["id"] for a in page["actions"]]
+        if "win:add" not in acts or "gui" not in acts:
+            fail(f"the Windows actions are missing: {acts}")
+        job("uninstall", {"purge": True})
+        page = until("Nova's page to show it gone",
+                     lambda: (lambda d: d if d["status"]["state"] == "off" else None)(call("/api/apps/nova")), 60)
+        say(f"after removing: {page['status']['headline']}")
+        say("\nNova installed, answered and was removed through the standalone Orbit.")
+    finally:
+        p.kill()
+        try:
+            say("--- Orbit's output:\n" + (home / "orbit.log").read_text(errors="replace")[-2000:])
+        except OSError:
+            pass
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == "--exe":
+        through_the_program(sys.argv[2])
+    else:
+        main()

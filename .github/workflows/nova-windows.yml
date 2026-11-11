@@ -12,15 +12,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, windows-2022]
+        include:
+          - { os: windows-2022, how: source }          # Orbit's Python code
+          - { os: windows-latest, how: program }       # the standalone orbit.exe people download
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - name: Build the standalone program
+        if: matrix.how == 'program'
+        shell: bash
+        run: |
+          pip install pyinstaller
+          pyinstaller --noconfirm --paths . --collect-submodules orbit --add-data "orbit/static;orbit/static" --onefile --windowed --name orbit packaging/entry.py
       - name: Install, check, update and remove Nova through Orbit
+        if: matrix.how == 'source'
         run: python tools/ci-nova-windows.py
+        env:
+          PYTHONIOENCODING: utf-8
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Install, check and remove Nova through the standalone Orbit
+        if: matrix.how == 'program'
+        run: python tools/ci-nova-windows.py --exe dist/orbit.exe
         env:
           PYTHONIOENCODING: utf-8
           GITHUB_TOKEN: ${{ github.token }}     # GitHub's machines share addresses: without it, release lookups get rate-limited
