@@ -1078,7 +1078,7 @@ function closeWizard(now) {
   W.open = false;
   clearTimeout(W.poll);
   const wiz = $("#wiz");
-  if (running) say(`${W.meta.name}: still ${W.op === "uninstall" ? "removing" : "installing"} in the background · see the install page`);
+  if (running) say(`${W.meta.name}: still ${W.op === "uninstall" ? "removing" : /^Update/.test(W.job.title) ? "updating" : "installing"} in the background · see the install page`);
   if (now || REDUCE) { wiz.classList.remove("open"); return; }
   wiz.classList.add("closing");
   setTimeout(() => { if (!W.open) wiz.classList.remove("open", "closing"); }, 200);
@@ -1240,7 +1240,7 @@ function buildProgress(dir) {
   const body = h("div", { class: "stage" }, W.el.bar, h("div", { class: "pinfo" }, W.el.now, W.el.pct),
     h("div", { class: "steps" }, W.rows), W.el.logwrap);
   W.el.logBtn = btn(W.logOpen ? "hide details" : "show details", toggleLog);
-  W.el.cancel = btn(W.op === "uninstall" ? "stop" : "cancel install", async () => {
+  W.el.cancel = btn(W.op === "uninstall" ? "stop" : "cancel", async () => {
     if (!(await confirmDlg(`Stop ${W.op === "uninstall" ? "removing" : "installing"} ${W.meta.name}? Steps already finished stay as they are.`, true))) return;
     try { await api(`/api/install/jobs/${W.job.id}/cancel`, {}); } catch (e) { say(e.message, "err"); }
   }, "danger");
