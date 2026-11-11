@@ -15,7 +15,7 @@ from orbit.apps.custom import validate
 from orbit.apps.nova import Nova
 from orbit.apps.pocketfader import Pocketfader
 from orbit.config import Config
-from orbit.runner import Runner
+from orbit.runner import Runner, open_argv
 from orbit.server import Hub, serve
 
 
@@ -48,6 +48,10 @@ class FakeRunner(Runner):
     def launch(self, argv):
         self.spawns.append(list(argv))
         return True
+
+    def open_url(self, url):
+        # recorded the same way on every system (on Windows the real one goes through the shell, not a program)
+        return self.launch(open_argv(url))
 
     def spawn(self, argv):
         self.spawns.append(argv)
@@ -335,7 +339,7 @@ class PocketfaderTests(AsOnLinux):
         self.pf.run_action("svc:restart", {})
         self.assertEqual(self.hub.ctx.runner.writes[-1], ["systemctl", "--user", "restart", "pocketfader.service"])
         self.pf.run_action("open", {})
-        self.assertEqual(self.hub.ctx.runner.spawns[-1][0], "xdg-open")
+        self.assertEqual(self.hub.ctx.runner.spawns[-1], open_argv(f"http://127.0.0.1:{self.stub.port}/"))
 
 
 # ------------------------------------------------------------------------------------ nova

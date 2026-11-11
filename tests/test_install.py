@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from orbit import net
-from tests import unix_only
+from tests import ed25519_sign, unix_only
 from orbit.install import engine
 from orbit.install.engine import Failed, Installer, Session, Sources, Job, Step, parse_sums, safe_extract
 from orbit.install.host import Host
@@ -190,7 +190,7 @@ class TestPieces(unittest.TestCase):
         self.assertEqual(w.local_app_data, Path("C:/L"))
         self.assertIn("Start Menu", str(w.start_menu))
         m = Host(system="darwin", home="/Users/x", env={}, which={})
-        self.assertEqual(str(m.local_app_data), "/Users/x/Library/Application Support")
+        self.assertEqual(m.local_app_data, Path("/Users/x/Library/Application Support"))
         self.assertEqual(Host(system="linux", arch="arm64", home="/h", env={}, which={}, distro="Pi OS").label,
                          "Pi OS · ARM 64-bit")
 
@@ -289,16 +289,26 @@ class TestBeacon(Base):
 
 
 # ---- Nova ----------------------------------------------------------------------------------
-@unix_only
-@unittest.skipUnless(shutil.which("openssl"), "needs openssl")
-class TestNova(Base):
+class SignedNova(Base):
+    """A stand-in for Nova's release key, and releases signed with it (signed in Python, so any system can run these)."""
+
     def setUp(self):
         super().setUp()
-        self.key = self.tmp / "k.pem"
-        subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(self.key)], check=True,
-                       capture_output=True)
-        self.pub = subprocess.run(["openssl", "pkey", "-in", str(self.key), "-pubout"], check=True,
-                                  capture_output=True, text=True).stdout
+        self.key = os.urandom(32)
+        self.pub = ed25519_sign.public_pem(self.key)
+
+    def signed(self, files, listed=None, sign_with=None):
+        import base64
+        listed = listed or sums(files)
+        sig = ed25519_sign.sign(sign_with or self.key, listed)
+        self.gh.publish("dash1101/Nova", "v0.9.20-alpha",
+                        dict(files, SHA256SUMS=listed, **{"SHA256SUMS.sig": base64.b64encode(sig) + b"\n"}))
+
+
+@unix_only
+class TestNova(SignedNova):
+    def setUp(self):
+        super().setUp()
         self.vfile = self.tmp / "VERSION"
         script(self.bin / "pkexec", 'echo "pkexec $*" >> "$MARK"\nexec "$@"\n')
         script(self.bin / "apt-get", f'echo "apt-get $*" >> "$MARK"\necho 0.9.20~alpha > "{self.vfile}"\n')
@@ -306,7 +316,7 @@ class TestNova(Base):
 
     def recipe(self, **kw):
         which = {n: str(self.bin / n) for n in ("pkexec", "apt-get", "dpkg-query")}
-        which.update(dpkg="/usr/bin/dpkg", openssl=shutil.which("openssl"), sudo="/usr/bin/sudo")
+        which.update(dpkg="/usr/bin/dpkg", sudo="/usr/bin/sudo")
         which.update(kw.pop("which", {}))
         r = NovaRecipe(self.host("linux", which=which, **kw), self.sources)
         r.release_key, r.version_file, r.port, r.start_tries = self.pub, self.vfile, CLOSED_PORT, 1
@@ -317,14 +327,7 @@ class TestNova(Base):
         deb = b"!<arch>\nfake deb"
         files = {"nova-server_0.9.20.alpha_all.deb": deb, "nova-installer.run": b"#!/bin/sh\n"}
         listed = sums({"nova-server_0.9.20~alpha_all.deb": deb, "nova-installer.run": files["nova-installer.run"]})
-        sumfile = self.tmp / "SUMS"
-        sumfile.write_bytes(listed)
-        key = sign_with or self.key
-        sig = subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(sumfile)],
-                             check=True, capture_output=True).stdout
-        import base64
-        self.gh.publish("dash1101/Nova", "v0.9.20-alpha",
-                        dict(files, SHA256SUMS=listed, **{"SHA256SUMS.sig": base64.b64encode(sig) + b"\n"}))
+        self.signed(files, listed, sign_with)
 
     def test_signed_release_installs_through_pkexec(self):
         self.publish()
@@ -342,9 +345,7 @@ class TestNova(Base):
         self.assertEqual(snap["result"]["next"][0]["argv"], ["sudo", "nova", "setup"])  # first install: set it up
 
     def test_wrong_signature_stops_before_downloading(self):
-        other = self.tmp / "other.pem"
-        subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(other)], check=True, capture_output=True)
-        self.publish(sign_with=other)
+        self.publish(sign_with=os.urandom(32))     # someone else's key
         snap = wait(self.installer(self.recipe()).start("nova", "install", {}))
         self.assertEqual(snap["state"], "failed")
         self.assertIn("signature doesn't match", snap["error"])
@@ -380,7 +381,17 @@ class TestNova(Base):
             r.plan("install")
         self.assertIn("systemd", NovaRecipe(self.host(systemd=False), self.sources).support()["note"])
 
-    # ---- Windows (a preview of Nova there) --------------------------------------------------
+    def test_uninstall_only_for_the_debian_package(self):
+        self.vfile.write_text("0.9.13~alpha")
+        r = self.recipe()
+        self.assertIn("one-file installer", r.info("uninstall")["blocked"])
+        script(self.bin / "dpkg-query", 'echo "install ok installed|0.9.13~alpha"\n')
+        r.forget()
+        self.assertFalse(r.info("uninstall")["blocked"])
+
+
+# ---- Nova on Windows (a preview there): no shell scripts, so these also run on Windows itself ----
+class TestNovaWindows(SignedNova):
     def win_recipe(self):
         pf, pd = self.tmp / "Program Files", self.tmp / "ProgramData"
         pf.mkdir(exist_ok=True)
@@ -391,22 +402,12 @@ class TestNova(Base):
         return r
 
     def publish_windows(self):
-        import base64
-        import io
-        import zipfile
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as z:
             z.writestr("Nova/windows/install.ps1", "# Nova's installer\r\n")
             z.writestr("Nova/windows/uninstall.ps1", "# Nova's uninstaller\r\n")
             z.writestr("Nova/api/server.py", "API_VERSION = \"0.9.20-alpha\"\n")
-        files = {"nova-windows.zip": buf.getvalue()}
-        listed = sums(files)
-        sumfile = self.tmp / "SUMS"
-        sumfile.write_bytes(listed)
-        sig = subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(self.key), "-rawin", "-in", str(sumfile)],
-                             check=True, capture_output=True).stdout
-        self.gh.publish("dash1101/Nova", "v0.9.20-alpha",
-                        dict(files, SHA256SUMS=listed, **{"SHA256SUMS.sig": base64.b64encode(sig) + b"\n"}))
+        self.signed({"nova-windows.zip": buf.getvalue()})
 
     def test_windows_preview_installs_with_one_permission_prompt(self):
         self.publish_windows()
@@ -479,14 +480,6 @@ class TestNova(Base):
         self.assertEqual(snap["state"], "done", snap["error"])
         self.assertIn("would run, as the administrator", "\n".join(snap["log"]))
         self.assertFalse(r.win_dir.exists() and any(r.win_dir.iterdir()))
-
-    def test_uninstall_only_for_the_debian_package(self):
-        self.vfile.write_text("0.9.13~alpha")
-        r = self.recipe()
-        self.assertIn("one-file installer", r.info("uninstall")["blocked"])
-        script(self.bin / "dpkg-query", 'echo "install ok installed|0.9.13~alpha"\n')
-        r.forget()
-        self.assertFalse(r.info("uninstall")["blocked"])
 
 
 # ---- Pocketfader ---------------------------------------------------------------------------

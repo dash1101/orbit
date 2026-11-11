@@ -70,11 +70,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      # the tests are written for Linux; on the other systems the program itself is smoke-tested below
+      # the same tests on every system (a few that use shell scripts as stand-ins for programs skip Windows)
       - name: Tests
         shell: bash
         run: python -W error::ResourceWarning -m unittest discover -s tests -t .
-        continue-on-error: ${{ runner.os != 'Linux' }}
       - name: "Build (bundles Python, so nothing needs installing to run it)"
         shell: bash
         run: |
