@@ -230,16 +230,20 @@ pub fn env_token() -> String {
 
 /// The GitHub command line's sign-in, when it's installed and signed in (cached with the rest).
 pub fn gh_cli_token() -> String {
-    if let Some((at, tok, src)) = token_cache().lock().unwrap().clone() {
-        if at.elapsed() <= Duration::from_secs(600) && src == "gh" {
-            return tok;
+    static GH: Mutex<Option<(Instant, String)>> = Mutex::new(None);
+    if let Some((at, tok)) = GH.lock().unwrap().clone() {
+        if at.elapsed() <= Duration::from_secs(600) {
+            return tok; // signed in or not, asked at most every 10 minutes (starting `gh` is slow on Windows)
         }
     }
-    if crate::runner::which("gh").is_none() {
-        return String::new();
-    }
-    let (code, out) = crate::runner::run_capture(&["gh".into(), "auth".into(), "token".into()], Duration::from_secs(5), true);
-    if code == 0 { out.trim().to_string() } else { String::new() }
+    let tok = if crate::runner::which("gh").is_none() {
+        String::new()
+    } else {
+        let (code, out) = crate::runner::run_capture(&["gh".into(), "auth".into(), "token".into()], Duration::from_secs(5), true);
+        if code == 0 { out.trim().to_string() } else { String::new() }
+    };
+    *GH.lock().unwrap() = Some((Instant::now(), tok.clone()));
+    tok
 }
 
 /// The GitHub token Orbit uses: its own sign-in, else GITHUB_TOKEN/GH_TOKEN, else the `gh` command's.

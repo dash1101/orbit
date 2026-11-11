@@ -98,7 +98,7 @@ pub fn run(url: &str, size: (f64, f64), report: SizeReport) -> i32 {
     tauri::Builder::default()
         .setup(move |app| {
             let home = target.clone();
-            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(target.clone()))
+            let win = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(target.clone()))
                 .title("Orbit")
                 .inner_size(size.0, size.1)
                 .min_inner_size(720.0, 480.0)
@@ -111,6 +111,15 @@ pub fn run(url: &str, size: (f64, f64), report: SizeReport) -> i32 {
                     same
                 })
                 .build()?;
+            // A remembered (or the default) size larger than this screen: fit it to the screen instead.
+            if let Ok(Some(m)) = win.current_monitor() {
+                let screen = m.size().to_logical::<f64>(m.scale_factor());
+                let (w, h) = (size.0.min(screen.width * 0.92), size.1.min(screen.height * 0.86));
+                if (w, h) != size {
+                    let _ = win.set_size(tauri::LogicalSize::new(w, h));
+                    let _ = win.center();
+                }
+            }
             Ok(())
         })
         .on_window_event(move |win, ev| {
