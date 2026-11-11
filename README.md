@@ -186,7 +186,7 @@ list, marked "not available on … yet".
 - It talks to your apps on this computer only. The exceptions are the release check (at most every 12 hours, one
   request per app to `api.github.com`), which you can turn off, and installing or updating an app, which downloads
   that app's release from GitHub.
-- Settings are kept in `~/.config/orbit/config.json`.
+- Settings are kept in `~/.config/orbit/config.json` (`%APPDATA%\Orbit\config.json` on Windows), readable by you only.
 
 ## Tests
 
@@ -197,3 +197,7 @@ python3 -W error::ResourceWarning -m unittest discover -s tests -t .
 The tests use fakes and small stub servers, so they never touch real services. The installer tests run real
 downloads, checksum and signature checks against a stub GitHub, with fake `pkexec`, `apt-get`, `python3` and
 `systemctl` in a temporary home folder, and the Windows and macOS installs as dry runs.
+
+Two checks run on real machines in CI instead: `tools/ci-nova-windows.py` installs, updates and removes Nova through
+Orbit on GitHub's Windows Server 2022 and 2025 machines, and `tools/ci-selfupdate.py` has a real standalone Orbit
+update itself to a newer build and restart on it, on Linux and Windows.
