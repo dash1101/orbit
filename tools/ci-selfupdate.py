@@ -79,7 +79,7 @@ def call(port, path, body=None, timeout=10):
         return json.loads(r.read())
 
 
-def wait_for(what, check, seconds=90):
+def wait_for(what, check, seconds=90, quiet=False):
     end = time.time() + seconds
     while time.time() < end:
         try:
@@ -89,7 +89,18 @@ def wait_for(what, check, seconds=90):
         except (OSError, urllib.error.URLError, ValueError):
             pass
         time.sleep(1)
+    if quiet:
+        return None
     fail(f"timed out waiting for {what}")
+
+
+def show_processes():
+    if os.name == "nt":
+        ps = ("Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'orbit*' } | "
+              "Format-Table -AutoSize ProcessId, ParentProcessId, ExecutablePath, CommandLine | Out-String -Width 400")
+        say(subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True).stdout)
+    else:
+        say(subprocess.run(["ps", "-eo", "pid,ppid,args"], capture_output=True, text=True).stdout)
 
 
 def stop_everything(app):
@@ -122,7 +133,7 @@ def scenario(gh, how):
         return subprocess.Popen([str(exe), "--no-window", "--port", str(port)], env=env, stdin=subprocess.DEVNULL,
                                 stdout=open(root / log, "w"), stderr=subprocess.STDOUT)
 
-    start("first.log")
+    first = start("first.log")
     try:
         hub = wait_for("Orbit to start", lambda: call(port, "/api/hub"))
         say(f"running Orbit {hub['version']}")
@@ -155,11 +166,20 @@ def scenario(gh, how):
         hub = wait_for("the new Orbit on the same port",
                        lambda: (lambda h: h if h["version"] == "99.0.0" else None)(call(port, "/api/hub")), 90)
         say(f"Orbit {hub['version']} answers on port {port}")
+        if how == "restart":
+            try:
+                first.wait(30)
+                say(f"the first Orbit ended (exit {first.returncode})")
+            except subprocess.TimeoutExpired:
+                say("the first Orbit is still running 30 s after the restart")
+                show_processes()
         out = root / "v.txt"
         subprocess.run([str(exe), "--write-version", str(out)], timeout=120)
         if out.read_text().strip() != "orbit 99.0.0":
             fail(f"the program in place says {out.read_text().strip()!r}")
-        wait_for("the old program to be deleted", lambda: not old.exists(), 90)
+        if not wait_for("the old program to be deleted", lambda: not old.exists(), 90, quiet=True):
+            show_processes()
+            fail("the old program is still there")
         left = sorted(x.name for x in app.iterdir())
         if left != [exe.name]:
             fail(f"left next to Orbit: {left}")

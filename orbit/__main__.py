@@ -100,10 +100,10 @@ def _serve(hub, port, wait=0):
 def _cleanup_after_update(cleanup):
     """The program an update replaced is deleted once it has ended (on Windows that can take a moment)."""
     import time
-    for _ in range(20):
+    for _ in range(120):            # up to 10 minutes; whatever is left is tried again at the next start
         if cleanup():
             return
-        time.sleep(3)
+        time.sleep(5)
 
 
 if __name__ == "__main__":
