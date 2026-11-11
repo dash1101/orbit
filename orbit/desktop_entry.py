@@ -53,7 +53,7 @@ def add(runner, home=None):
         exe = " ".join(f'"{c}"' if " " in c else c for c in cmd)
         entry.write_text("\n".join([
             "[Desktop Entry]", "Type=Application", "Name=Orbit", "GenericName=App hub",
-            "Comment=One place for Pocketfader, Nova and YTM Beacon", f"Exec={exe}", "Icon=orbit",
+            "Comment=One place for YTM Starcast and Nova", f"Exec={exe}", "Icon=orbit",
             "Terminal=false", "Categories=Utility;System;", "StartupWMClass=orbit", ""]), encoding="utf-8")
         if shutil.which("update-desktop-database"):
             subprocess.run(["update-desktop-database", str(entry.parent)], capture_output=True)
@@ -68,7 +68,7 @@ def add(runner, home=None):
         link.parent.mkdir(parents=True, exist_ok=True)      # a new or redirected profile may not have it yet
         script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut({q(link)});"
                   f"$s.TargetPath={q(cmd[0])};$s.Arguments={q(args)};$s.WorkingDirectory={q(Path(cmd[0]).parent)};"
-                  "$s.Description='One place for Pocketfader, Nova and YTM Beacon';$s.Save()")
+                  "$s.Description='One place for YTM Starcast and Nova';$s.Save()")
         p = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                            capture_output=True, text=True, creationflags=0x08000000)
         if p.returncode != 0:

@@ -9,11 +9,11 @@ from pathlib import Path
 
 from orbit import net, systemd
 from orbit.apps.base import App, BadRequest, coerce, field
-from orbit.apps.beacon import Beacon, headline
+from orbit.apps.discord import headline
 from orbit.apps.custom import validate
 from orbit.apps.nova import Nova
-from orbit.apps.pocketfader import Pocketfader
-from orbit.config import Config
+from orbit.apps.starcast import Starcast
+from orbit.config import Config, migrate
 from orbit.runner import Runner, open_argv
 from orbit.server import Hub, serve
 
@@ -141,7 +141,7 @@ class SystemdTests(AsOnLinux):
         self.assertEqual(systemd.summarize("a.timer", timer)["state"], "running")
 
     def test_unit_names(self):
-        self.assertTrue(systemd.valid_unit("ytm-beacon.service"))
+        self.assertTrue(systemd.valid_unit("ytm-starcast.service"))
         self.assertTrue(systemd.valid_unit("nova-helper.socket"))
         for bad in ("", "x", "a b.service", "--now.service; rm", "../x.service", "x.exe"):
             self.assertFalse(systemd.valid_unit(bad), bad)
@@ -194,124 +194,241 @@ class FieldTests(unittest.TestCase):
             coerce(field("t", "T", "note", ""), "x")
 
 
-# ------------------------------------------------------------------------------------ beacon
-def beacon_status(**over):
-    s = {"app": "ytm-beacon", "version": "v0.1.4", "port": 0, "visible": True, "snoozeSec": 0, "hidden": "",
-         "presenceActive": True, "discord": {"state": "connected"},
-         "extension": {"lastSeenAgoSec": 3, "everConnected": True, "quietAfterSec": 90},
-         "nowPlaying": {"title": "Song", "artist": "Artist", "state": "playing"},
-         "config": {"enabled": True, "privateMode": False, "statusDisplay": "name", "showPaused": True,
-                    "pauseTimeoutMinutes": 5, "showAlbumArt": True, "showProgress": True, "showStateIcon": True,
-                    "showButtons": True, "hideMatching": []}}
+# ------------------------------------------------------------------------------ ytm starcast
+def discord_status(**over):
+    """YTM Starcast's GET /api/beacon (the shape Pocketfader alpha.15 served, plus what YTM Starcast added)."""
+    s = {"reachable": True, "version": "0.2.0a1", "headline": "showing", "visible": True, "snoozeSec": 0,
+         "discord": {"state": "connected", "user": "someone"},
+         "extension": {"lastSeenAgoSec": 3, "quietAfterSec": 90, "everConnected": True},
+         "nowPlaying": {"title": "Song", "artist": "Artist", "album": "Album", "state": "playing"},
+         "presenceActive": True,
+         "settings": {"privateMode": False, "showPaused": True, "showProgress": True, "showStateIcon": True,
+                      "showButtons": True, "showAlbumArt": True, "pauseTimeoutMinutes": 5, "statusDisplay": "name",
+                      "hideMatching": [], "clientId": ""},
+         "beaconApp": {"running": False, "installed": False, "canMigrate": False, "version": None},
+         "install": {"canInstall": False}}
     s.update(over)
     return s
 
 
-class BeaconTests(AsOnLinux):
+STATE = {"volume": {"available": True, "percent": 40, "muted": False, "device": "Desk"},
+         "media": {"title": "T", "artist": "A", "playing": True},
+         "capabilities": {"eq": True, "engine_label": "Built-in EQ", "ytm_bridge": True, "beacon": True, "discord": True},
+         "parts": {"remote": True, "discord": True, "refine": True, "audio": True}}
+
+
+class StarcastBase(AsOnLinux):
+    """A stub YTM Starcast on a free port, and Orbit's YTM Starcast page pointed at it."""
+    UNITS = {"ytm-starcast.service": RUNNING}
+
     def setUp(self):
         super().setUp()
-        self.state = beacon_status()
+        self.prefs = {"pauseOthers": False}
+        self.parts = dict(STATE["parts"])
+        self.state = dict(STATE, parts=self.parts)
+        self.discord = discord_status()
         self.stub = Stub({
-            ("GET", "/v1/ping"): lambda b: (200, {"app": "ytm-beacon", "version": "v0.1.4"}),
-            ("GET", "/v1/status"): lambda b: (200, self.state),
-            ("POST", "/v1/visibility"): lambda b: (200, {"enabled": b["action"] == "show"}),
-            ("POST", "/v1/config"): lambda b: (200, b),
-            ("GET", "/v1/logs"): lambda b: (200, "beacon log"),
+            ("GET", "/api/info"): lambda b: (200, {"name": "YTM Starcast", "version": "0.2.0a1", "auth": False}),
+            ("GET", "/api/state"): lambda b: (200, self.state),
+            ("GET", "/api/ytm/state"): lambda b: (200, {"connected": False}),
+            ("GET", "/api/prefs"): lambda b: (200, self.prefs),
+            ("POST", "/api/prefs"): lambda b: (self.prefs.update(b), (200, self.prefs))[1],
+            ("GET", "/api/parts"): lambda b: (200, {"parts": self.parts}),
+            ("POST", "/api/parts"): lambda b: (self.parts.update(b), (200, {"parts": self.parts}))[1],
+            ("GET", "/api/beacon"): lambda b: (200, self.discord),
+            ("POST", "/api/beacon/visibility"): lambda b: (200, {"enabled": b["action"] == "show"}),
+            ("POST", "/api/beacon/settings"): lambda b: (200, b),
+            ("POST", "/api/beacon/migrate"): lambda b: (200, {"ok": True, "message": "Moved over from YTM Beacon."}),
         })
         self.addCleanup(self.stub.close)
+        self.hub = self.make()
+        self.hp = self.hub.app("ytm-starcast")
+        self.hp.beacon_binary = lambda: None      # never this computer's own YTM Beacon
 
-    def app(self, dry_run=False):
-        hub = make_hub({"ytm-beacon.service": RUNNING}, dry_run=dry_run, app_classes=())
-        b = Beacon(hub.ctx, ports=(1, self.stub.port))  # port 1 never answers: the scan moves on
-        return b
+    def make(self, dry_run=False):
+        hub = make_hub(dict(self.UNITS), dry_run=dry_run, app_classes=(Starcast,))
+        hub.ctx.config.update_app("ytm-starcast", {"url": f"http://127.0.0.1:{self.stub.port}"})
+        return hub
 
+    def posts(self):
+        return [(c[1], c[2], c[3]) for c in self.stub.calls if c[0] == "POST"]
+
+
+class StarcastDiscordTests(StarcastBase):
     def test_headlines(self):
-        self.assertEqual(headline(beacon_status()), "showing")
-        self.assertEqual(headline(beacon_status(visible=False)), "off")
-        self.assertEqual(headline(beacon_status(visible=False, snoozeSec=60)), "snoozed")
-        self.assertEqual(headline(beacon_status(discord={"state": "connecting"})), "discord-down")
-        self.assertEqual(headline(beacon_status(extension={"lastSeenAgoSec": None, "everConnected": False})), "extension-missing")
-        self.assertEqual(headline(beacon_status(extension={"lastSeenAgoSec": 500, "quietAfterSec": 90})), "extension-quiet")
-        self.assertEqual(headline(beacon_status(nowPlaying=None)), "idle")
-        self.assertEqual(headline(beacon_status(hidden="paused")), "paused-hidden")
+        from orbit.apps.discord import describe
+        self.assertEqual(headline(discord_status()), "showing")                  # the payload's own word wins
+        raw = dict(discord_status(), headline="")                                 # else worked out like YTM Beacon did
+        self.assertEqual(headline(raw), "showing")
+        self.assertEqual(headline(dict(raw, visible=False)), "off")
+        self.assertEqual(headline(dict(raw, visible=False, snoozeSec=60)), "snoozed")
+        self.assertEqual(headline(dict(raw, discord={"state": "connecting"})), "discord-down")
+        self.assertEqual(headline(dict(raw, extension={"lastSeenAgoSec": None, "everConnected": False})), "extension-missing")
+        self.assertEqual(headline(dict(raw, extension={"lastSeenAgoSec": 500, "quietAfterSec": 90})), "extension-quiet")
+        self.assertEqual(headline(dict(raw, nowPlaying=None)), "idle")
+        self.assertEqual(headline(dict(raw, hidden="paused")), "paused-hidden")
+        self.assertEqual(headline(None), "unreachable")
+        old = discord_status(headline="discord-down", beaconApp={"running": True, "installed": True, "canMigrate": True})
+        self.assertEqual(describe(old)[0], "beacon-app")                          # the old app still running says so
+        self.assertEqual(describe(discord_status(headline="beacon-running"))[0], "beacon-app")
+        self.assertEqual(describe(discord_status(headline="ad"))[1], "ok")              # an advert is no trouble
+        self.assertEqual(describe(discord_status(headline="something-new"))[2], "something new")
 
-    def test_status(self):
-        s = self.app().status()
+    def test_status_has_discord_lines_and_more(self):
+        s = self.hp.status()
         self.assertEqual(s["state"], "ok")
-        self.assertEqual(s["headline"], "Showing on Discord")
-        self.assertIn(["playing", "Song — Artist"], s["facts"])
-        self.assertTrue(s["update"]["available"])  # fake release v9.9.9
+        self.assertIn(["discord status", "Showing on Discord", None], s["facts"])
+        self.assertIn(["discord", "connected", None], s["facts"])
+        self.assertIn(["browser extension", "last seen 3 s ago", "muted"], s["facts"])
+        more = dict(s["more"])
+        self.assertEqual(more["discord user"], "someone")
+        self.assertIn("the built-in one", more["application id"])
 
-    def test_settings_go_to_beacon_without_origin(self):
-        b = self.app()
-        b.apply_settings({"enabled": False, "privateMode": True, "hideMatching": "a, b"})
-        posts = [(c[1], c[2], c[3]) for c in self.stub.calls if c[0] == "POST"]
-        self.assertIn(("/v1/visibility", {"action": "hide"}, None), posts)
-        self.assertIn(("/v1/config", {"privateMode": True, "hideMatching": ["a", "b"]}, None), posts)
+    def test_discord_trouble_never_changes_the_apps_state(self):
+        self.discord = discord_status(headline="discord-down", discord={"state": "disconnected"})
+        s = self.hp.status()
+        self.assertEqual(s["state"], "ok")
+        self.assertIn(["discord status", "Can't reach Discord: is it open?", "warn"], s["facts"])
+        self.discord = discord_status(headline="off", visible=False)
+        self.parts["discord"] = False
+        s = self.hp.status()
+        self.assertEqual(s["state"], "ok")
+        self.assertIn(["discord status", "off", "muted"], s["facts"])
+        self.stub.routes.pop(("GET", "/api/beacon"))                          # an older version without it
+        self.assertEqual(self.hp.status()["state"], "ok")
+
+    def test_settings_go_to_the_right_place_without_origin(self):
+        groups = {g["title"]: [f["key"] for f in g["fields"]] for g in self.hp.settings()}
+        self.assertIn("parts.discord", groups["ytm starcast"])
+        self.assertNotIn("discord.visible", groups["discord card"])    # the "Discord status" part is that switch
+        self.assertIn("discord.hideMatching", groups["never show"])
+        self.hp.apply_settings({"discord.privateMode": True, "discord.hideMatching": "a, b", "parts.refine": False,
+                                "pauseOthers": True})
+        posts = self.posts()
+        self.assertIn(("/api/beacon/settings", {"privateMode": True, "hideMatching": ["a", "b"]}, None), posts)
+        self.assertIn(("/api/parts", {"refine": False}, None), posts)
+        self.assertIn(("/api/prefs", {"pauseOthers": True}, None), posts)
+        self.assertTrue(self.prefs["pauseOthers"])
+        self.assertFalse(self.parts["refine"])
+
+    def test_older_version_without_parts_gets_the_show_switch(self):
+        self.stub.routes.pop(("GET", "/api/parts"))
+        groups = {g["title"]: [f["key"] for f in g["fields"]] for g in self.hp.settings()}
+        self.assertNotIn("parts.discord", groups["ytm starcast"])
+        self.assertIn("discord.visible", groups["discord card"])
+        self.hp.apply_settings({"discord.visible": False})
+        self.assertIn(("/api/beacon/visibility", {"action": "hide"}, None), self.posts())
+
+    def test_only_the_settings_it_has(self):
+        del self.discord["settings"]["hideMatching"]
+        groups = {g["title"] for g in self.hp.settings()}
+        self.assertNotIn("never show", groups)
+        with self.assertRaises(BadRequest):
+            self.hp.apply_settings({"discord.hideMatching": "x"})
 
     def test_dry_run_sends_nothing(self):
-        b = self.app(dry_run=True)
-        b.apply_settings({"privateMode": True})
-        b.run_action("hide:30", {})
+        hub = self.make(dry_run=True)
+        hp = hub.app("ytm-starcast")
+        hp.status()
+        hp.apply_settings({"discord.privateMode": True, "parts.audio": False})
+        hp.run_action("hide:30", {})
+        hp.run_action("migrate-beacon", {})
         self.assertFalse([c for c in self.stub.calls if c[0] == "POST"])
 
     def test_rejects_bad_settings(self):
         with self.assertRaises(BadRequest):
-            self.app().apply_settings({"pauseTimeoutMinutes": 5000})
+            self.hp.apply_settings({"discord.pauseTimeoutMinutes": 5000})
         with self.assertRaises(BadRequest):
-            self.app().apply_settings({"clientId": "123"})  # not exposed
+            self.hp.apply_settings({"discord.clientId": "123456789012345678"})   # shown in details, not changed here
+        with self.assertRaises(BadRequest):
+            self.hp.apply_settings({"parts.everything": True})
 
-    def test_hide_for(self):
-        self.app().run_action("hide:60", {})
-        self.assertIn(("POST", "/v1/visibility", {"action": "hide", "minutes": 60}, None),
-                      [c for c in self.stub.calls])
+    def test_hide_for_and_show(self):
+        self.hp.status()
+        ids = [a["id"] for a in self.hp.actions()]
+        self.assertEqual([i for i in ids if i.startswith("hide:")], ["hide:30", "hide:60", "hide:180"])
+        self.hp.run_action("hide:60", {})
+        self.assertIn(("/api/beacon/visibility", {"action": "hide", "minutes": 60}, None), self.posts())
+        with self.assertRaises(BadRequest):
+            self.hp.run_action("hide:99999", {})
+        self.discord = discord_status(headline="snoozed", visible=False, snoozeSec=600)
+        s = self.hp.status()
+        self.assertIn(["discord status", "Hidden for 10 more min", "muted"], s["facts"])
+        self.assertIn("show", [a["id"] for a in self.hp.actions()])
+        self.hp.run_action("show", {})
+        self.assertIn(("/api/beacon/visibility", {"action": "show"}, None), self.posts())
 
-    def test_not_running(self):
+    def test_move_over_from_the_old_beacon_app(self):
+        self.discord = discord_status(headline="discord-down",
+                                      beaconApp={"running": True, "installed": True, "canMigrate": True, "version": "0.1.4"})
+        s = self.hp.status()
+        self.assertIn(["discord status", "The old YTM Beacon app is still running: move over to YTM Starcast", "warn"], s["facts"])
+        self.assertIn(["old ytm beacon app", "still running · 0.1.4"], s["more"])
+        ids = [a["id"] for a in self.hp.actions()]
+        self.assertIn("migrate-beacon", ids)
+        self.assertNotIn("hide:30", ids)
+        r = self.hp.run_action("migrate-beacon", {})
+        self.assertEqual(r["message"], "Moved over from YTM Beacon.")
+        self.assertIn(("/api/beacon/migrate", {}, None), self.posts())
+        self.stub.routes[("POST", "/api/beacon/migrate")] = lambda b: (409, {"error": "nothing_to_move"})
+        with self.assertRaises(BadRequest) as c:
+            self.hp.run_action("migrate-beacon", {})
+        self.assertIn("nothing to move", str(c.exception))
+        # YTM Starcast's own words win: a 409 can also mean a move is already under way
+        self.stub.routes[("POST", "/api/beacon/migrate")] = lambda b: (
+            409, {"error": "busy", "message": "Already moving over from YTM Beacon."})
+        with self.assertRaises(BadRequest) as c:
+            self.hp.run_action("migrate-beacon", {})
+        self.assertEqual(str(c.exception), "Already moving over from YTM Beacon.")
+        self.stub.routes[("POST", "/api/beacon/migrate")] = lambda b: (
+            502, {"error": "import_failed", "message": "Couldn't take over YTM Beacon's settings (bad file), so "
+                                                       "nothing was changed."})
+        with self.assertRaises(BadRequest) as c:
+            self.hp.run_action("migrate-beacon", {})
+        self.assertIn("so nothing was changed", str(c.exception))
+
+    def test_remove_beacon_when_starcast_isnt_there(self):
         self.stub.close()
-        b = self.app()
-        b.binary = lambda: "/x/ytm-beacon"
-        hub_units = b.ctx.runner.units
-        hub_units["ytm-beacon.service"] = STOPPED
-        s = b.status()
-        self.assertEqual((s["state"], s["headline"]), ("off", "Not running"))
-        self.stub = Stub({})  # so cleanup has something to close
+        self.hp.beacon_binary = lambda: "/x/ytm-beacon"
+        self.hp.status()
+        a = next(a for a in self.hp.actions() if a["id"] == "remove-beacon")
+        self.assertTrue(a["term"] and a["changes"] and a["confirm"])
+        self.assertEqual(self.hp.term_command("remove-beacon", {})["argv"], ["/x/ytm-beacon", "uninstall"])
+        self.stub = Stub({})
 
 
-# ------------------------------------------------------------------------------------ pocketfader
-class PocketfaderTests(AsOnLinux):
-    def setUp(self):
-        super().setUp()
-        self.prefs = {"pauseOthers": False}
-        self.stub = Stub({
-            ("GET", "/api/info"): lambda b: (200, {"name": "pocketfader", "version": "0.1.0a9", "auth": False}),
-            ("GET", "/api/state"): lambda b: (200, {"volume": {"available": True, "percent": 40, "muted": False, "device": "Desk"},
-                                                    "media": {"title": "T", "artist": "A", "playing": True},
-                                                    "capabilities": {"eq": True, "engine_label": "Built-in EQ", "ytm_bridge": True}}),
-            ("GET", "/api/ytm/state"): lambda b: (200, {"connected": False}),
-            ("GET", "/api/update"): lambda b: (200, {"latest": "v0.1.0-alpha.9", "available": False}),
-            ("GET", "/api/prefs"): lambda b: (200, self.prefs),
-            ("POST", "/api/prefs"): lambda b: (self.prefs.update(b), (200, self.prefs))[1],
-        })
-        self.addCleanup(self.stub.close)
-        self.hub = make_hub({"pocketfader.service": RUNNING}, app_classes=(Pocketfader,))
-        self.hub.ctx.config.update_app("pocketfader", {"url": f"http://127.0.0.1:{self.stub.port}"})
-        self.pf = self.hub.app("pocketfader")
-
+class StarcastTests(StarcastBase):
     def test_status(self):
-        s = self.pf.status()
-        self.assertEqual(s["state"], "ok")
+        s = self.hp.status()
+        self.assertEqual((s["state"], s["headline"]), ("ok", "Running · Desk"))
         self.assertIn(["output", "Desk"], s["facts"])
         self.assertIn(["playing", "T — A"], s["facts"])
-        self.assertFalse(s["update"]["available"])
+        self.assertEqual(s["version"], "0.2.0a1")
+
+    def test_audio_part_off(self):
+        self.parts["audio"] = False
+        s = self.hp.status()
+        self.assertEqual(s["headline"], "Running")
+        self.assertIn(["computer audio", "switched off in YTM Starcast", "muted"], s["facts"])
+        self.assertFalse([f for f in s["facts"] if f[0] in ("output", "volume", "eq")])
+
+    def test_update_comes_from_orbits_release_check(self):
+        s = self.hp.status()                       # the stub has no /api/update: Orbit's own check answers
+        self.assertEqual((s["update"]["latest"], s["update"]["available"]), ("v9.9.9", True))
+        self.assertFalse([c for c in self.stub.calls if c[1] == "/api/update"])
+        self.hub.ctx.config.update({"checkUpdates": False})          # off: what the app itself says
+        self.stub.routes[("GET", "/api/update")] = lambda b: (200, {"latest": "v0.2.0-alpha.1", "available": False})
+        s = self.hp.status()
+        self.assertEqual((s["update"]["latest"], s["update"]["available"]), ("v0.2.0-alpha.1", False))
 
     def test_pref_and_hub_settings_split(self):
-        self.pf.apply_settings({"pauseOthers": True, "token": "abc"})
+        self.hp.apply_settings({"pauseOthers": True, "token": "abc"})
         self.assertTrue(self.prefs["pauseOthers"])
-        self.assertEqual(self.hub.ctx.config.app("pocketfader")["token"], "abc")
+        self.assertEqual(self.hub.ctx.config.app("ytm-starcast")["token"], "abc")
         self.assertNotIn("token", self.prefs)
 
     def test_token_is_sent(self):
-        self.hub.ctx.config.update_app("pocketfader", {"token": "sekrit"})
+        self.hub.ctx.config.update_app("ytm-starcast", {"token": "sekrit"})
         seen = []
         self.stub.routes[("GET", "/api/info")] = lambda b: (200, {"version": "x", "auth": True})
         orig = self.stub.httpd.RequestHandlerClass.do_GET
@@ -320,25 +437,74 @@ class PocketfaderTests(AsOnLinux):
             seen.append(handler.headers.get("Authorization"))
             orig(handler)
         self.stub.httpd.RequestHandlerClass.do_GET = spy
-        self.pf.status()
+        self.hp.status()
         self.assertIn("Bearer sekrit", seen)
 
     def test_unreachable_and_stopped(self):
         self.stub.close()
-        self.hub.ctx.runner.units["pocketfader.service"] = STOPPED
-        self.assertEqual(self.pf.status()["state"], "off")
-        self.hub.ctx.runner.units["pocketfader.service"] = FAILED
-        self.assertEqual(self.pf.status()["state"], "down")
+        self.hub.ctx.runner.units["ytm-starcast.service"] = STOPPED
+        self.assertEqual(self.hp.status()["state"], "off")
+        self.hub.ctx.runner.units["ytm-starcast.service"] = FAILED
+        self.assertEqual(self.hp.status()["state"], "down")
         self.stub = Stub({})
 
     def test_service_actions(self):
-        ids = [a["id"] for a in self.pf.actions()]
+        ids = [a["id"] for a in self.hp.actions()]
         self.assertIn("svc:restart", ids)
         self.assertIn("svc:disable", ids)
-        self.pf.run_action("svc:restart", {})
-        self.assertEqual(self.hub.ctx.runner.writes[-1], ["systemctl", "--user", "restart", "pocketfader.service"])
-        self.pf.run_action("open", {})
+        self.hp.run_action("svc:restart", {})
+        self.assertEqual(self.hub.ctx.runner.writes[-1], ["systemctl", "--user", "restart", "ytm-starcast.service"])
+        self.hp.run_action("open", {})
         self.assertEqual(self.hub.ctx.runner.spawns[-1], open_argv(f"http://127.0.0.1:{self.stub.port}/"))
+
+
+class LegacyUnitTests(StarcastBase):
+    UNITS = {"pocketfader.service": RUNNING}       # not moved yet: Pocketfader's service is the one running
+
+    def test_legacy_unit_used_until_moved(self):
+        self.assertEqual(self.hp.units, (("pocketfader.service", True),))
+        s = self.hp.status()
+        self.assertIn(["service", "still Pocketfader's: update to move it over to YTM Starcast", "muted"], s["facts"])
+        self.hp.run_action("svc:restart", {})
+        self.assertEqual(self.hub.ctx.runner.writes[-1], ["systemctl", "--user", "restart", "pocketfader.service"])
+        self.assertIn("line one", self.hp.logs())
+        self.hub.ctx.runner.units["ytm-starcast.service"] = RUNNING        # after the move (Orbit forgets after installing)
+        self.hub._installed("ytm-starcast")
+        self.assertEqual(self.hp.units, (("ytm-starcast.service", True),))
+
+
+class ConfigMigrationTests(unittest.TestCase):
+    def write(self, data):
+        path = Path(tempfile.mkdtemp()) / "config.json"
+        path.write_text(json.dumps(data))
+        return path
+
+    def test_pocketfader_becomes_starcast_and_beacon_goes(self):
+        path = self.write({"theme": "amber",
+                           "apps": {"pocketfader": {"url": "http://127.0.0.1:9", "token": "t", "enabled": False},
+                                    "ytm-beacon": {"enabled": True}, "nova": {"enabled": True}},
+                           "order": ["nova", "ytm-beacon", "pocketfader"]})
+        c = Config(path)
+        self.assertEqual(c.get("apps"), {"ytm-starcast": {"url": "http://127.0.0.1:9", "token": "t", "enabled": False},
+                                         "nova": {"enabled": True}})
+        self.assertEqual(c.get("order"), ["nova", "ytm-starcast"])
+        self.assertEqual(c.get("theme"), "amber")
+        saved = json.loads(path.read_text())
+        self.assertEqual(saved["order"], ["nova", "ytm-starcast"])            # written once
+        before = path.stat().st_mtime_ns
+        Config(path)
+        self.assertEqual(path.stat().st_mtime_ns, before)                # a second start changes nothing
+
+    def test_starcast_settings_win_and_order_keeps_its_place(self):
+        d = {"apps": {"pocketfader": {"url": "old", "token": "t"}, "ytm-starcast": {"url": "new"}},
+             "order": ["pocketfader", "nova", "ytm-starcast"]}
+        self.assertTrue(migrate(d))
+        self.assertEqual(d["apps"], {"ytm-starcast": {"url": "new", "token": "t"}})
+        self.assertEqual(d["order"], ["nova", "ytm-starcast"])
+        d = {"apps": {}, "order": ["pocketfader", "nova"]}
+        self.assertTrue(migrate(d))
+        self.assertEqual(d["order"], ["ytm-starcast", "nova"])
+        self.assertFalse(migrate({"apps": {"ytm-starcast": {}}, "order": ["ytm-starcast", "nova"]}))
 
 
 # ------------------------------------------------------------------------------------ nova

@@ -1,6 +1,6 @@
 """Orbit's local server: the web app plus a small JSON API over the app adapters.
 
-Security: it listens on 127.0.0.1 only and has no login, like YTM Beacon. To stop web pages from
+Security: it listens on 127.0.0.1 only and has no login. To stop web pages from
 using it: the Host header must be a loopback name (no DNS rebinding), any Origin must be Orbit's own,
 and POSTs must be JSON (a plain HTML form can't send that).
 """
@@ -278,10 +278,15 @@ class Hub:
         rel = self.installer.sources.cached(r.repo)
         latest = rel["tag"].lstrip("vV") if rel else ""
         from .net import is_newer
+        # "migrate": an app that replaces an older one (YTM Starcast: Pocketfader) offers to move it over even when the
+        # version alone wouldn't say so (a Pocketfader installed by hand has no version). The recipe only says so while
+        # the old app is still the install here, so the offer goes away once the move is done.
+        migrate = bool(inst.get("migrate"))
         return {"installed": inst["installed"], "version": inst.get("version", ""), "supported": sup["level"],
                 "latest": latest, "busy": self.installer.busy(app_id), "pending": inst.get("pending", ""),
-                "update": bool(inst["installed"] and latest and inst.get("version") and not inst.get("pending")
-                               and is_newer(latest, inst["version"]))}
+                "migrate": migrate,
+                "update": bool(inst["installed"] and latest and not inst.get("pending")
+                               and (migrate or (inst.get("version") and is_newer(latest, inst["version"]))))}
 
     def _learn_latest(self):
         """First look: learn the latest versions in the background, once (then at most every 10 minutes per app)."""

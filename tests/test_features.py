@@ -1,4 +1,4 @@
-"""In-app terminals, terminal actions, Nova's and Beacon's new actions and settings, custom themes, icons and
+"""In-app terminals, terminal actions, Nova's actions, YTM Starcast's Discord details, custom themes, icons and
 "not available on this system yet". Fakes and harmless shell commands only."""
 import os
 import tempfile
@@ -7,14 +7,15 @@ import unittest
 from pathlib import Path
 
 from orbit.apps.base import App, BadRequest
-from orbit.apps.beacon import Beacon
+from orbit.apps import discord
+from orbit.apps.starcast import Starcast
 from orbit.apps.nova import Nova
 from orbit.install.engine import Sources
 from orbit.install.host import Host
 from orbit.install.recipes import load as load_recipes
 from orbit.term import Terminals
 from tests import unix_only
-from tests.test_orbit import RUNNING, AsOnLinux, Stub, make_hub
+from tests.test_orbit import AsOnLinux, make_hub
 
 
 def wait_done(session, timeout=10):
@@ -108,7 +109,7 @@ class NovaActionTests(AsOnLinux):
         self.assertEqual(n.term_command("term:approvals", {})["argv"], ["sudo", "nova", "approve"])
         self.assertEqual(n.term_command("term:links", {})["argv"], ["sudo", "nova", "link"])
         self.assertEqual(n.term_command("term:plugins", {})["argv"], ["sudo", "nova", "plugin", "list"])
-        self.assertEqual(n.term_command("term:remove", {"value": "Parker's S26"})["argv"], ["sudo", "nova", "remove", "Parker's S26"])
+        self.assertEqual(n.term_command("term:remove", {"value": "Alex's phone"})["argv"], ["sudo", "nova", "remove", "Alex's phone"])
         for bad in ("--all", "-x", "a; rm -rf /", "$(reboot)", ""):
             with self.assertRaises(BadRequest, msg=bad):
                 n.term_command("term:remove", {"value": bad})
@@ -128,45 +129,34 @@ class NovaActionTests(AsOnLinux):
             n.term_command("term:cf-token", {"value": "too short"})
 
 
-class BeaconFeatureTests(unittest.TestCase):
-    def setUp(self):
-        self.state = {"app": "ytm-beacon", "version": "v0.1.4", "commit": "abc", "os": "linux", "arch": "amd64",
-                      "pid": 42, "port": 41713, "uptimeSec": 7300, "visible": True, "presenceActive": True,
-                      "discord": {"state": "connected", "user": "someone",
-                                  "endpoint": "/run/user/1000/.flatpak/dev.vencord.Vesktop/xdg-run/discord-ipc-0"},
-                      "extension": {"lastSeenAgoSec": 5, "everConnected": True}, "nowPlaying": None,
-                      "config": {"enabled": True, "clientId": ""}, "extensionBuild": "b1",
-                      "extensionDirs": {"chrome": "/x/chrome"}}
-        self.posts = []
-        self.stub = Stub({("GET", "/v1/status"): lambda b: (200, self.state),
-                          ("GET", "/v1/ping"): lambda b: (200, {"app": "ytm-beacon"}),
-                          ("POST", "/v1/config"): lambda b: self.posts.append(b) or (200, b)})
-        self.addCleanup(self.stub.close)
-
-    def app(self):
-        hub = make_hub({"ytm-beacon.service": RUNNING}, app_classes=())
-        return Beacon(hub.ctx, ports=(self.stub.port,))
+class DiscordDetailsTests(unittest.TestCase):
+    """The "details" box of YTM Starcast's page: only what the Discord status payload says, worded for people."""
 
     def test_details(self):
-        more = dict(self.app().status()["more"])
+        raw = {"discord": {"state": "connected", "user": "someone",
+                           "endpoint": "/run/user/1000/.flatpak/dev.vencord.Vesktop/xdg-run/discord-ipc-0"},
+               "extension": {"lastSeenAgoSec": 5, "everConnected": True, "sources": [{"agent": "Brave", "state": "playing",
+                                                                                     "ageSec": 8}]},
+               "nowPlaying": {"title": "Song", "album": "Album"}, "settings": {"clientId": ""}, "uptimeSec": 7300,
+               "extensionBuild": "b1", "snoozeSec": 0}
+        more = dict(discord.details(raw))
         self.assertEqual(more["discord app"], "Vesktop")
-        self.assertIn("YTM Beacon's", more["application id"])
+        self.assertEqual(more["discord user"], "someone")
+        self.assertIn("the built-in one", more["application id"])
+        self.assertEqual(more["album"], "Album")
+        self.assertEqual(more["reporting from"], "Brave · playing · 8 s ago")
+        self.assertEqual(more["browser extension"], "connected before · build b1")
         self.assertEqual(more["running for"], "2 h 1 min")
 
-    def test_application_id(self):
-        b = self.app()
-        with self.assertRaises(BadRequest):
-            b.apply_settings({"clientId": "12ab"})
-        b.apply_settings({"clientId": " 123456789012345678 "})
-        self.assertEqual(self.posts[-1], {"clientId": "123456789012345678"})
-        b.apply_settings({"clientId": ""})   # back to Beacon's own
-        self.assertEqual(self.posts[-1], {"clientId": ""})
-
-    def test_doctor_runs_in_orbit(self):
-        b = self.app()
-        b.binary = lambda: "/bin/ytm-beacon"
-        self.assertEqual(b.term_command("update-check", {})["argv"], ["/bin/ytm-beacon", "update", "--check"])
-        self.assertTrue(next(a for a in b.actions() if a["id"] == "update")["changes"])
+    def test_application_id_and_whats_missing(self):
+        own = dict(discord.details({"settings": {"clientId": "123456789012345678"}}))
+        self.assertEqual(own["application id"], "123456789012345678  (your own)")
+        same = dict(discord.details({"settings": {"clientId": discord.DEFAULT_CLIENT_ID}}))
+        self.assertIn("the built-in one", same["application id"])
+        self.assertEqual(discord.details({}), [])                       # nothing said: nothing shown
+        self.assertEqual(discord.details(None), [])
+        old = dict(discord.details({"beaconApp": {"running": False, "installed": True, "canMigrate": True}}))
+        self.assertEqual(old["old ytm beacon app"], "installed, not running")
 
 
 class ThemeTests(unittest.TestCase):
@@ -209,26 +199,23 @@ class AvailabilityTests(unittest.TestCase):
 
 
     def test_an_app_never_installed_is_grey_not_red(self):
-        from orbit.apps.pocketfader import Pocketfader
         tmp = tempfile.mkdtemp()
         host = Host(system="linux", arch="amd64", home=tmp, env={"HOME": tmp}, which={}, systemd=True, distro="Fresh 1")
         src = Sources(api="http://127.0.0.1:9", allow=("http://127.0.0.1:9",), token=lambda: "")
 
-        class QuietBeacon(Beacon):
-            def __init__(self, ctx):
-                super().__init__(ctx, ports=(9,))
+        class QuietStarcast(Starcast):
+            beacon_binary = staticmethod(lambda: None)
 
-            def binary(self):
-                return None
-
-        hub = make_hub(app_classes=[Pocketfader, QuietBeacon], tmp=tmp)
-        hub.ctx.config.update_app("pocketfader", {"url": "http://127.0.0.1:9"})
+        hub = make_hub(app_classes=[QuietStarcast], tmp=tmp)
+        hub.ctx.config.update_app("ytm-starcast", {"url": "http://127.0.0.1:9"})
         hub2 = type(hub)(config=hub.ctx.config, runner=hub.ctx.runner, releases=hub.ctx.releases,
-                         app_classes=[Pocketfader, QuietBeacon], host=host, sources=src, recipes=load_recipes(host, src))
+                         app_classes=[QuietStarcast], host=host, sources=src, recipes=load_recipes(host, src))
         cards = {a["id"]: a for a in hub2.overview()}
-        for app in ("pocketfader", "ytm-beacon"):
-            self.assertEqual((cards[app]["state"], cards[app]["headline"]), ("off", "Not installed"), app)
-            self.assertFalse(cards[app]["install"]["installed"])
+        self.assertEqual((cards["ytm-starcast"]["state"], cards["ytm-starcast"]["headline"]), ("off", "Not installed"))
+        self.assertFalse(cards["ytm-starcast"]["install"]["installed"])
+        self.assertFalse(cards["ytm-starcast"]["install"]["migrate"])
+        self.assertEqual(cards["ytm-starcast"]["icon"], "/apps/ytm-starcast.svg")
+
 
 class LatestLookupTests(unittest.TestCase):
     def test_the_overview_looks_up_installable_versions_once_in_a_while(self):
@@ -254,7 +241,9 @@ class LatestLookupTests(unittest.TestCase):
             hub2.overview()
         hub2._pool.shutdown(wait=True)
         self.assertEqual(sorted(src.calls), sorted(set(src.calls)))        # each app once, though GitHub failed
-        self.assertIn("dash1101/pocketfader", src.calls)
+        self.assertIn("dash1101/ytm-starcast", src.calls)
+        self.assertNotIn("dash1101/pocketfader", src.calls)
+        self.assertNotIn("dash1101/ytm-beacon", src.calls)
 
 if __name__ == "__main__":
     unittest.main()

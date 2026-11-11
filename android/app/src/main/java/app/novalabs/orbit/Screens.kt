@@ -537,7 +537,7 @@ private fun SettingsScreen(model: HubModel) {
         }
         LegendBox("github") { GitHubBox(model) }
         LegendBox("about") {
-            Txt("Orbit for Android, by NovaLabs, installs and updates the Android apps of Pocketfader and Nova, and itself. " +
+            Txt("Orbit for Android, by NovaLabs, installs and updates the Android apps of YTM Starcast and Nova, and itself. " +
                 "Orbit for desktop (Linux, Windows, macOS) manages the programs on your computer.", color = t.muted, size = 12.5.sp)
         }
         Spacer(Modifier.height(24.dp))

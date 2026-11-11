@@ -17,10 +17,10 @@ DESKTOP = ROOT / "orbit" / "static" / "apps"
 ANDROID = ROOT / "android" / "app" / "src" / "main" / "assets" / "icons"
 
 # file name in Orbit -> (repository, path of the icon in it, also used by the Android app?)
+# Every file in Orbit's icon folders is one of these (tests/test_icons.py checks that nothing stale is left).
 ICONS = {
-    "pocketfader.svg": ("dash1101/pocketfader", "pocketfader/static/icon.svg", True),
+    "ytm-starcast.svg": ("dash1101/ytm-starcast", "starcast/static/icon.svg", True),
     "nova.svg": ("dash1101/Nova", "server/web/icon.svg", True),
-    "ytm-beacon.png": ("dash1101/ytm-beacon", "assets/logo.png", False),   # desktop only: Beacon is built into Pocketfader on Android
 }
 
 

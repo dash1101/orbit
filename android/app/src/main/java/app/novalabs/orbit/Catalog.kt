@@ -9,7 +9,7 @@ data class Listing(
     val name: String,
     val blurb: String,
     val repo: String,
-    val pkgs: List<String>,        // the app's Android package ids, newest first (Pocketfader's id is changing)
+    val pkgs: List<String>,        // the app's Android package ids, newest first (older ids it had, after)
     val icon: String,              // file in assets/icons
     val color: Long,
     val sums: String,              // checksum list in each release
@@ -23,19 +23,28 @@ data class Listing(
     val onAndroid get() = pkgs.isNotEmpty()
 }
 
+/** YTM Starcast's phone app in a release: ytm-starcast-android.apk, else a name with the version; never the
+ *  -unshrunk- build. */
+fun starcastApk(names: Collection<String>): String? =
+    names.firstOrNull { it == "ytm-starcast-android.apk" }
+        ?: names.firstOrNull { Regex("""ytm-starcast-android-v[^/]*\.apk""").matches(it) }
+
 object Catalog {
     // packaging/release-key.pub in the Nova repository (ed25519)
     private const val NOVA_KEY = "MCowBQYDK2VwAyEAGk70hAkKUc/oE8yLsTv49yeIkSJkCeuDG0IqxnF69WI="
 
     val apps = listOf(
         Listing(
-            id = "pocketfader", name = "Pocketfader",
-            blurb = "Control your computer's volume and music from your phone",
-            repo = "dash1101/pocketfader", pkgs = listOf("app.novalabs.pocketfader", "app.pocketfader.client"), icon = "pocketfader.svg", color = 0xFFA78BFA,
+            id = "ytm-starcast", name = "YTM Starcast",
+            blurb = "YouTube Music companion: a remote for your phone, your Discord status and a better YouTube Music",
+            repo = "dash1101/ytm-starcast",
+            // YTM Starcast's phone app keeps the id it had as Pocketfader (so it updates in place), then alpha.13's
+            pkgs = listOf("app.novalabs.pocketfader", "app.pocketfader.client"),
+            icon = "ytm-starcast.svg", color = 0xFF38D9C4,
             sums = "SHA256SUMS.txt",
-            apk = { names -> names.firstOrNull { Regex("""pocketfader-android-v[^/]*\.apk""").matches(it) } },
-            note = "The phone app talks to Pocketfader on your computer: install that with Orbit for desktop.",
-            extra = "Includes YTM Beacon: its Discord status controls are built into Pocketfader, so there's no separate Beacon app for Android.",
+            apk = { names -> starcastApk(names) },
+            note = "The phone app talks to YTM Starcast on your computer: install that with Orbit for desktop.",
+            extra = "Includes your Discord status (formerly YTM Beacon): its controls are in YTM Starcast's app.",
         ),
         Listing(
             id = "nova", name = "Nova",

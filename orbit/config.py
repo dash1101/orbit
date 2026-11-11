@@ -18,6 +18,37 @@ DEFAULTS = {
 }
 
 
+# Built-in apps that changed: Pocketfader is now YTM Starcast, and YTM Beacon is part of YTM Starcast.
+RENAMED = {"pocketfader": "ytm-starcast"}     # old id -> new id (its address, token and on/off carry over)
+RETIRED = ("ytm-beacon",)                     # folded into another app: its tile goes
+
+
+def migrate(d):
+    """Bring settings saved by an older Orbit up to date. Returns True when something changed."""
+    changed = False
+    apps, order = d["apps"], d["order"]
+    for old, new in RENAMED.items():
+        if old in apps:
+            was = apps.pop(old)
+            merged = dict(was) if isinstance(was, dict) else {}
+            merged.update(apps.get(new) if isinstance(apps.get(new), dict) else {})    # the new id's own values win
+            apps[new] = merged
+            changed = True
+        if old in order:
+            i = order.index(old)
+            order[:] = [x for x in order if x != old]
+            if new not in order:
+                order.insert(i, new)            # the tile keeps its place
+            changed = True
+    for gone in RETIRED:
+        if apps.pop(gone, None) is not None:
+            changed = True
+        if gone in order:
+            order[:] = [x for x in order if x != gone]
+            changed = True
+    return changed
+
+
 def config_dir():
     if os.name == "nt":
         return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / "Orbit"
@@ -30,6 +61,9 @@ class Config:
         self.path = Path(path) if path else config_dir() / "config.json"
         self._lock = threading.Lock()
         self._data = self._load()
+        if migrate(self._data):
+            with self._lock:
+                self._save()
 
     def _load(self):
         data = copy.deepcopy(DEFAULTS)

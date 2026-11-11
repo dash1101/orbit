@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#C9F5EC"/><stop offset=".5" stop-color="#E3D6FF"/><stop offset="1" stop-color="#FFB9AA"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".55"/><stop offset=".45" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C323B"/><stop offset="1" stop-color="#15191F"/>
+    </linearGradient>
+    <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4ECF2"/>
+    </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="16"/><feOffset dy="12" result="b"/>
+      <feFlood flood-color="#3A2A40" flood-opacity=".30"/><feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#bg)"/><rect x="24" y="24" width="464" height="464" rx="120" fill="url(#gloss)"/>
+  <!-- a record (YouTube Music) whose ring is three faders' colours (the remote), and a star sending out light (Discord status) -->
+  <g filter="url(#sh)">
+    <circle cx="246" cy="280" r="150" fill="url(#card)"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M255.6,188.5 A92,92 0 0 1 330.0,317.4" stroke="#FF7A59" stroke-opacity=".28" stroke-width="34"/>
+    <path d="M320.4,334.1 A92,92 0 0 1 171.6,334.1" stroke="#FFC94D" stroke-opacity=".28" stroke-width="34"/>
+    <path d="M162.0,317.4 A92,92 0 0 1 236.4,188.5" stroke="#38D9C4" stroke-opacity=".28" stroke-width="34"/>
+    <path d="M255.6,188.5 A92,92 0 0 1 330.0,317.4" stroke="#FF7A59" stroke-width="16"/>
+    <path d="M320.4,334.1 A92,92 0 0 1 171.6,334.1" stroke="#FFC94D" stroke-width="16"/>
+    <path d="M162.0,317.4 A92,92 0 0 1 236.4,188.5" stroke="#38D9C4" stroke-width="16"/>
+  </g>
+  <path d="M227.3,233.1 L295.1,272.9 Q307.2,280.0 295.1,287.1 L227.3,326.9 Q215.2,334.0 215.2,320.0 L215.2,240.0 Q215.2,226.0 227.3,233.1 Z" fill="url(#play)"/>
+  <g filter="url(#sh)">
+    <circle cx="380" cy="148" r="62" fill="url(#card)" stroke="#FFFFFF" stroke-opacity=".9" stroke-width="12"/>
+  </g>
+  <circle cx="380" cy="148" r="34" fill="#7FF2E1" opacity=".14"/>
+  <path d="M380,116 C382.5,138 386,143.5 408,148 C386,152.5 382.5,158 380,180 C377.5,158 374,152.5 352,148 C374,143.5 377.5,138 380,116 Z" fill="#7FF2E1"/>
+  <g fill="none" stroke="#7FF2E1" stroke-width="7" stroke-linecap="round" opacity=".7">
+    <path d="M347,114 a48,48 0 0 0 0,68"/><path d="M413,114 a48,48 0 0 1 0,68"/>
+  </g>
+</svg>
