@@ -4,6 +4,7 @@
 
 - **Orbit updates itself** on Linux and Windows. When a new version is out, the top bar says *update orbit to …*: Orbit downloads it, checks it against the release's checksums, starts it once to make sure it runs and is that version, and switches to it when you press *restart orbit* (or the next time you open Orbit). The old program is kept until the new one has started, so a failed update leaves Orbit as it was. This is checked on every build by updating a real Orbit to a newer one and restarting it, on Linux and on Windows. On a Mac, download the new `.dmg` as before.
 - **The overview shows what each app is doing**: the song Pocketfader is playing, what Beacon shows on Discord.
+- **Linux: programs Orbit opens use your computer's own libraries.** The standalone Orbit passed its own bundled copies of some system libraries (such as OpenSSL and zlib) on to the browsers, terminals and system tools it started, where older copies can clash with the system's. Now each program gets the computer's own.
 - Updating from 0.3.0 or older is still by hand, once: download this release's file in place of the old one.
 
 **New in 0.3.0:** Nova on Windows (a preview), installed, updated and removed by Orbit with one Windows permission prompt; Nova's release signature checked by Orbit itself everywhere, Android included; Nova Server and Nova's setup window opened from Orbit on Linux; open a running app from the overview in one click; and many smaller fixes.
