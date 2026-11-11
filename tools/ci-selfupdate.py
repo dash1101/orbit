@@ -2,8 +2,11 @@
 
     python tools/ci-selfupdate.py <this build> <a build that says 99.0.0> <asset suffix, e.g. linux-x86_64>
 
+    python tools/ci-selfupdate.py --real <a published Orbit> <the newest version>
+
 A stand-in for GitHub (on 127.0.0.1, named to Orbit by ORBIT_TEST_GITHUB_API) publishes the newer build as release
-v99.0.0 with its SHA256SUMS. A copy of this build is started, asked through its own API to update itself (exactly
+v99.0.0 with its SHA256SUMS. With --real, an Orbit downloaded from an earlier release updates itself from the real
+GitHub releases instead. A copy of this build is started, asked through its own API to update itself (exactly
 what the window's "update" button does), then to restart; the newer Orbit must come up on the same port and the
 old program must be gone. Run by the build workflow on Linux and Windows.
 """
@@ -22,11 +25,16 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-old_exe, new_exe, suffix = sys.argv[1:4]
-TAG = "v99.0.0"
-NAME = f"orbit-{TAG}-{suffix}"
-DATA = Path(new_exe).read_bytes()
-SUMS = f"{hashlib.sha256(DATA).hexdigest()}  {NAME}\n".encode()
+REAL = len(sys.argv) > 1 and sys.argv[1] == "--real"
+if REAL:
+    old_exe, WANT = sys.argv[2:4]
+else:
+    old_exe, new_exe, suffix = sys.argv[1:4]
+    WANT = "99.0.0"
+    TAG = "v99.0.0"
+    NAME = f"orbit-{TAG}-{suffix}"
+    DATA = Path(new_exe).read_bytes()
+    SUMS = f"{hashlib.sha256(DATA).hexdigest()}  {NAME}\n".encode()
 
 
 def say(text):
@@ -146,8 +154,9 @@ def scenario(gh, how):
     exe = app / Path(old_exe).name
     shutil.copy2(old_exe, exe)
     port = free_port()
-    env = dict(os.environ, ORBIT_TEST_GITHUB_API=f"http://127.0.0.1:{gh.server_address[1]}",
-               XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"))
+    env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"))
+    if gh is not None:
+        env["ORBIT_TEST_GITHUB_API"] = f"http://127.0.0.1:{gh.server_address[1]}"
 
     def start(log):
         say(f"starting {exe} on port {port}")
@@ -160,7 +169,7 @@ def scenario(gh, how):
         say(f"running Orbit {hub['version']}")
         plan = call(port, "/api/install/orbit/plan", {"op": "install"})
         say(f"plan: {plan['title']} · blocked: {plan['blocked'] or 'no'}")
-        if plan["blocked"] or plan["title"] != "Update Orbit to 99.0.0":
+        if plan["blocked"] or plan["title"] != f"Update Orbit to {WANT}":
             fail("the update isn't offered")
         job = call(port, "/api/install/orbit/start", {"op": "install"})
         snap = wait_for("the update", lambda: (lambda j: j if j["state"] != "running" else None)(
@@ -176,7 +185,7 @@ def scenario(gh, how):
             fail("the running program's file changed before the restart")
         tag = call(port, "/api/hub").get("orbitUpdate") or {}
         say(f"the window offers: {tag}")
-        if not tag.get("pending") or tag.get("version") != "99.0.0":
+        if not tag.get("pending") or tag.get("version") != WANT:
             fail("the window doesn't offer the restart")
         if how == "restart":
             call(port, "/api/hub/restart", {})
@@ -185,7 +194,7 @@ def scenario(gh, how):
             wait_for("the port to be free", lambda: not port_busy(port), 30)
             start("second.log")
         hub = wait_for("the new Orbit on the same port",
-                       lambda: (lambda h: h if h["version"] == "99.0.0" else None)(call(port, "/api/hub")), 90)
+                       lambda: (lambda h: h if h["version"] == WANT else None)(call(port, "/api/hub")), 90)
         say(f"Orbit {hub['version']} answers on port {port}")
         if how == "restart":
             try:
@@ -199,7 +208,7 @@ def scenario(gh, how):
             fail(f"the new Orbit uses unpacked files that are gone (another Orbit's): {unpacked}")
         out = root / "v.txt"
         subprocess.run([str(exe), "--write-version", str(out)], timeout=120)
-        if out.read_text().strip() != "orbit 99.0.0":
+        if out.read_text().strip() != f"orbit {WANT}":
             fail(f"the program in place says {out.read_text().strip()!r}")
         if not wait_for("the old program to be deleted", lambda: not old.exists(), 90, quiet=True):
             show_processes()
@@ -207,7 +216,7 @@ def scenario(gh, how):
         left = sorted(x.name for x in app.iterdir())
         if left != [exe.name]:
             fail(f"left next to Orbit: {left}")
-        say(f"{how}: the program in place is 99.0.0 and nothing else is left.")
+        say(f"{how}: the program in place is {WANT} and nothing else is left.")
     finally:
         stop_everything(app)
         for log in ("first.log", "second.log"):
@@ -224,8 +233,10 @@ def port_busy(port):
 
 
 def main():
-    gh = ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
-    threading.Thread(target=gh.serve_forever, daemon=True).start()
+    gh = None
+    if not REAL:
+        gh = ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
+        threading.Thread(target=gh.serve_forever, daemon=True).start()
     scenario(gh, "restart")
     scenario(gh, "reopen")
     say("\nSelf-update works: after a restart from the window, and after closing Orbit and opening it again.")
