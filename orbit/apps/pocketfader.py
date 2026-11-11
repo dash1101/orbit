@@ -17,6 +17,7 @@ class Pocketfader(App):
     repo = "dash1101/pocketfader"
     homepage = "https://github.com/dash1101/pocketfader"
     units = (("pocketfader.service", True),)
+    open_label = "open web app"
 
     @property
     def base(self):

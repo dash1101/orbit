@@ -238,6 +238,8 @@ class Hub:
                 na = self.unavailable(i)
                 if na:
                     d.update(state="off", headline=na, unavailable=True)
+                elif (s["state"] in ("ok", "warn") or s.get("running")) and self.apps[i].open_label:
+                    d["open"] = self.apps[i].open_label
             else:
                 d.update(state="off", headline="hidden (orbit settings → apps)", version="", update=False)
             out.append(d)

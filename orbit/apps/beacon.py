@@ -67,6 +67,7 @@ class Beacon(App):
     repo = "dash1101/ytm-beacon"
     homepage = "https://github.com/dash1101/ytm-beacon"
     units = (("ytm-beacon.service", True),)
+    open_label = "dashboard"
 
     def __init__(self, ctx, ports=PORTS):
         super().__init__(ctx)
@@ -146,7 +147,7 @@ class Beacon(App):
                   if raw.get("visible") else "hidden", None if raw.get("visible") else "muted"])
         f.append(["port", str(raw.get("port", self._port))])
         s["more"] = self.details(raw)
-        s.update(state=tone, headline=text, version=raw.get("version", ""), code=code,
+        s.update(state=tone, headline=text, version=raw.get("version", ""), code=code, running=True,
                  snoozeSec=int(raw.get("snoozeSec") or 0), visible=bool(raw.get("visible")))
         rel = self.release_info(raw.get("version", ""))
         if rel:

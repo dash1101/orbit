@@ -49,6 +49,7 @@ class CustomApp(App):
         self.glyph = (spec["name"][:2] or "··").upper()
         self.blurb = "Added in Orbit"
         self.units = ((spec["unit"], spec["scope"] == "user"),) if spec.get("unit") else ()
+        self.open_label = "open" if spec.get("openUrl") else ""
 
     def describe(self):
         d = super().describe()

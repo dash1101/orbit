@@ -65,6 +65,7 @@ class Nova(App):
     homepage = "https://github.com/dash1101/Nova"
     units = tuple((u, False) for u, _ in UNITS)
     status_file = STATUS_FILE
+    open_label = "nova web"
 
     def __init__(self, ctx, local_hosts=None):
         super().__init__(ctx)

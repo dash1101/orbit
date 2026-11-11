@@ -706,17 +706,23 @@ function renderOverview() {
       h("span", { class: "ver" }, pv(a.version))),
     h("div", { class: "hl" }, h("span", { class: "dot s-" + a.state }), h("span", {}, a.headline || STATE_WORD[a.state])),
     h("div", { class: "bl" }, a.blurb),
-    installHint(a)));
+    cardButtons(a)));
   main.replaceChildren(
     shown.length ? h("div", { class: "cards" }, cards) : box("overview", h("div", { class: "empty" }, "No apps shown. Turn some on in orbit settings.")));
 }
 
-function installHint(a) {
+// A card's buttons: open the app while it runs, install or update it when that's possible.
+function cardButtons(a) {
+  const b = [];
+  if (a.open) b.push(h("button", { class: "btn small", title: "open " + a.name, onclick: e => {
+    e.stopPropagation(); runAction(a, { id: "open", label: a.open }); } }, a.open + " ↗"));
   const i = a.install;
-  if (!i || i.supported === "none" || (i.installed && !i.update && !i.busy)) return null;
-  const label = i.busy ? "installing…" : !i.installed ? "install" : "update to " + pv(i.latest);
-  return h("div", { class: "btns", style: "margin-top:10px" }, h("button", { class: "btn small primary", onclick: e => {
-    e.stopPropagation(); openWizard(a.id, "install", i.busy || null); } }, i.busy ? [spin(), " " + label] : label));
+  if (i && i.supported !== "none" && (!i.installed || i.update || i.busy)) {
+    const label = i.busy ? "installing…" : !i.installed ? "install" : "update to " + pv(i.latest);
+    b.push(h("button", { class: "btn small primary", onclick: e => {
+      e.stopPropagation(); openWizard(a.id, "install", i.busy || null); } }, i.busy ? [spin(), " " + label] : label));
+  }
+  return b.length ? h("div", { class: "btns", style: "margin-top:10px" }, b) : null;
 }
 
 // ------------------------------------------------------------------ one app

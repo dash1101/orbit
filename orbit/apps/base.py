@@ -76,6 +76,7 @@ class App:
     homepage = ""
     units = ()            # (unit, user?) pairs this app runs as
     icon = ""             # file in static/apps/ (svg or png); the glyph is used when empty
+    open_label = ""       # its "open" action's name, for a button on the overview card while it runs
 
     def __init__(self, ctx):
         self.ctx = ctx    # .runner .config .releases .dry_run .jobs
