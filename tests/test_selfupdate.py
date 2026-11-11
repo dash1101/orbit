@@ -7,7 +7,7 @@ from pathlib import Path
 
 from orbit.install.engine import Installer, Sources
 from orbit.install.host import Host
-from orbit.install.recipes.orbit import OrbitRecipe, cleanup_old, switch, waiting
+from orbit.install.recipes.orbit import OrbitRecipe, cleanup_old, switch, unit, waiting
 from tests import unix_only
 from tests.test_install import StubGitHub, sums, wait
 
@@ -66,6 +66,29 @@ class SelfUpdateTests(unittest.TestCase):
         self.assertTrue(cleanup_old(self.exe))           # what the new Orbit does when it starts
         self.assertEqual(sorted(p.name for p in self.exe.parent.iterdir()), ["orbit"])
 
+    def test_on_a_mac_the_whole_app_is_switched(self):
+        app = self.tmp / "Applications" / "Orbit.app"
+        exe = app / "Contents" / "MacOS" / "Orbit"
+        exe.parent.mkdir(parents=True)
+        exe.write_bytes(program("0.3.0"))
+        (app / "Contents" / "Info.plist").write_text("old")
+        self.assertEqual(unit(exe), app)
+        self.assertEqual(unit(self.exe), self.exe)                 # a plain program file is its own unit
+        r = self.recipe("darwin")
+        self.assertEqual(r.asset("v1.2.3"), "orbit-v1.2.3-macos-intel.dmg")
+        new = app.with_name("Orbit.app.new")
+        (new / "Contents" / "MacOS").mkdir(parents=True)
+        (new / "Contents" / "MacOS" / "Orbit").write_bytes(program("9.9.9"))
+        (new / "Contents" / "Info.plist").write_text("new")
+        self.assertEqual(waiting(exe), "")                          # not checked yet: never switched to
+        app.with_name("Orbit.app.new.ok").write_text("orbit 9.9.9\n")
+        self.assertEqual(waiting(exe), "9.9.9")
+        self.assertTrue(switch(exe))
+        self.assertEqual((app / "Contents" / "Info.plist").read_text(), "new")
+        self.assertEqual((app.with_name("Orbit.app.old") / "Contents" / "Info.plist").read_text(), "old")
+        self.assertTrue(cleanup_old(exe))
+        self.assertEqual(sorted(x.name for x in app.parent.iterdir()), ["Orbit.app"])
+
     def test_a_half_finished_download_is_never_switched_to(self):
         (self.exe.parent / "orbit.new").write_bytes(b"partial")       # no .new.ok: it was never checked
         self.assertEqual(waiting(self.exe), "")
@@ -98,9 +121,6 @@ class SelfUpdateTests(unittest.TestCase):
 
     def test_says_how_to_update_where_it_cant_itself(self):
         self.publish(program("9.9.9"))
-        mac = self.recipe("darwin")
-        self.assertIn(".dmg", mac.info("install")["requirements"][0]["hint"])
-        self.assertTrue(mac.info("install")["blocked"])
         src = self.recipe()
         src.program = None                     # running from the source folder (tests are never frozen)
         self.assertIn("git pull", src.info("install")["requirements"][0]["hint"])

@@ -104,7 +104,7 @@ def wait_for(what, check, seconds=90, quiet=False):
 
 def borrowed_files(app):
     """Linux: unpacked files the running Orbits use that no longer exist (they were another, ended Orbit's)."""
-    if os.name == "nt":
+    if not sys.platform.startswith("linux"):
         return []
     gone = set()
     for pid in os.listdir("/proc"):
@@ -136,6 +136,16 @@ def stop_everything(app):
     if os.name == "nt":
         subprocess.run(["taskkill", "/F", "/T", "/IM", Path(old_exe).name], capture_output=True)
         return
+    if sys.platform == "darwin":
+        out = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            pid, _, cmd = line.strip().partition(" ")
+            if cmd.startswith(str(app)) and pid.isdigit():
+                try:
+                    os.kill(int(pid), 15)
+                except OSError:
+                    pass
+        return
     for pid in os.listdir("/proc"):
         if pid.isdigit():
             try:
@@ -151,8 +161,15 @@ def scenario(gh, how):
     root = Path(tempfile.mkdtemp(prefix="orbit-selfupdate-"))
     app = root / "app"
     app.mkdir()
-    exe = app / Path(old_exe).name
-    shutil.copy2(old_exe, exe)
+    if old_exe.endswith(".app"):          # macOS: the whole app, as dragged into Applications
+        bundle = app / Path(old_exe).name
+        shutil.copytree(old_exe, bundle, symlinks=True)
+        exe = bundle / "Contents" / "MacOS" / "Orbit"
+        original = Path(old_exe) / "Contents" / "MacOS" / "Orbit"
+    else:
+        bundle = exe = app / Path(old_exe).name
+        shutil.copy2(old_exe, exe)
+        original = Path(old_exe)
     port = free_port()
     env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"))
     if gh is not None:
@@ -178,10 +195,10 @@ def scenario(gh, how):
             say("  " + line)
         if snap["state"] != "done":
             fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
-        old = exe.with_name(exe.name + ".old")
-        if not exe.with_name(exe.name + ".new").exists() or not exe.with_name(exe.name + ".new.ok").exists():
+        old = bundle.with_name(bundle.name + ".old")
+        if not bundle.with_name(bundle.name + ".new").exists() or not bundle.with_name(bundle.name + ".new.ok").exists():
             fail("the new program isn't waiting next to the running one")
-        if exe.read_bytes() != Path(old_exe).read_bytes():
+        if exe.read_bytes() != original.read_bytes():
             fail("the running program's file changed before the restart")
         tag = call(port, "/api/hub").get("orbitUpdate") or {}
         say(f"the window offers: {tag}")
@@ -214,7 +231,7 @@ def scenario(gh, how):
             show_processes()
             fail("the old program is still there")
         left = sorted(x.name for x in app.iterdir())
-        if left != [exe.name]:
+        if left != [bundle.name]:
             fail(f"left next to Orbit: {left}")
         say(f"{how}: the program in place is {WANT} and nothing else is left.")
     finally:

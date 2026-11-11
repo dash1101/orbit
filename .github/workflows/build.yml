@@ -122,7 +122,6 @@ jobs:
       # Orbit updates itself on Linux and Windows: a second build that says 99.0.0 is published by a stand-in GitHub, and
       # this build must update itself to it through its own API, restart on it, and delete the old program.
       - name: "Self-update (a real update to a newer build, then a restart)"
-        if: runner.os != 'macOS'
         shell: bash
         run: |
           cp orbit/__init__.py "$RUNNER_TEMP/init.py"
@@ -134,6 +133,12 @@ jobs:
             pyinstaller "${common[@]}" --onefile --windowed --name orbit packaging/entry.py
             cp "$RUNNER_TEMP/init.py" orbit/__init__.py
             python tools/ci-selfupdate.py dist/orbit.exe dist-next/orbit.exe windows-x64.exe
+          elif [ "$RUNNER_OS" = macOS ]; then
+            pyinstaller "${common[@]}" --windowed --name Orbit --osx-bundle-identifier app.novalabs.orbit packaging/entry.py
+            cp "$RUNNER_TEMP/init.py" orbit/__init__.py
+            mkdir -p dmg-next && cp -R dist-next/Orbit.app dmg-next/ && ln -s /Applications dmg-next/Applications
+            hdiutil create -volname Orbit -srcfolder dmg-next -ov -format UDZO next.dmg
+            python tools/ci-selfupdate.py dist/Orbit.app next.dmg "${{ matrix.name }}.dmg"
           else
             pyinstaller "${common[@]}" --onefile --name orbit packaging/entry.py
             cp "$RUNNER_TEMP/init.py" orbit/__init__.py
