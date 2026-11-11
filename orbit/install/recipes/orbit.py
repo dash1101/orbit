@@ -131,7 +131,9 @@ class OrbitRecipe(Recipe):
                                                    "drag Orbit onto Applications again.")]
         if not exe:
             return [need("Running as the standalone program", False,
-                         "This Orbit runs from its source folder: update it with `git pull` there.")]
+                         "This Orbit runs from its Python source, so it can't replace itself. Update the source "
+                         "(`git pull`) and run `./install.sh` again, or use the standalone program from the releases "
+                         "page, which updates itself.")]
         if not self.asset("v0"):
             return [need("A standalone program for this computer", False,
                          f"There's no standalone Orbit for {self.host.label} yet.")]
