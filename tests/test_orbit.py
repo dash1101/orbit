@@ -8,7 +8,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from orbit import net, systemd
-from orbit.apps import base
 from orbit.apps.base import App, BadRequest, coerce, field
 from orbit.apps.beacon import Beacon, headline
 from orbit.apps.custom import validate
@@ -411,12 +410,12 @@ class NovaTests(AsOnLinux):
                   "Running · 2 need attention: a"),
                  (self._monitor(age=3 * 3600), "warn", "Running, but its alerts have stopped checking the server"),
                  (None, "ok", "Running"))
-        for status, state, headline in cases:
+        for status, state, want in cases:
             n = self._nova(status)
             with mock.patch.object(Nova, "address", return_value="https://127.0.0.1:8495"), \
                     mock.patch("orbit.apps.nova.net.get_json", return_value=answer):
                 s = n.status()
-            self.assertEqual((s["state"], s["headline"]), (state, headline))
+            self.assertEqual((s["state"], s["headline"]), (state, want))
             self.assertEqual(s["version"], "0.9.14-alpha")
 
     def test_health_when_the_monitor_stopped_or_the_file_is_odd(self):

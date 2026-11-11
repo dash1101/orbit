@@ -9,7 +9,6 @@ import io
 import json
 import os
 import shutil
-import subprocess
 import tarfile
 import tempfile
 import threading
@@ -21,9 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from orbit import net
+from orbit.install.engine import Failed, Installer, Session, Sources, Step, parse_sums, safe_extract
 from tests import ed25519_sign, unix_only
-from orbit.install import engine
-from orbit.install.engine import Failed, Installer, Session, Sources, Job, Step, parse_sums, safe_extract
 from orbit.install.host import Host
 from orbit.install.recipes.beacon import BeaconRecipe
 from orbit.install.recipes.nova import NovaRecipe
