@@ -381,8 +381,9 @@ def through_the_program(exe, apps, migrate=False):
                 if not (inst["installed"] and inst.get("migrate") and inst.get("how") == "Pocketfader (its old name)"
                         and inst.get("legacy", {}).get("beacon")):
                     fail("Orbit doesn't see Pocketfader and YTM Beacon as something to move to YTM Starcast")
-                if not found.get("update"):
-                    fail("YTM Starcast's card doesn't offer the move")
+                # the card offers the move once Orbit has learned the latest release, which it looks up in the
+                # background after it starts
+                until("YTM Starcast's card to offer the move", lambda: listing(app).get("update"), 120)
                 old = call(f"/api/apps/{app}")["status"]
                 say(f"Orbit's {app} page before the move: {old['state']} · {old['headline']} · {old.get('version')}")
             elif installed(app):
