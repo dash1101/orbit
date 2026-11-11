@@ -718,6 +718,43 @@ impl Session {
         Ok(())
     }
 
+    pub fn copy_tree(&self, src: &Path, dest: &Path) -> Res<()> {
+        if self.dry_run {
+            self.log(&format!("dry run: would copy the program into {}", dest.display()));
+            return Ok(());
+        }
+        fn copy(src: &Path, dest: &Path) -> std::io::Result<()> {
+            std::fs::create_dir_all(dest)?;
+            for e in std::fs::read_dir(src)?.flatten() {
+                let (from, to) = (e.path(), dest.join(e.file_name()));
+                if from.is_dir() { copy(&from, &to)? } else { std::fs::copy(&from, &to).map(|_| ())? }
+            }
+            Ok(())
+        }
+        copy(src, dest).map_err(|e| failed(format!("Couldn't copy the program into {}: {e}", dest.display()), ""))?;
+        self.log(&format!("Copied the program into {}", dest.display()));
+        Ok(())
+    }
+
+    pub fn symlink(&self, target: &Path, link: &Path) -> Res<()> {
+        if self.dry_run {
+            self.log(&format!("dry run: would link {} → {}", link.display(), target.display()));
+            return Ok(());
+        }
+        let err = |e: std::io::Error| failed(format!("Couldn't link {}: {e}", link.display()), "");
+        if let Some(d) = link.parent() {
+            std::fs::create_dir_all(d).map_err(err)?;
+        }
+        if util::exists(link) {
+            std::fs::remove_file(link).map_err(err)?;
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).map_err(err)?;
+        #[cfg(not(unix))]
+        std::fs::copy(target, link).map(|_| ()).map_err(err)?;
+        Ok(())
+    }
+
     /// Wait until something answers at `url`. Returns true when it did.
     pub fn wait_http(&self, url: &str, seconds: f64, insecure: bool) -> Res<bool> {
         self.detail(&format!("waiting for it to answer · {}", url.split('/').nth(2).unwrap_or(url)));

@@ -89,6 +89,8 @@ pub trait Recipe: Send + Sync {
     fn needs_admin(&self, _op: &str) -> Value {
         json!(false)
     }
+    /// A last word on what the installer window shows (a recipe's own wording).
+    fn adjust_info(&self, _info: &mut Value) {}
 
     fn support(&self) -> Value {
         let b = self.base();
@@ -214,7 +216,7 @@ pub fn info(r: &Arc<dyn Recipe>, op: &str, given: &Value) -> Res<Value> {
     let release = rel.as_ref().map(|rv| json!({
         "version": version_of(rv["tag"].as_str().unwrap_or("")), "tag": rv["tag"], "published": rv["published"],
         "prerelease": rv["prerelease"], "size": size, "sizeText": if size > 0 { fmt_size(size) } else { String::new() }, "url": rv["url"]}));
-    Ok(json!({
+    let mut out = json!({
         "app": r.id(), "name": r.name(), "op": op, "title": r.title(op, rel.as_ref()), "host": r.base().host.describe(),
         "support": sup, "installed": inst, "platforms": platforms(r.as_ref()), "release": release,
         "requirements": reqs, "options": fields,
@@ -222,7 +224,9 @@ pub fn info(r: &Arc<dyn Recipe>, op: &str, given: &Value) -> Res<Value> {
         "steps": steps.iter().map(|s| json!({"id": s.id, "label": s.label})).collect::<Vec<_>>(),
         "needsAdmin": r.needs_admin(op), "blocked": blocked,
         "blockedHint": if !blocked.is_empty() && blocked == rel_err { hint } else { String::new() },
-    }))
+    });
+    r.adjust_info(&mut out);
+    Ok(out)
 }
 
 pub struct Plan {

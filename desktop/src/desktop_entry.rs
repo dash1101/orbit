@@ -55,7 +55,7 @@ pub fn add(runner: &Runner) -> Value {
             std::fs::create_dir_all(entry.parent().unwrap())?;
             let e = if exe.contains(' ') { format!("\"{exe}\"") } else { exe.clone() };
             std::fs::write(&entry, ["[Desktop Entry]", "Type=Application", "Name=Orbit", "GenericName=App hub",
-                                    "Comment=One place for your apps", &format!("Exec={e}"), "Icon=orbit", "Terminal=false",
+                                    "Comment=One place for YTM Starcast and Nova", &format!("Exec={e}"), "Icon=orbit", "Terminal=false",
                                     "Categories=Utility;System;", "StartupWMClass=orbit", ""].join("\n"))
         })();
         if let Err(e) = r {
@@ -76,7 +76,7 @@ pub fn add(runner: &Runner) -> Value {
         let _ = std::fs::create_dir_all(link.parent().unwrap()); // a new or redirected profile may not have it yet
         let dir = Path::new(&exe).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
         let script = format!("$s=(New-Object -ComObject WScript.Shell).CreateShortcut({});$s.TargetPath={};$s.Arguments='';$s.WorkingDirectory={};\
-                              $s.Description='One place for your apps';$s.Save()",
+                              $s.Description='One place for YTM Starcast and Nova';$s.Save()",
                              ps_quote(&link.to_string_lossy()), ps_quote(&exe), ps_quote(&dir));
         let (rc, out) = powershell(&script);
         if rc != 0 {

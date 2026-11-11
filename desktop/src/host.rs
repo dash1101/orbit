@@ -71,6 +71,13 @@ impl Host {
             || self.env.get("WAYLAND_DISPLAY").map(|s| !s.is_empty()).unwrap_or(false)
     }
 
+    pub fn uid(&self) -> u32 {
+        #[cfg(unix)]
+        return unsafe { libc::getuid() };
+        #[cfg(not(unix))]
+        0
+    }
+
     pub fn has_systemd(&self) -> bool {
         if let Some(s) = self.systemd {
             return s;

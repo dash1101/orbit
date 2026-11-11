@@ -5,7 +5,9 @@
 //! generically: {"key", "label", "type": bool|int|choice|text|words|secret|note, "value", "help"?, "min"?, "max"?,
 //! "options"?: [[value, label]], "scope": "app"|"hub"}.
 pub mod custom;
+pub mod discord;
 pub mod nova;
+pub mod starcast;
 
 use crate::config::Config;
 use crate::net::{self, Releases};
@@ -292,7 +294,7 @@ pub fn release_info(app: &dyn App, current: &str, force: bool) -> Option<Value> 
 
 /// All apps, in the person's order (built-ins first by default), keyed by id.
 pub fn load(ctx: &Arc<Ctx>) -> Vec<Arc<dyn App>> {
-    let mut apps: Vec<Arc<dyn App>> = vec![Arc::new(nova::Nova::new(ctx.clone()))];
+    let mut apps: Vec<Arc<dyn App>> = vec![Arc::new(starcast::Starcast::new(ctx.clone())), Arc::new(nova::Nova::new(ctx.clone()))];
     for spec in ctx.config.get("custom").as_array().cloned().unwrap_or_default() {
         let id = spec["id"].as_str().unwrap_or("").to_string();
         if !id.is_empty() && !apps.iter().any(|a| a.id() == id) {

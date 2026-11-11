@@ -13,6 +13,14 @@ pub const UA: &str = "orbit-hub";
 pub struct HttpError {
     pub status: u16,
     pub message: String,
+    /// The app's own explanation (the "message" of its JSON reply), when it sent one.
+    pub text: String,
+}
+
+impl HttpError {
+    pub fn new(status: u16, message: impl Into<String>) -> HttpError {
+        HttpError { status, message: message.into(), text: String::new() }
+    }
 }
 
 impl std::fmt::Display for HttpError {
@@ -146,7 +154,7 @@ pub fn request_text(method: &str, url: &str, body: Option<&Value>, opt: &Req) ->
     let loc = local(url);
     if let Some((h, p)) = &loc {
         if !local_listening(h, *p) {
-            return Err(HttpError { status: 0, message: "not running".into() });
+            return Err(HttpError::new(0, "not running"));
         }
     }
     let a = agent(Duration::from_secs_f64(opt.timeout), opt.insecure);
@@ -161,25 +169,23 @@ pub fn request_text(method: &str, url: &str, body: Option<&Value>, opt: &Req) ->
     match res {
         Ok(resp) => {
             let mut buf = Vec::new();
-            resp.into_reader().take(4 << 20).read_to_end(&mut buf).map_err(|e| HttpError { status: 0, message: e.to_string() })?;
+            resp.into_reader().take(4 << 20).read_to_end(&mut buf).map_err(|e| HttpError::new(0, e.to_string()))?;
             Ok(String::from_utf8_lossy(&buf).into_owned())
         }
         Err(ureq::Error::Status(code, resp)) => {
             let reason = resp.status_text().to_string();
             let mut buf = Vec::new();
             let _ = resp.into_reader().take(64 << 10).read_to_end(&mut buf);
-            let msg = serde_json::from_slice::<Value>(&buf)
-                .ok()
-                .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
-                .filter(|s| !s.is_empty())
-                .unwrap_or(reason);
-            Err(HttpError { status: code, message: msg })
+            let reply = serde_json::from_slice::<Value>(&buf).unwrap_or(Value::Null);
+            let msg = reply.get("error").and_then(|e| e.as_str()).filter(|s| !s.is_empty()).map(String::from).unwrap_or(reason);
+            let text = reply.get("message").and_then(|m| m.as_str()).unwrap_or("").to_string();
+            Err(HttpError { status: code, message: msg, text })
         }
         Err(ureq::Error::Transport(t)) => {
             if let Some(k) = loc {
                 note(k, false);
             }
-            Err(HttpError { status: 0, message: t.message().map(String::from).unwrap_or_else(|| t.kind().to_string()) })
+            Err(HttpError::new(0, t.message().map(String::from).unwrap_or_else(|| t.kind().to_string())))
         }
     }
 }
@@ -189,7 +195,7 @@ pub fn request(method: &str, url: &str, body: Option<&Value>, opt: &Req) -> Resu
     if text.trim().is_empty() {
         return Ok(Value::Null);
     }
-    serde_json::from_str(&text).map_err(|_| HttpError { status: 0, message: "unexpected reply".into() })
+    serde_json::from_str(&text).map_err(|_| HttpError::new(0, "unexpected reply"))
 }
 
 pub fn get_json(url: &str, opt: &Req) -> Result<Value, HttpError> {

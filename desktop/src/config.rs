@@ -60,8 +60,11 @@ pub struct Config {
 impl Config {
     pub fn new(path: Option<PathBuf>) -> Config {
         let path = path.unwrap_or_else(|| config_dir().join("config.json"));
-        let data = Mutex::new(load(&path));
-        Config { path, data }
+        let mut d = load(&path);
+        if migrate(&mut d) {
+            save(&path, &d);
+        }
+        Config { path, data: Mutex::new(d) }
     }
 
     /// Everything, as one object.
@@ -107,6 +110,48 @@ impl Config {
     }
 }
 
+// Built-in apps that changed: Pocketfader is now YTM Starcast, and YTM Beacon is part of YTM Starcast.
+const RENAMED: [(&str, &str); 1] = [("pocketfader", "ytm-starcast")]; // old id -> new id (its address, token and on/off carry over)
+const RETIRED: [&str; 1] = ["ytm-beacon"]; // folded into another app: its tile goes
+
+/// Bring settings saved by an older Orbit up to date. Returns true when something changed.
+pub fn migrate(d: &mut Map<String, Value>) -> bool {
+    let mut changed = false;
+    let mut apps = d.get("apps").and_then(|a| a.as_object()).cloned().unwrap_or_default();
+    let mut order: Vec<Value> = d.get("order").and_then(|o| o.as_array()).cloned().unwrap_or_default();
+    for (old, new) in RENAMED {
+        if let Some(was) = apps.remove(old) {
+            let mut merged = was.as_object().cloned().unwrap_or_default();
+            if let Some(Value::Object(own)) = apps.get(new) {
+                merged.extend(own.clone()); // the new id's own values win
+            }
+            apps.insert(new.into(), Value::Object(merged));
+            changed = true;
+        }
+        if let Some(i) = order.iter().position(|x| x == old) {
+            order.retain(|x| x != old);
+            if !order.iter().any(|x| x == new) {
+                order.insert(i.min(order.len()), json!(new)); // the tile keeps its place
+            }
+            changed = true;
+        }
+    }
+    for gone in RETIRED {
+        if apps.remove(gone).is_some() {
+            changed = true;
+        }
+        if order.iter().any(|x| x == gone) {
+            order.retain(|x| x != gone);
+            changed = true;
+        }
+    }
+    if changed {
+        d.insert("apps".into(), Value::Object(apps));
+        d.insert("order".into(), Value::Array(order));
+    }
+    changed
+}
+
 fn load(path: &Path) -> Map<String, Value> {
     let mut data = defaults();
     if let Ok(text) = std::fs::read_to_string(path) {
@@ -137,4 +182,21 @@ fn save(path: &Path, data: &Map<String, Value>) {
         }
         std::fs::rename(&tmp, path) // atomic: a crash can't leave half a file
     })();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_from_before_the_move_carry_over() {
+        let mut d = defaults();
+        d.insert("apps".into(), json!({"pocketfader": {"url": "http://127.0.0.1:8777", "token": "t"}, "ytm-beacon": {"enabled": false},
+                                       "ytm-starcast": {"enabled": true}}));
+        d.insert("order".into(), json!(["nova", "pocketfader", "ytm-beacon"]));
+        assert!(migrate(&mut d));
+        assert_eq!(d["apps"], json!({"ytm-starcast": {"url": "http://127.0.0.1:8777", "token": "t", "enabled": true}}));
+        assert_eq!(d["order"], json!(["nova", "ytm-starcast"]));
+        assert!(!migrate(&mut d));
+    }
 }

@@ -281,9 +281,13 @@ impl Hub {
         let latest = self.installer.sources.cached(r.repo()).map(|rel| crate::util::version_of(rel["tag"].as_str().unwrap_or(""))).unwrap_or_default();
         let (installed, version, pending) = (inst["installed"].as_bool().unwrap_or(false), inst["version"].as_str().unwrap_or(""),
                                              inst["pending"].as_str().unwrap_or(""));
+        // "migrate": an app that replaces an older one (YTM Starcast: Pocketfader) offers to move it over even when the
+        // version alone wouldn't say so. The recipe only says so while the old app is still the install here.
+        let migrate = inst["migrate"].as_bool().unwrap_or(false);
         json!({"installed": installed, "version": version, "supported": sup["level"], "latest": latest,
-               "busy": self.installer.busy(id), "pending": pending,
-               "update": installed && !latest.is_empty() && !version.is_empty() && pending.is_empty() && net::is_newer(&latest, version)})
+               "busy": self.installer.busy(id), "pending": pending, "migrate": migrate,
+               "update": installed && !latest.is_empty() && pending.is_empty()
+                         && (migrate || (!version.is_empty() && net::is_newer(&latest, version)))})
     }
 
     /// First look: learn the latest versions in the background, once (then at most every 10 minutes per app).
