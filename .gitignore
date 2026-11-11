@@ -8,3 +8,4 @@ local.properties
 *.keystore
 config.json
 prefs.json
+desktop/target/
