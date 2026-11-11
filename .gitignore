@@ -9,3 +9,4 @@ local.properties
 config.json
 prefs.json
 desktop/target/
+desktop/target-*/
