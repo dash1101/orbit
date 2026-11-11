@@ -1,5 +1,11 @@
 **Orbit** by NovaLabs: one place for Pocketfader, Nova and YTM Beacon. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.3.3**
+
+- **An app's card offers "update to …" as soon as Orbit opens**, not only after the install page has been visited.
+- **After Orbit updates itself, there's one window.** If the browser window from before can't be closed (Edge sometimes hands it to an Edge that's already running), the new Orbit keeps using it instead of opening a second one.
+- Updating from 0.3.1 or newer happens in Orbit itself. This was checked by having the published 0.3.1 update itself to 0.3.2 from GitHub on Windows and Linux.
+
 **New in 0.3.2**
 
 - **Windows: installing Pocketfader no longer fails when the Start menu folder is missing** (as on a new or redirected profile); Orbit's own *Orbit in the Start menu* had the same problem. Found by installing Pocketfader, YTM Beacon and Nova through the real `orbit.exe` on GitHub's Windows machines, which now happens on every change.
