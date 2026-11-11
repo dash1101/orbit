@@ -130,6 +130,7 @@ class Hub:
         net.set_login_provider(self.github.token)
         self.terminals = Terminals()
         self.last_seen = time.time()   # when a page last asked for anything
+        self._asked = {}               # repo -> when its latest release was last looked up from here
         self.host = host or Host()
         sources = sources or Sources.from_env()
         self.installer = Installer(self.host, sources,
@@ -221,6 +222,7 @@ class Hub:
             return False
 
     def overview(self):
+        self._learn_latest()        # so a card can offer "update to …" without the install page being opened first
         ids = [i for i in self.apps if self.enabled(i)]
         futures = {i: self._pool.submit(self._status, self.apps[i]) for i in ids}
         out = []
@@ -281,12 +283,19 @@ class Hub:
                 "update": bool(inst["installed"] and latest and inst.get("version") and not inst.get("pending")
                                and is_newer(latest, inst["version"]))}
 
+    def _learn_latest(self):
+        """First look: learn the latest versions in the background, once (then at most every 10 minutes per app)."""
+        if not self.ctx.config.get("checkUpdates"):
+            return
+        now = time.time()
+        for r in self.installer.recipes.values():
+            if (self.installer.sources.cached(r.repo) is None and now - self._asked.get(r.repo, 0) > 600
+                    and r.support()["level"] != "none"):
+                self._asked[r.repo] = now      # not again for 10 minutes, even when GitHub can't be reached
+                self._pool.submit(self._fetch_latest, r)
+
     def install_list(self):
-        if self.ctx.config.get("checkUpdates"):
-            # first look: learn the latest versions in the background (at most every 10 minutes per app)
-            for r in self.installer.recipes.values():
-                if self.installer.sources.cached(r.repo) is None and r.support()["level"] != "none":
-                    self._pool.submit(self._fetch_latest, r)
+        self._learn_latest()
         out = []
         for r in self.installer.recipes.values():
             d = r.describe()

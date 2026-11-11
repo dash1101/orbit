@@ -230,5 +230,31 @@ class AvailabilityTests(unittest.TestCase):
             self.assertEqual((cards[app]["state"], cards[app]["headline"]), ("off", "Not installed"), app)
             self.assertFalse(cards[app]["install"]["installed"])
 
+class LatestLookupTests(unittest.TestCase):
+    def test_the_overview_looks_up_installable_versions_once_in_a_while(self):
+        from orbit.install.engine import Failed
+
+        class Src:
+            calls = []
+
+            def cached(self, repo):
+                return None
+
+            def latest(self, repo, force=False):
+                self.calls.append(repo)
+                raise Failed("offline")
+
+        tmp = tempfile.mkdtemp()
+        host = Host(system="linux", arch="amd64", home=tmp, env={}, which={}, systemd=True)
+        src = Src()
+        hub = make_hub(app_classes=[], tmp=tmp)
+        hub2 = type(hub)(config=hub.ctx.config, runner=hub.ctx.runner, releases=hub.ctx.releases, app_classes=[],
+                         host=host, sources=src, recipes=load_recipes(host, src))
+        for _ in range(5):
+            hub2.overview()
+        hub2._pool.shutdown(wait=True)
+        self.assertEqual(sorted(src.calls), sorted(set(src.calls)))        # each app once, though GitHub failed
+        self.assertIn("dash1101/pocketfader", src.calls)
+
 if __name__ == "__main__":
     unittest.main()
