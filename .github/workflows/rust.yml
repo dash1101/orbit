@@ -129,10 +129,14 @@ jobs:
               python tools/ci-selfupdate.py dist/Orbit.app next.dmg "${{ matrix.name }}.dmg" ;;
             *) python tools/ci-selfupdate.py desktop/target/release/orbit desktop/target-next/release/orbit linux-x86_64 ;;
           esac
-      - name: "Windows: install, check and remove Nova through the program"
+      - name: "Windows: install, check and remove Nova and YTM Starcast through the program"
         if: runner.os == 'Windows'
-        env: { PYTHONIOENCODING: utf-8 }
-        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe nova
+        env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
+        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe nova,ytm-starcast
+      - name: "Windows: move a computer from Pocketfader and YTM Beacon to YTM Starcast through the program"
+        if: runner.os == 'Windows'
+        env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
+        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe ytm-starcast --migrate
       - name: Package
         run: |
           mkdir -p out
