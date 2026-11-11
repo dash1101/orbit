@@ -1,12 +1,11 @@
 **Orbit** by NovaLabs: one place for Pocketfader, Nova and YTM Beacon. Each download is the program itself: nothing to unpack, and nothing else to install.
 
-**New in 0.3.0**
+**New in 0.3.1**
 
-- **Nova on Windows.** Nova's server now runs on Windows 10 and 11 and Windows Server 2019 or newer (a preview: pairing, devices, approvals, live graphs, alerts, the task manager, power and Docker Desktop work; programs and updates, files, the terminal and backups aren't there yet). Orbit installs, updates and removes it, with one Windows permission prompt and the installer's progress in Orbit's own window. Nova's page shows whether it answers and opens an administrator window for its commands. This was checked by installing, updating and removing Nova through Orbit on real Windows Server 2022 and 2025 machines.
-- **Nova's release signature is checked everywhere.** Orbit checks it itself now, so it no longer depends on openssl (which Windows doesn't have), and the Android app checks it on every Android version (Android only checks these signatures itself from version 13).
-- **Nova Server and Nova's setup window** (Nova 0.9.16 and newer on Linux) open from Orbit instead of a terminal.
-- **Open an app from the overview** in one click while it runs: Pocketfader's web app, Beacon's dashboard, Nova web.
-- **Smaller things:** versions are written the same way everywhere, an app you haven't installed is shown as "Not installed" in grey instead of red, a page shows straight away when you switch apps, commands in hints are shown as code, YTM Beacon's buttons follow what it's doing (show now when hidden, the hide times when showing, update only when there is one), Nova's log explains why it can be empty and *api log* reads it, simpler theme names, links in *about*, and the Linux window remembers its size.
+- **Orbit updates itself** on Linux and Windows. When a new version is out, the top bar says *update orbit to …*: Orbit downloads it, checks it against the release's checksums, starts it once to make sure it runs and is that version, and switches to it when you press *restart orbit* (or the next time you open Orbit). The old program is kept until the new one has started, so a failed update leaves Orbit as it was. This is checked on every build by updating a real Orbit to a newer one and restarting it, on Linux and on Windows. On a Mac, download the new `.dmg` as before.
+- Updating from 0.3.0 or older is still by hand, once: download this release's file in place of the old one.
+
+**New in 0.3.0:** Nova on Windows (a preview), installed, updated and removed by Orbit with one Windows permission prompt; Nova's release signature checked by Orbit itself everywhere, Android included; Nova Server and Nova's setup window opened from Orbit on Linux; open a running app from the overview in one click; and many smaller fixes.
 
 | System | Download | Then |
 |---|---|---|

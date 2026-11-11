@@ -143,6 +143,8 @@ class Beacon(App):
         if now.get("title"):
             f.append(["paused" if now.get("state") == "paused" else "playing",
                       now.get("title") + (f" — {now['artist']}" if now.get("artist") else "")])
+            if raw.get("presenceActive"):
+                s["line"] = "on Discord: " + now.get("title") + (f" — {now['artist']}" if now.get("artist") else "")
         f.append(["on discord", ("showing now" if raw.get("presenceActive") else "visible, nothing to show")
                   if raw.get("visible") else "hidden", None if raw.get("visible") else "muted"])
         f.append(["port", str(raw.get("port", self._port))])

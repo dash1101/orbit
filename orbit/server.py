@@ -234,7 +234,7 @@ class Hub:
                 except Exception as e:
                     s = {"state": "unknown", "headline": str(e)}
                 d.update(state=s["state"], headline=s.get("headline", ""), version=s.get("version", ""),
-                         update=bool((s.get("update") or {}).get("available")))
+                         update=bool((s.get("update") or {}).get("available")), line=s.get("line", ""))
                 na = self.unavailable(i)
                 if na:
                     d.update(state="off", headline=na, unavailable=True)

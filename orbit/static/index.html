@@ -705,7 +705,7 @@ function renderOverview() {
       h("span", { class: "name" }, a.name), a.update ? h("span", { class: "upd" }, "UPDATE") : null,
       h("span", { class: "ver" }, pv(a.version))),
     h("div", { class: "hl" }, h("span", { class: "dot s-" + a.state }), h("span", {}, a.headline || STATE_WORD[a.state])),
-    h("div", { class: "bl" }, a.blurb),
+    h("div", { class: "bl", title: a.line ? a.blurb : null }, a.line || a.blurb),
     cardButtons(a)));
   main.replaceChildren(
     shown.length ? h("div", { class: "cards" }, cards) : box("overview", h("div", { class: "empty" }, "No apps shown. Turn some on in orbit settings.")));

@@ -83,6 +83,7 @@ class Pocketfader(App):
             artist = now.get("artist") or media.get("artist") or ""
             playing = now.get("playing") if now else media.get("playing")
             facts.append(["playing" if playing else "paused", f"{title}" + (f" — {artist}" if artist else "")])
+            s["line"] = ("▶ " if playing else "❚❚ ") + title + (f" — {artist}" if artist else "")
         if caps.get("ytm_bridge"):
             facts.append(["ytm extension", "connected" if ytm.get("connected") else "not connected",
                           None if ytm.get("connected") else "muted"])
