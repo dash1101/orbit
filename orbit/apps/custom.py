@@ -102,7 +102,7 @@ class CustomApp(App):
 
     def actions(self):
         acts = [{"id": "open", "label": "open", "group": "open", "primary": True}] if self.spec.get("openUrl") else []
-        return acts + self.unit_actions() + [{"id": "remove", "label": "remove from orbit", "group": "hub",
+        return acts + self.unit_actions() + [{"id": "remove", "label": "remove from orbit", "group": "orbit",
                                                "danger": True, "confirm": f"Remove {self.name} from Orbit? (The app itself is not touched.)"}]
 
     def run_action(self, action, args):

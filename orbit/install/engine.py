@@ -90,11 +90,13 @@ class Sources:
         except net.HttpError as e:
             if e.status == 404:
                 raise Failed(f"Couldn't find {repo} on GitHub.",
-                             "If it's a private repository, sign in with GitHub in Orbit's settings (or with "
-                             "`gh auth login`), then try again.") from None
+                             "If it's a private repository, sign in with GitHub in Orbit's settings (or run "
+                             "gh auth login), then try again.") from None
             if e.status in (401, 403):
-                raise Failed("GitHub refused the request (signed out, or too many requests from this network).",
-                             "Wait a few minutes; if it keeps happening run `gh auth login` again.") from None
+                raise Failed("GitHub turned the request down for now.",
+                             "Without a sign-in GitHub answers about 60 requests an hour per network. Wait a few "
+                             "minutes and try again. If you signed in, your sign-in may have expired: sign in again "
+                             "in Orbit's settings.") from None
             raise Failed("Couldn't reach GitHub to find the latest release.",
                          "Check your internet connection and try again.") from None
         rel = net.newest_release(items)

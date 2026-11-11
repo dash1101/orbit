@@ -190,6 +190,9 @@ select.inp { padding: 3px 4px; }
 .seg button { background: none; border: 1px solid var(--line); margin-left: -1px; padding: 2px 9px; cursor: pointer; color: var(--muted); }
 .seg button.on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); text-shadow: none; position: relative; }
 
+code { font: inherit; color: var(--text); background: var(--raise); border: 1px solid var(--line); padding: 0 4px;
+       border-radius: var(--radius); white-space: pre-wrap; }
+.callout code, .req code, .result code { background: var(--bg); }
 pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--font); color: var(--muted); white-space: pre-wrap;
           word-break: break-all; }
 .lg .lnk { color: var(--muted); cursor: pointer; background: var(--bg); border: 0; padding: 0; }
@@ -231,7 +234,8 @@ pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--
 .icard .name { font-weight: 700; }
 .icard .ver { color: var(--muted); margin-left: auto; font-size: 12.5px; text-align: right; }
 .icard .bl { color: var(--muted); font-size: 12.5px; margin-bottom: 8px; }
-.icard .stl { display: flex; align-items: baseline; margin: 8px 0 2px; min-height: 1.45em; }
+.icard .stl { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .6ch; margin: 8px 0 2px; min-height: 1.45em; }
+.icard .stl .dot { margin-right: 1px; }
 .icard .nt { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
 .icard .acts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .mbar { height: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }
@@ -519,6 +523,15 @@ function say(text, kind) {
   clearTimeout(say.t);
   if (kind !== "err") say.t = setTimeout(() => { m.textContent = "> ready"; m.className = ""; }, 6000);
 }
+// Versions as people write them: "0.1.0a15" (Python), "0.9.13~alpha" (Debian) and "v0.1.4" all read the same way.
+function pv(v) {
+  v = String(v || "").trim().replace(/^v(?=\d)/i, "").replace(/~/g, "-");
+  return v.replace(/^(\d+(?:\.\d+)*)(a|b|rc)(\d+)$/, (_, n, k, d) => `${n}-${{ a: "alpha", b: "beta", rc: "rc" }[k]}.${d}`);
+}
+// Text with `commands` in it: the commands are shown as code.
+function rt(text) {
+  return String(text == null ? "" : text).split("`").map((part, i) => i % 2 ? h("code", {}, part) : part);
+}
 const STATE_WORD = { ok: "ok", warn: "attention", down: "down", off: "off", unknown: "unknown" };
 const store = {
   get(k, d) { try { const v = localStorage.getItem("orbit." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -645,7 +658,7 @@ function renderSummary() {
   const n = k => shown.filter(a => a.state === k).length;
   const parts = [`${shown.length} apps`];
   if (n("ok")) parts.push(`${n("ok")} ok`);
-  if (n("warn")) parts.push(`${n("warn")} need attention`);
+  if (n("warn")) parts.push(`${n("warn")} need${n("warn") === 1 ? "s" : ""} attention`);
   if (n("down")) parts.push(`${n("down")} down`);
   if (n("off")) parts.push(`${n("off")} off`);
   const upd = shown.filter(a => a.update).length;
@@ -690,7 +703,7 @@ function renderOverview() {
     h("span", { class: "lg" }, a.id),
     h("div", { class: "h" }, mark(a),
       h("span", { class: "name" }, a.name), a.update ? h("span", { class: "upd" }, "UPDATE") : null,
-      h("span", { class: "ver" }, a.version || "")),
+      h("span", { class: "ver" }, pv(a.version))),
     h("div", { class: "hl" }, h("span", { class: "dot s-" + a.state }), h("span", {}, a.headline || STATE_WORD[a.state])),
     h("div", { class: "bl" }, a.blurb),
     installHint(a)));
@@ -701,7 +714,7 @@ function renderOverview() {
 function installHint(a) {
   const i = a.install;
   if (!i || i.supported === "none" || (i.installed && !i.update && !i.busy)) return null;
-  const label = i.busy ? "installing…" : !i.installed ? "install" : "update to " + i.latest;
+  const label = i.busy ? "installing…" : !i.installed ? "install" : "update to " + pv(i.latest);
   return h("div", { class: "btns", style: "margin-top:10px" }, h("button", { class: "btn small primary", onclick: e => {
     e.stopPropagation(); openWizard(a.id, "install", i.busy || null); } }, i.busy ? [spin(), " " + label] : label));
 }
@@ -709,6 +722,7 @@ function installHint(a) {
 // ------------------------------------------------------------------ one app
 async function loadDetail(full) {
   const id = S.view;
+  if (!S.detail || S.detail.id !== id) placeholder(id);
   try {
     const d = await api("/api/apps/" + encodeURIComponent(id));
     if (S.view !== id) return;
@@ -719,17 +733,29 @@ async function loadDetail(full) {
     if (S.view === id) $("#main").replaceChildren(box(id, h("div", { class: "empty" }, e.message)));
   }
 }
+// What we already know about an app (from the overview), shown at once while its page loads.
+function placeholder(id) {
+  const a = S.apps.find(x => x.id === id);
+  if (!a) return;
+  $("#main").replaceChildren(h("div", { class: "grid g2" },
+    box("status",
+      h("div", { class: "hero" }, mark(a),
+        h("div", {}, h("div", { class: "name" }, a.name, " ", h("span", { class: "sub" }, pv(a.version))), h("div", { class: "sub" }, a.blurb))),
+      h("div", { class: "headline" }, h("span", { class: "dot s-" + a.state }), h("span", { class: "t-" + a.state }, a.headline || STATE_WORD[a.state])),
+      h("div", { class: "t-muted" }, spin(), " reading " + a.name + "…")),
+    box("actions", h("div", { class: "t-muted" }, spin()))));
+}
 function renderDetail(full) {
   const d = S.detail, s = d.status, main = $("#main");
   const statusBox = box("status",
     h("div", { class: "hero" }, mark(d),
-      h("div", {}, h("div", { class: "name" }, d.name, " ", h("span", { class: "sub" }, s.version || "")), h("div", { class: "sub" }, d.blurb))),
+      h("div", {}, h("div", { class: "name" }, d.name, " ", h("span", { class: "sub" }, pv(s.version))), h("div", { class: "sub" }, d.blurb))),
     h("div", { class: "headline" }, h("span", { class: "dot s-" + s.state }), h("span", { class: "t-" + s.state }, s.headline || STATE_WORD[s.state])),
-    s.detail ? h("div", { class: "t-muted", style: "margin:-4px 0 8px;font-size:12.5px" }, s.detail) : null,
+    s.detail ? h("div", { class: "t-muted", style: "margin:-4px 0 8px;font-size:12.5px" }, rt(s.detail)) : null,
     h("div", { class: "kv" }, (s.facts || []).flatMap(([k, v, tone]) => [h("span", { class: "k" }, k), h("span", { class: "v " + (tone || ""), title: v }, v)]),
       s.update ? [h("span", { class: "k" }, "release"), h("span", { class: "v " + (s.update.available ? "" : "muted") },
         s.update.error ? "can't check: " + s.update.error :
-        s.update.available ? h("span", {}, h("span", { class: "upd" }, "NEW"), " ", s.update.latest, " is out") : "up to date (" + (s.update.latest || "?") + ")")] : null));
+        s.update.available ? h("span", {}, h("span", { class: "upd" }, "NEW"), " ", pv(s.update.latest), " is out") : "up to date (" + (pv(s.update.latest) || "?") + ")")] : null));
 
   const groups = {};
   for (const a of d.actions) (groups[a.group || "actions"] ||= []).push(a);
@@ -744,7 +770,7 @@ function renderDetail(full) {
     if (ins.busy) b.push(h("button", { class: "btn primary", onclick: () => openWizard(d.id, "install", ins.busy) }, spin(), " show progress"));
     else if (!ins.installed) b.push(h("button", { class: "btn primary", onclick: () => openWizard(d.id, "install") }, "install"));
     else {
-      b.push(h("button", { class: "btn" + (ins.update ? " primary" : ""), onclick: () => openWizard(d.id, "install") }, ins.update ? "update to " + ins.latest : "reinstall"));
+      b.push(h("button", { class: "btn" + (ins.update ? " primary" : ""), onclick: () => openWizard(d.id, "install") }, ins.update ? "update to " + pv(ins.latest) : "reinstall"));
       b.push(h("button", { class: "btn danger", onclick: () => openWizard(d.id, "uninstall") }, "remove"));
     }
     actBox.append(h("div", { class: "grp" }, h("div", { class: "gt" }, "installer"), h("div", { class: "btns" }, b)));
@@ -951,13 +977,13 @@ async function renderInstall(full) {
     } else if (sup === "none") {
       line = [h("span", { class: "dot s-off" }), h("span", { class: "t-muted" }, `not available on ${d.host.systemName}`)];
     } else if (!inst.installed) {
-      line = [h("span", { class: "dot s-off" }), h("span", {}, "not installed"), a.latest ? h("span", { class: "t-muted" }, " · latest " + a.latest) : null];
+      line = [h("span", { class: "dot s-off" }), h("span", {}, "not installed"), a.latest ? h("span", { class: "t-muted" }, "· latest " + pv(a.latest)) : null];
       acts.push(h("button", { class: "btn primary", onclick: () => openWizard(a.id, "install") }, "install"));
     } else {
       line = a.update
-        ? [h("span", { class: "dot s-warn" }), h("span", { class: "upd" }, "UPDATE"), h("span", {}, ` ${a.latest} is out`)]
-        : [h("span", { class: "dot s-ok" }), h("span", {}, "installed"), h("span", { class: "t-muted" }, a.latest ? " · up to date" : "")];
-      acts.push(h("button", { class: "btn" + (a.update ? " primary" : ""), onclick: () => openWizard(a.id, "install") }, a.update ? "update to " + a.latest : "reinstall"));
+        ? [h("span", { class: "dot s-warn" }), h("span", { class: "upd" }, "UPDATE"), h("span", {}, `${pv(a.latest)} is out`)]
+        : [h("span", { class: "dot s-ok" }), h("span", {}, "installed"), a.latest ? h("span", { class: "t-muted" }, "· up to date") : null];
+      acts.push(h("button", { class: "btn" + (a.update ? " primary" : ""), onclick: () => openWizard(a.id, "install") }, a.update ? "update to " + pv(a.latest) : "reinstall"));
       acts.push(h("button", { class: "btn danger", onclick: () => openWizard(a.id, "uninstall") }, "remove"));
       if (S.apps.some(x => x.id === a.id && x.enabled)) acts.push(h("button", { class: "btn", onclick: () => go(a.id) }, "open"));
     }
@@ -965,13 +991,12 @@ async function renderInstall(full) {
         "data-sig": JSON.stringify([a, busy ? [busy.op, Math.round(busy.progress * 100)] : 0, S.apps.some(x => x.id === a.id && x.enabled)]) },
       h("span", { class: "lg" }, a.id),
       h("div", { class: "h" }, mark(a), h("span", { class: "name" }, a.name),
-        h("span", { class: "ver" }, inst.installed ? (inst.version || "installed") : "")),
+        h("span", { class: "ver" }, inst.installed ? (pv(inst.version) || "installed") : "")),
       h("div", { class: "bl" }, a.blurb),
       platBadges(a.platforms, sys),
       h("div", { class: "stl" }, line),
       busy ? h("div", { class: "mbar" }, h("i", { style: `width:${busy.progress * 100}%` })) : null,
-      sup === "limited" && a.support.note ? h("div", { class: "nt" }, a.support.note) : null,
-      sup === "none" && a.support.note ? h("div", { class: "nt" }, a.support.note) : null,
+      sup !== "full" && a.support.note ? h("div", { class: "nt" }, rt(a.support.note)) : null,
       h("div", { class: "acts" }, acts));
     return card;
   });
@@ -1089,8 +1114,8 @@ async function loadInfo(opts) {
   if (!W.open) return;
   const i = W.info;
   $("#wt").textContent = i.title;
-  $("#wr").replaceChildren(...(i.release ? [h("div", {}, i.release.tag), h("div", {}, [i.release.prerelease ? "pre-release" : "release", ago(i.release.published)].filter(Boolean).join(" · "))]
-    : i.installed.installed ? [h("div", {}, "installed " + (i.installed.version || ""))] : []));
+  $("#wr").replaceChildren(...(i.release ? [h("div", {}, pv(i.release.tag)), h("div", {}, [i.release.prerelease ? "pre-release" : "release", ago(i.release.published)].filter(Boolean).join(" · "))]
+    : i.installed.installed ? [h("div", {}, "installed " + pv(i.installed.version))] : []));
   for (const f of i.options) if (!(f.key in W.opts)) W.opts[f.key] = f.value;
   W.noOptions = !i.options.length;
   if (W.stage <= 0) stageCheck(1);
@@ -1102,7 +1127,7 @@ function stageCheck(dir) {
   const reqs = i.requirements.map((r, k) => h("div", { class: "req", style: `animation-delay:${120 + k * 70}ms` },
     h("span", { class: "m " + (r.ok ? "ok" : r.blocking ? "bad" : "soft") }, r.ok ? "[ok]" : r.blocking ? "[!!]" : "[--]"),
     h("span", {}, r.label, r.detail && r.ok && r.detail.length <= 40 ? h("span", { class: "t-muted" }, " · " + r.detail) : null),
-    !r.ok && r.hint ? h("span", { class: "hint" }, r.hint) : null,
+    !r.ok && r.hint ? h("span", { class: "hint" }, rt(r.hint)) : null,
     r.ok && r.detail && r.detail.length > 40 ? h("span", { class: "dt" }, r.detail) : null));
   const body = h("div", { class: "stage" },
     h("h4", {}, "── this computer"),
@@ -1110,15 +1135,15 @@ function stageCheck(dir) {
       h("span", { class: "k" }, "system"), h("span", { class: "v" }, i.host.label),
       plat ? [h("span", { class: "k" }, "runs on"), h("span", { class: "v" }, platBadges(plat, sys))] : null,
       h("span", { class: "k" }, W.meta.name), h("span", { class: "v" }, inst.installed
-        ? `installed ${inst.version || ""} · ${inst.how}` : "not installed yet"),
+        ? `installed ${pv(inst.version)} · ${inst.how}` : "not installed yet"),
       inst.installed && inst.where ? [h("span", { class: "k" }, "where"), h("span", { class: "v t-muted", title: inst.where }, inst.where)] : null,
-      i.release ? [h("span", { class: "k" }, "latest"), h("span", { class: "v" }, `${i.release.tag}`, h("span", { class: "t-muted" },
+      i.release ? [h("span", { class: "k" }, "latest"), h("span", { class: "v" }, pv(i.release.tag), h("span", { class: "t-muted" },
         ` · ${ago(i.release.published)}${i.release.sizeText ? " · " + i.release.sizeText : ""}`))] : null),
-    i.support.level === "limited" ? h("div", { class: "callout warn" }, i.support.note) : null,
-    i.support.level === "none" ? h("div", { class: "callout bad" }, i.support.note) : null,
+    i.support.level === "limited" ? h("div", { class: "callout warn" }, rt(i.support.note)) : null,
+    i.support.level === "none" ? h("div", { class: "callout bad" }, rt(i.support.note)) : null,
     reqs.length ? [h("h4", {}, "── what " + W.meta.name + " needs"), h("div", {}, reqs)] : null,
     i.blocked && i.support.level !== "none" ? h("div", { class: "callout bad", style: `animation-delay:${200 + reqs.length * 70}ms` },
-      i.blocked, i.blockedHint ? h("div", { class: "hint" }, i.blockedHint) : null) : null);
+      rt(i.blocked), i.blockedHint ? h("div", { class: "hint" }, rt(i.blockedHint)) : null) : null);
   const buttons = [btn("cancel", () => closeWizard()), sp()];
   if (i.blocked) {
     if (i.support.level !== "none") buttons.push(btn("check again", () => { W.stage = -1; setStage(0, 1, h("div", { class: "stage" }, h("div", { class: "loading" }, spin(), " checking again…")), []); loadInfo(); }));
@@ -1156,12 +1181,12 @@ async function stageReview(dir) {
   W.info = i;
   const del = W.op === "uninstall";
   const body = h("div", { class: "stage" },
-    h("p", { class: "lead" }, del ? "Orbit will:" : `Orbit will install ${i.release ? i.release.tag : "the latest release"}:`),
-    h("div", { class: "will" }, i.summary.map((line, k) => h("div", { style: `animation-delay:${k * 60}ms` }, line))),
+    h("p", { class: "lead" }, del ? "Orbit will:" : `Orbit will install ${i.release ? pv(i.release.tag) : "the latest release"}:`),
+    h("div", { class: "will" }, i.summary.map((line, k) => h("div", { style: `animation-delay:${k * 60}ms` }, rt(line)))),
     i.release && i.release.sizeText ? h("div", { class: "t-muted", style: "margin-top:10px;font-size:12.5px" }, `Download: ${i.release.sizeText} from github.com`) : null,
     i.needsAdmin ? h("div", { class: "callout", style: `animation-delay:${i.summary.length * 60 + 80}ms` },
       `🔑 Your computer will ask for the administrator password once (${i.needsAdmin === true ? "the system will ask" : i.needsAdmin}). Orbit never sees it.`) : null,
-    i.blocked ? h("div", { class: "callout bad" }, i.blocked) : null);
+    i.blocked ? h("div", { class: "callout bad" }, rt(i.blocked)) : null);
   const label = del ? "remove " + W.meta.name : /^Update/.test(i.title) ? "update" : /^Reinstall/.test(i.title) ? "reinstall" : "install";
   setStage(2, 0, body, [btn("← back", back), sp(),
     btn(label, startJob, (del ? "danger" : "primary") + " go")]);
@@ -1301,8 +1326,8 @@ function finishJob() {
   }, n.primary ? "primary go" : ""));
   const body = h("div", { class: "stage" }, h("div", { class: "result " + tone }, art,
     h("h3", {}, ok ? (r.headline || "Done.") : j.state === "cancelled" ? "Stopped." : "That didn't work."),
-    h("p", {}, ok ? (r.body || "") : j.error),
-    !ok && j.hint ? h("div", { class: "callout warn", style: "animation-delay:.6s;max-width:540px;margin:8px auto 0" }, j.hint) : null,
+    h("p", {}, rt(ok ? (r.body || "") : j.error)),
+    !ok && j.hint ? h("div", { class: "callout warn", style: "animation-delay:.6s;max-width:540px;margin:8px auto 0" }, rt(j.hint)) : null,
     j.dryRun ? h("p", { class: "t-warn", style: "font-size:12.5px" }, "dry run: nothing was actually changed") : null),
     W.el.logwrap);
   const buttons = ok ? [btn("close", () => closeWizard()), sp(), W.el.logBtn, ...nexts.reverse()]
@@ -1734,12 +1759,15 @@ function renderHub() {
 
   const F = {};
   const inp = (k, ph) => (F[k] = h("input", { class: "inp wide", placeholder: ph || "", spellcheck: "false", autocomplete: "off" }));
-  F.scope = h("select", { class: "inp" }, h("option", { value: "user" }, "user service"), h("option", { value: "system" }, "system service (read-only)"));
+  const linux = !hub.system || hub.system === "linux";
+  if (linux) F.scope = h("select", { class: "inp" }, h("option", { value: "user" }, "user service"), h("option", { value: "system" }, "system service (read-only)"));
   const add = h("div", {},
-    h("div", { class: "t-muted", style: "margin-bottom:10px" }, "Any app with a systemd service, a health address or a web page. Built-in support for more of your apps comes with Orbit updates."),
+    h("div", { class: "t-muted", style: "margin-bottom:10px" }, linux
+      ? "Any app with a systemd service, a health address or a web page. Built-in support for more of your apps comes with Orbit updates."
+      : "Any app with a health address (a page that answers while it runs) or a web page. Built-in support for more of your apps comes with Orbit updates."),
     h("div", { class: "form2" },
       h("label", {}, "name"), inp("name", "My app"),
-      h("label", {}, "service"), h("div", { style: "display:flex;gap:8px" }, inp("unit", "myapp.service"), F.scope),
+      linux ? [h("label", {}, "service"), h("div", { style: "display:flex;gap:8px" }, inp("unit", "myapp.service"), F.scope)] : null,
       h("label", {}, "health"), inp("healthUrl", "http://127.0.0.1:8080/health"),
       h("label", {}, "web page"), inp("openUrl", "http://127.0.0.1:8080/")),
     h("div", { class: "btns", style: "margin-top:12px;justify-content:flex-end" },
@@ -1753,8 +1781,16 @@ function renderHub() {
     h("div", { class: "grid g2" }, box("general", general), box("apps", appsList)),
     githubBox(),
     box("add an app", add),
-    box("about", h("div", { class: "t-muted" }, `Orbit ${hub.version} · local only (127.0.0.1) · `, h("span", {}, "keys: "),
-      "j/k or ↑/↓ move, 1–9 jump, r refresh, t next theme, , settings, o overview")));
+    box("about", h("div", { class: "t-muted" }, `Orbit ${hub.version} by NovaLabs · MIT license · local only (127.0.0.1)`),
+      h("div", { class: "btns", style: "margin-top:8px" },
+        h("button", { class: "btn small", onclick: () => openLink("project") }, "project page"),
+        h("button", { class: "btn small", onclick: () => openLink("releases") }, "releases"),
+        h("button", { class: "btn small", onclick: () => openLink("issues") }, "report a problem"),
+        h("button", { class: "btn small", onclick: showHelp }, "keyboard keys"))));
+}
+
+async function openLink(which) {
+  try { say((await api("/api/hub/open-link", { which })).message, "ok"); } catch (e) { say(e.message, "err"); }
 }
 
 // ------------------------------------------------------------------ github sign-in
@@ -1802,15 +1838,15 @@ function paintGithub(el, g) {
       try { GH.access = (await api("/api/github/access")).access; } catch (err) { say(err.message, "err"); }
       paintGithub(el, S.hub.github); } }, "check access"));
     kids.push(h("div", { class: "btns" }, btns));
-    if (!g.available) kids.push(h("div", { class: "t-muted", style: "font-size:12.5px;margin-top:6px" },
-      "Signing in from Orbit isn't set up in this build. Orbit uses the GitHub command line's sign-in (gh auth login) or GITHUB_TOKEN instead."));
+    if (!g.available && !g.signedIn) kids.push(h("div", { class: "t-muted", style: "font-size:12.5px;margin-top:6px" },
+      "Every app Orbit installs is public, so this needs nothing from you. For an app from a private repository, Orbit can use the GitHub command line's sign-in (", h("code", {}, "gh auth login"), ") or a ", h("code", {}, "GITHUB_TOKEN"), " set on this computer."));
   }
   if (GH.access) kids.push(h("div", { class: "kv", style: "margin-top:10px" }, Object.entries(GH.access).flatMap(([repo, st]) => [
     h("span", { class: "k" }, repo), h("span", { class: "v " + (st === "no access" ? "warn" : "") },
       st === "no access" ? "✗ can't see it (private, and this sign-in has no access)" : st === "offline" ? "? couldn't reach GitHub" : `✓ ${st}`)])));
-  kids.push(h("div", { class: "help t-muted", style: "font-size:12.5px;margin-top:8px" },
+  if (g.available || g.signedIn) kids.push(h("div", { class: "help t-muted", style: "font-size:12.5px;margin-top:8px" },
     "Public repositories need no sign-in. Signing in lets Orbit read releases from private ones: the login can only read " +
-    "repository contents, and the token stays in Orbit's settings on this computer (readable by you only), sent only to api.github.com."));
+    "repository contents, and the token stays on this computer (readable by you only), sent only to api.github.com."));
   el.replaceChildren(...kids);
 }
 
@@ -1840,10 +1876,14 @@ document.addEventListener("keydown", e => {
     S.hub.settings.theme = next; setTheme(next); api("/api/hub", { theme: next }).catch(() => {});
     say("theme · " + S.hub.themes.find(t => t.id === next).label); if (S.view === "hub") renderHub();
   }
-  else if (k === "?") showDlg("help", h("div", { class: "kv" },
-    ["j / ↓", "next", "k / ↑", "previous", "1–9", "jump to an app", "o", "overview", "i", "install apps", ",", "orbit settings", "r", "refresh", "t", "next theme", "esc", "close a dialog"]
-      .map((x, i) => h("span", { class: i % 2 ? "v" : "k" }, x))), [["close", true]]);
+  else if (k === "?") showHelp();
 });
+function showHelp() {
+  showDlg("keys", h("div", { class: "kv" },
+    ["j / ↓", "next", "k / ↑", "previous", "1–9", "jump to an app", "o", "overview", "i", "install apps", ",", "orbit settings",
+     "r", "refresh", "t", "next theme", "?", "this list", "esc", "close a dialog or the installer"]
+      .map((x, i) => h("span", { class: i % 2 ? "v" : "k" }, x))), [["close", true]]);
+}
 
 // ------------------------------------------------------------------ start
 (async () => {

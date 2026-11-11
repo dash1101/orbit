@@ -72,6 +72,7 @@ class Beacon(App):
         super().__init__(ctx)
         self.ports = ports
         self._port = None
+        self._last = None         # the last /v1/status, so the buttons can match what Beacon is doing
 
     def _url(self, port, path):
         return f"http://127.0.0.1:{port}{path}"
@@ -123,6 +124,7 @@ class Beacon(App):
             raw = self._call("GET", "/v1/status")
         except BadRequest:
             raw = None
+        self._last = raw
         if not raw:
             installed = bool(self.binary())
             s.update(state="off" if installed and unit.get("state") == "stopped" else "down",
@@ -149,6 +151,7 @@ class Beacon(App):
         rel = self.release_info(raw.get("version", ""))
         if rel:
             s["update"] = rel
+            raw["_update"] = rel
         return s
 
     def details(self, raw):
@@ -174,8 +177,7 @@ class Beacon(App):
         out.append(["extension", ("connected before" if ext.get("everConnected") else "never connected")
                     + (f" · build {raw['extensionBuild']}" if raw.get("extensionBuild") else "")])
         if ext.get("sources"):
-            out.append(["reporting from", ", ".join(str(x.get("browser") or x.get("name") or x) if isinstance(x, dict)
-                                                    else str(x) for x in ext["sources"])])
+            out.append(["reporting from", ", ".join(_source(x) for x in ext["sources"])])
         if raw.get("snoozeSec"):
             out.append(["hidden for", f"{int(raw['snoozeSec']) // 60} min more"])
         out.append(["version", f"{raw.get('version', '?')} ({raw.get('commit', '?')}) · {raw.get('os', '')}/{raw.get('arch', '')}"])
@@ -236,18 +238,29 @@ class Beacon(App):
             self._call("POST", "/v1/config", patch)
 
     def actions(self):
-        acts = [
-            {"id": "open", "label": "dashboard", "group": "open", "primary": True},
-            {"id": "hide:30", "label": "hide 30 min", "group": "discord"},
-            {"id": "hide:60", "label": "hide 1 h", "group": "discord"},
-            {"id": "hide:180", "label": "hide 3 h", "group": "discord"},
-            {"id": "show", "label": "show now", "group": "discord"},
-            {"id": "doctor", "label": "doctor", "group": "maintenance", "term": True},
-            {"id": "update-check", "label": "check for update", "group": "maintenance", "term": True},
-            {"id": "update", "label": "update", "group": "maintenance", "term": True, "changes": True,
-             "confirm": "Download and install the newest YTM Beacon?"},
-            {"id": "extension", "label": "extension folders", "group": "maintenance", "term": True, "changes": True},
-        ]
+        """The buttons follow what Beacon is doing: "show now" when it's hidden, the hide times when it's showing,
+        "update" when a newer release is out (or it's unknown)."""
+        raw = self._last
+        running = raw is not None
+        acts = []
+        if running:
+            acts.append({"id": "open", "label": "dashboard", "group": "open", "primary": True})
+            if raw.get("visible") is False:          # switched off, or hidden for a while
+                acts.append({"id": "show", "label": "show now", "group": "discord", "primary": True})
+            else:
+                acts += [{"id": "hide:30", "label": "hide 30 min", "group": "discord"},
+                         {"id": "hide:60", "label": "hide 1 h", "group": "discord"},
+                         {"id": "hide:180", "label": "hide 3 h", "group": "discord"}]
+        if self.binary():
+            rel = (raw or {}).get("_update") or {}
+            acts.append({"id": "doctor", "label": "doctor", "group": "maintenance", "term": True})
+            acts.append({"id": "update-check", "label": "check for update", "group": "maintenance", "term": True})
+            if rel.get("available") or not rel.get("latest"):
+                acts.append({"id": "update", "label": f"update to {rel['latest']}" if rel.get("available") else "update",
+                             "group": "maintenance", "term": True, "changes": True, "primary": bool(rel.get("available")),
+                             "confirm": "Download and install the newest YTM Beacon?"})
+            acts.append({"id": "extension", "label": "extension folders", "group": "maintenance", "term": True,
+                         "changes": True})
         return acts + self.unit_actions()
 
     def run_action(self, action, args):
@@ -283,6 +296,19 @@ class Beacon(App):
             return self._call("GET", "/v1/logs", raw=True)
         except BadRequest:
             return super().logs()
+
+
+def _source(x):
+    """One browser tab Beacon hears from: "Brave · playing · 8 s ago"."""
+    if not isinstance(x, dict):
+        return str(x)
+    who = str(x.get("agent") or x.get("browser") or x.get("name") or "a browser")
+    bits = [who]
+    if x.get("state"):
+        bits.append(str(x["state"]))
+    if isinstance(x.get("ageSec"), (int, float)):
+        bits.append(_ago(x["ageSec"]))
+    return " · ".join(bits)
 
 
 def _dur(sec):

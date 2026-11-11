@@ -380,7 +380,7 @@ class NovaTests(unittest.TestCase):
         self.assertEqual(n.health()["issues"], ["Swap 87% used", "Drive sdb is failing"])
         facts = n.status()["facts"]
         self.assertIn(["needs attention", "Swap 87% used", "warn"], facts)
-        self.assertIn(["needs attention", "Drive sdb is failing", "warn"], facts)
+        self.assertIn(["", "Drive sdb is failing", "warn"], facts)     # the label once, for the first
 
     def test_health_headlines_when_nova_answers(self):
         from unittest import mock
@@ -548,7 +548,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.req("POST", "/api/hub", {"order": ["fake"]})[0], 400)
         self.assertEqual(self.req("POST", "/api/hub", {"enabled": {"fake": False}})[0], 200)
         d = self.req("GET", "/api/apps")[1]
-        self.assertEqual(d["apps"][0]["headline"], "hidden from the hub")
+        self.assertEqual(d["apps"][0]["headline"], "hidden (orbit settings → apps)")
         # survives a restart
         self.assertEqual(Config(self.hub.ctx.config.path).get("theme"), "amber")
 

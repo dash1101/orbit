@@ -30,19 +30,21 @@ from .term import Terminals
 
 STATIC = Path(__file__).parent / "static"
 THEMES = [
-    {"id": "tui", "label": "tui · dusk"},
-    {"id": "phosphor", "label": "tui · phosphor"},
-    {"id": "amber", "label": "tui · amber"},
-    {"id": "paper", "label": "tui · paper"},
-    {"id": "frost", "label": "tui · frost"},
-    {"id": "ember", "label": "tui · ember"},
-    {"id": "ocean", "label": "tui · ocean"},
-    {"id": "lilac", "label": "tui · lilac"},
-    {"id": "mono", "label": "tui · mono"},
+    {"id": "tui", "label": "dusk"},
+    {"id": "phosphor", "label": "phosphor"},
+    {"id": "amber", "label": "amber"},
+    {"id": "paper", "label": "paper"},
+    {"id": "frost", "label": "frost"},
+    {"id": "ember", "label": "ember"},
+    {"id": "ocean", "label": "ocean"},
+    {"id": "lilac", "label": "lilac"},
+    {"id": "mono", "label": "mono"},
 ]
 THEME_IDS = {t["id"] for t in THEMES}
 ORBIT_REPO = "dash1101/orbit"
 ORBIT_RELEASES = f"https://github.com/{ORBIT_REPO}/releases"
+LINKS = {"project": f"https://github.com/{ORBIT_REPO}", "releases": ORBIT_RELEASES,
+         "issues": f"https://github.com/{ORBIT_REPO}/issues"}
 # What a custom theme may set (the same tokens the built-in ones use).
 THEME_COLORS = ("bg", "raise", "line", "line-hi", "text", "muted", "legend", "accent", "accent-ink",
                 "ok", "warn", "down", "off", "sel")
@@ -225,7 +227,7 @@ class Hub:
                 if na:
                     d.update(state="off", headline=na, unavailable=True)
             else:
-                d.update(state="off", headline="hidden from the hub", version="", update=False)
+                d.update(state="off", headline="hidden (orbit settings → apps)", version="", update=False)
             out.append(d)
         return out
 
@@ -313,6 +315,7 @@ class Hub:
     def hub_info(self):
         c = self.ctx.config.get()
         return {"name": "Orbit", "version": __version__, "dryRun": self.ctx.dry_run, "github": self.github.state(),
+                "system": self.host.system,
                 "orbitUpdate": self.orbit_update(), "menu": desktop_entry.state(),
                 "themes": THEMES + [dict(t, custom=True) for t in c.get("themes", [])], "themeTokens": THEME_COLORS,
                 "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"]},
@@ -532,6 +535,13 @@ def make_handler(hub, port_ref):
                 self._err(400, str(e))
             except Failed as e:
                 self._err(400, str(e), e.hint)
+            except Exception as e:   # a bug: answer with what went wrong instead of dropping the connection
+                import traceback
+                traceback.print_exc()
+                try:
+                    self._err(500, f"Orbit hit a problem: {type(e).__name__}: {e}")
+                except OSError:
+                    pass
 
         def do_POST(self):
             if not self._allowed():
@@ -548,6 +558,13 @@ def make_handler(hub, port_ref):
                     return self._send(200, hub.check_updates())
                 if path == "/api/hub/menu":
                     return self._send(200, desktop_entry.add(hub.ctx.runner))
+                if path == "/api/hub/open-link":
+                    url = LINKS.get(body.get("which"))
+                    if not url:
+                        raise BadRequest("which link?")
+                    if not hub.ctx.runner.open_url(url):
+                        raise BadRequest("couldn't open a browser; the address is " + url)
+                    return self._send(200, {"ok": True, "message": "opened " + url})
                 if path == "/api/hub/open-release":
                     hub.ctx.runner.open_url((hub.orbit_update() or {}).get("url") or ORBIT_RELEASES)
                     return self._send(200, {"ok": True, "message": "opened Orbit's releases"})
@@ -630,6 +647,13 @@ def make_handler(hub, port_ref):
                 self._err(400, str(e))
             except Failed as e:
                 self._err(400, str(e), e.hint)
+            except Exception as e:   # a bug: answer with what went wrong instead of dropping the connection
+                import traceback
+                traceback.print_exc()
+                try:
+                    self._err(500, f"Orbit hit a problem: {type(e).__name__}: {e}")
+                except OSError:
+                    pass
 
     return Handler
 

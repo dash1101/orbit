@@ -94,7 +94,7 @@ class App:
 
     def settings(self):
         """[{"title", "fields": [...]}]"""
-        return [{"title": "hub", "fields": self.hub_fields()}] if self.hub_fields() else []
+        return [{"title": "connection", "fields": self.hub_fields()}] if self.hub_fields() else []
 
     def apply_app_settings(self, patch):
         raise BadRequest("this app has no settings that can be changed from here")

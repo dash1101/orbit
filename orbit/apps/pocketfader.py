@@ -59,7 +59,7 @@ class Pocketfader(App):
             return s
         s["version"] = info.get("version", "")
         if info.get("auth") and not self.hub.get("token"):
-            s.update(state="warn", headline="Running, but it needs an access token (settings → hub)")
+            s.update(state="warn", headline="Running, but it needs an access token (settings → connection)")
             return s
         try:
             st = self._get("/api/state")
@@ -113,7 +113,7 @@ class Pocketfader(App):
         except net.HttpError:
             groups.append({"title": "pocketfader", "fields": [
                 field("_note", "", "note", "Start Pocketfader to change its settings.")]})
-        groups.append({"title": "hub", "fields": self.hub_fields()})
+        groups.append({"title": "connection", "fields": self.hub_fields()})
         return groups
 
     def apply_app_settings(self, patch):

@@ -122,13 +122,13 @@ class Nova(App):
             out.append(["monitor", "last checked " + (self._ago(hl["age"]) if hl["age"] is not None else "a while ago")
                         + ": Nova's alerts aren't running", "warn"])
             return out
-        for t in hl["issues"][:4]:
-            out.append(["needs attention", t, "warn"])
+        for i, t in enumerate(hl["issues"][:4]):
+            out.append(["needs attention" if i == 0 else "", t, "warn"])
         if len(hl["issues"]) > 4:
             out.append(["", f"and {len(hl['issues']) - 4} more (open Nova)", "muted"])
         text = lambda k: m.get(k) if isinstance(m.get(k), str) and m.get(k).strip() else None
         for key, label in (("containers", "containers"), ("websites", "websites")):
-            if text(key):
+            if text(key) and not text(key).startswith("0/0"):     # "0/0 up": none set up, nothing to say
                 out.append([label, text(key)])
         drives = [d for d in m.get("storage") or [] if isinstance(d, dict) and isinstance(d.get("pct"), (int, float))]
         if drives:
@@ -193,7 +193,7 @@ class Nova(App):
         elif core_bad:
             s.update(state="warn", headline="Answering, but " + ", ".join(core_bad) + " isn't running")
         elif failed_jobs:
-            s.update(state="warn", headline=f"Running · last {failed_jobs[0]} run failed")
+            s.update(state="warn", headline=f"Running · the last {failed_jobs[0]} failed")
         elif hl and hl["stale"]:
             s.update(state="warn", headline="Running, but its alerts have stopped checking the server")
         elif hl and hl["issues"]:
@@ -239,7 +239,7 @@ class Nova(App):
             {"title": "nova", "fields": [field("_note", "", "note",
                 "Nova's own settings live in Nova web and the Nova app; risky changes are approved on your phone, "
                 "so they aren't changed from here. Use “open nova web” or “sudo nova setup”.")]},
-            {"title": "hub", "fields": self.hub_fields()},
+            {"title": "connection", "fields": self.hub_fields()},
         ]
 
     def actions(self):
@@ -251,6 +251,7 @@ class Nova(App):
             t("term:status", "status", "check"),
             t("term:doctor", "doctor", "check"),
             t("term:log", "recent actions", "check"),
+            t("term:journal", "api log", "check"),
             t("term:add", "pair a phone", "phones & browsers", True),
             t("term:add-viewer", "pair a view-only device", "phones & browsers", True),
             t("term:add-remote", "pair a phone that's away from home", "phones & browsers", True),
@@ -288,6 +289,7 @@ class Nova(App):
         "status": ["sudo", "nova", "status"],
         "doctor": ["sudo", "nova", "doctor"],
         "log": ["sudo", "nova", "log"],
+        "journal": ["sudo", "journalctl", "-u", "nova-api.service", "-n", "300", "--no-pager"],
         "add": ["sudo", "nova", "add"],
         "add-viewer": ["sudo", "nova", "add", "--viewer"],
         "add-remote": ["sudo", "nova", "add", "--remote"],
@@ -352,6 +354,8 @@ class Nova(App):
 
     def logs(self):
         out = systemd.journal(self.ctx.runner, "nova-api.service", user=False)
-        if "No entries" in out:
-            return out + "\n(Nova runs as a system service; your account needs the 'adm' or 'systemd-journal' group to read its log.)"
+        if not out.strip() or "No entries" in out:
+            return ("(Nothing here that your account may read. Nova runs as a system service, and its log is only "
+                    "readable by the administrator or members of the 'adm' or 'systemd-journal' groups.\n"
+                    " Use “api log” under actions to read it with sudo.)")
         return out
