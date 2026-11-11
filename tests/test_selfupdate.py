@@ -128,5 +128,20 @@ class SelfUpdateTests(unittest.TestCase):
         self.assertEqual(mine["pending"], "9.9.9")
         self.assertFalse(mine["update"])
 
+
+class ChildProgramTests(unittest.TestCase):
+    def test_programs_a_standalone_orbit_starts_are_their_own(self):
+        import os
+        import sys
+        from unittest import mock
+        from orbit.__main__ import _independent_children
+        env = {"PATH": "/usr/bin", "_PYI_APPLICATION_HOME_DIR": "/tmp/_MEIabc", "_PYI_PARENT_PROCESS_LEVEL": "1",
+               "_MEIPASS2": "/tmp/_MEIabc", "LD_LIBRARY_PATH": "/tmp/_MEIabc", "LD_LIBRARY_PATH_ORIG": "/opt/lib",
+               "DYLD_LIBRARY_PATH": "/tmp/_MEIabc/lib"}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(sys, "_MEIPASS", "/tmp/_MEIabc", create=True):
+            _independent_children()
+            got = dict(os.environ)
+        self.assertEqual(got, {"PATH": "/usr/bin", "PYINSTALLER_RESET_ENVIRONMENT": "1", "LD_LIBRARY_PATH": "/opt/lib"})
+
 if __name__ == "__main__":
     unittest.main()

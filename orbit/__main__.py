@@ -25,6 +25,8 @@ def main(argv=None):
         return 0
 
     import os
+    if getattr(sys, "frozen", False):
+        _independent_children()
     restarted = os.environ.pop("ORBIT_RESTARTED", "") == "1"
     if not restarted and _switch_to_waiting_update(a.port):
         return 0
@@ -57,6 +59,31 @@ def main(argv=None):
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     from .gui import open_window
     return open_window(url, hub=hub)
+
+
+def _independent_children():
+    """Programs this standalone Orbit starts are programs of their own, never "workers" of this one.
+
+    PyInstaller (which makes the standalone programs) marks the environment so that a program started from a bundled
+    app reuses that app's unpacked files. For a restarted Orbit, another app's PyInstaller-made window, or the
+    updater's trial run of a new Orbit, that is wrong: the files belong to this Orbit (and its version) and disappear
+    when it ends, and on Windows this Orbit can't even finish ending while another program uses them.
+    PYINSTALLER_RESET_ENVIRONMENT=1 is PyInstaller's own switch for this (6.9 and newer); the older markers go too.
+    """
+    import os
+    os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    for k in [k for k in os.environ if k.startswith("_PYI_") or k == "_MEIPASS2"]:
+        os.environ.pop(k, None)
+    # The bundle's own libraries are first on the library path (so Orbit finds its copies of libssl, libz…); every
+    # other program Orbit starts (a browser, a terminal, systemctl) gets the computer's path back, as PyInstaller
+    # saved it.
+    bundle = getattr(sys, "_MEIPASS", "") or "\0"
+    for var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
+        saved = os.environ.pop(var + "_ORIG", None)
+        if saved is not None:
+            os.environ[var] = saved
+        elif bundle in os.environ.get(var, ""):
+            os.environ.pop(var, None)
 
 
 def _switch_to_waiting_update(port):

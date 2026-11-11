@@ -94,6 +94,27 @@ def wait_for(what, check, seconds=90, quiet=False):
     fail(f"timed out waiting for {what}")
 
 
+def borrowed_files(app):
+    """Linux: unpacked files the running Orbits use that no longer exist (they were another, ended Orbit's)."""
+    if os.name == "nt":
+        return []
+    gone = set()
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            if not os.readlink(f"/proc/{pid}/exe").startswith(str(app)):
+                continue
+            with open(f"/proc/{pid}/maps") as f:
+                for line in f:
+                    path = line.split(None, 5)[-1].strip() if len(line.split()) >= 6 else ""
+                    if "/_MEI" in path and (path.endswith("(deleted)") or not os.path.exists(path)):
+                        gone.add(path)
+        except OSError:
+            pass
+    return sorted(gone)
+
+
 def show_processes():
     if os.name == "nt":
         ps = ("Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'orbit*' } | "
@@ -171,8 +192,11 @@ def scenario(gh, how):
                 first.wait(30)
                 say(f"the first Orbit ended (exit {first.returncode})")
             except subprocess.TimeoutExpired:
-                say("the first Orbit is still running 30 s after the restart")
                 show_processes()
+                fail("the first Orbit is still running 30 s after the restart")
+        unpacked = borrowed_files(app)
+        if unpacked:
+            fail(f"the new Orbit uses unpacked files that are gone (another Orbit's): {unpacked}")
         out = root / "v.txt"
         subprocess.run([str(exe), "--write-version", str(out)], timeout=120)
         if out.read_text().strip() != "orbit 99.0.0":
