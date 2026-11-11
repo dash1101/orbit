@@ -114,5 +114,19 @@ class SelfUpdateTests(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.exe.parent.iterdir()), ["orbit"])
 
 
+    def test_the_window_offers_the_restart_once_it_is_ready(self):
+        from unittest import mock
+        from tests.test_orbit import make_hub
+        hub = make_hub(app_classes=[], tmp=str(self.tmp))
+        with mock.patch("orbit.install.recipes.orbit.running_program", lambda: self.exe):
+            (self.exe.parent / "orbit.new").write_bytes(program("9.9.9"))
+            (self.exe.parent / "orbit.new.ok").write_text("orbit 9.9.9\n")
+            self.assertEqual(hub.orbit_update(), {"version": "9.9.9", "url": "https://github.com/dash1101/orbit/releases",
+                                                  "here": True, "pending": True})
+            mine = next(a for a in hub.install_list()["apps"] if a["id"] == "orbit")
+        self.assertTrue(mine["self"])
+        self.assertEqual(mine["pending"], "9.9.9")
+        self.assertFalse(mine["update"])
+
 if __name__ == "__main__":
     unittest.main()
