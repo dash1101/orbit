@@ -127,7 +127,7 @@ class Beacon(App):
         self._last = raw
         if not raw:
             installed = bool(self.binary())
-            s.update(state="off" if installed and unit.get("state") == "stopped" else "down",
+            s.update(state="off" if not installed or unit.get("state") == "stopped" else "down",
                      headline="Not running" if installed else "Not installed")
             return s
         code = headline(raw)

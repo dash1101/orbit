@@ -206,5 +206,27 @@ class AvailabilityTests(unittest.TestCase):
         self.assertIn("isn't available on macOS yet", hub2.detail("nova")["status"]["detail"])
 
 
+    def test_an_app_never_installed_is_grey_not_red(self):
+        from orbit.apps.pocketfader import Pocketfader
+        tmp = tempfile.mkdtemp()
+        host = Host(system="linux", arch="amd64", home=tmp, env={"HOME": tmp}, which={}, systemd=True, distro="Fresh 1")
+        src = Sources(api="http://127.0.0.1:9", allow=("http://127.0.0.1:9",), token=lambda: "")
+
+        class QuietBeacon(Beacon):
+            def __init__(self, ctx):
+                super().__init__(ctx, ports=(9,))
+
+            def binary(self):
+                return None
+
+        hub = make_hub(app_classes=[Pocketfader, QuietBeacon], tmp=tmp)
+        hub.ctx.config.update_app("pocketfader", {"url": "http://127.0.0.1:9"})
+        hub2 = type(hub)(config=hub.ctx.config, runner=hub.ctx.runner, releases=hub.ctx.releases,
+                         app_classes=[Pocketfader, QuietBeacon], host=host, sources=src, recipes=load_recipes(host, src))
+        cards = {a["id"]: a for a in hub2.overview()}
+        for app in ("pocketfader", "ytm-beacon"):
+            self.assertEqual((cards[app]["state"], cards[app]["headline"]), ("off", "Not installed"), app)
+            self.assertFalse(cards[app]["install"]["installed"])
+
 if __name__ == "__main__":
     unittest.main()

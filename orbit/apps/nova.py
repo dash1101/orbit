@@ -231,8 +231,9 @@ class Nova(App):
         if addr:
             f.append(["web", addr])
         if not installed and not ping:
-            s.update(state="off", headline="Not installed on this computer" + ("" if self.hub.get("url") else
-                                                                                  " — set its address in settings"))
+            s.update(state="off", headline="Not installed on this computer")
+            if not self.hub.get("url"):
+                s["detail"] = "Nova on another computer? Set its address in settings (connection)."
             return s
         core = [u for u in units if u["unit"] in ("nova-api.service", "nova-helper.socket")]
         core_bad = [names[u["unit"]] for u in core if u.get("state") not in ("running", "missing")]
@@ -277,8 +278,9 @@ class Nova(App):
                 s["detail"] = str(e)
         f = s["facts"]
         if not version and not ping:
-            s.update(state="off", headline="Not installed on this computer" + ("" if self.hub.get("url") else
-                                                                                  " — set its address in settings"))
+            s.update(state="off", headline="Not installed on this computer")
+            if not self.hub.get("url"):
+                s["detail"] = "Nova on another computer? Set its address in settings (connection)."
             return s
         if addr:
             f.append(["web", addr])

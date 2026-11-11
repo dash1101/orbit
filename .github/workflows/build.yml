@@ -52,6 +52,7 @@ jobs:
           gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease -PorbitVersionName="$name" -PorbitVersionCode="${GITHUB_RUN_NUMBER}" $extra
           if [ -n "$extra" ]; then out=orbit-android-unsigned.apk; else out=orbit-android.apk; fi
           cp app/build/outputs/apk/release/app-release*.apk "$GITHUB_WORKSPACE/$out"
+          echo "unit tests:"; grep -ho '<testsuite name="[^"]*" tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*" errors="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml
       - uses: actions/upload-artifact@v4
         with: { name: android, path: "orbit-android*.apk" }
 

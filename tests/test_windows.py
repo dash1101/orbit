@@ -70,7 +70,7 @@ class WindowsTests(unittest.TestCase):
             hub.hub_info()
             nova = next(a for a in hub.overview() if a["id"] == "nova")
             service_buttons = [a for a in hub.detail("pocketfader")["actions"] if a["id"].startswith("svc:")]
-        self.assertEqual(nova["headline"], "Not installed on this computer — set its address in settings")
+        self.assertEqual(nova["headline"], "Not installed on this computer")
         self.assertFalse(nova.get("unavailable"))          # Nova runs on Windows now (a preview): installable
         for argv, flags in calls:
             self.assertTrue(flags & CREATE_NO_WINDOW, f"{argv} would flash a console window")
@@ -120,7 +120,7 @@ class WindowsTests(unittest.TestCase):
                 mock.patch("shutil.which", lambda n, *a, **k: None):
             hub = self.hub()
             d = hub.detail("nova")
-            self.assertEqual(d["status"]["headline"], "Not installed on this computer — set its address in settings")
+            self.assertEqual(d["status"]["headline"], "Not installed on this computer")
             self.assertEqual([a["id"] for a in d["actions"]], ["open", "releases"])
             self.assertIn("only the administrator can read", hub.app("nova").logs())
             (pf / "Nova" / "lib").mkdir(parents=True)

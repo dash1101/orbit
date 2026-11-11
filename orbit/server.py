@@ -204,9 +204,21 @@ class Hub:
             s = {"state": "unknown", "headline": f"Orbit couldn't read this app: {e}", "facts": [], "units": []}
         s.setdefault("state", "unknown")
         s.setdefault("facts", [])
+        if s["state"] in ("down", "unknown") and not s.get("version") and self._not_installed(a.id):
+            # an app that was never installed isn't broken: grey, with the install button, not red
+            s.update(state="off", headline="Not installed", notInstalled=True)
         s["checked"] = time.time()
         self._cache[a.id] = (time.time(), s)
         return s
+
+    def _not_installed(self, app_id):
+        r = self.installer.recipes.get(app_id)
+        if not r:
+            return False
+        try:
+            return not r.installed()["installed"]
+        except Exception:
+            return False
 
     def overview(self):
         ids = [i for i in self.apps if self.enabled(i)]
