@@ -4,6 +4,10 @@ The new program comes from Orbit's own GitHub release and is checked against the
 start and say which version it is, so a broken or wrong download never takes the old one's place. It waits next to
 the running program (`orbit.new`, with `orbit.new.ok` saying it passed) until Orbit restarts.
 
+The release files are named without the version (`orbit-windows-x64.exe`, `orbit-linux-x86_64`, …), so the program
+keeps one name from update to update. A copy downloaded before 0.3.5, named with its version
+(`orbit-v0.3.4-windows-x64.exe`), takes the plain name at its next update, and Orbit's own menu entry follows it.
+
 The switch happens only when Orbit restarts (or the next time it starts): a running standalone Orbit keeps reading
 parts of itself from its own file, so that file can't change under it. At the switch the old program is renamed
 (`orbit.old`; Windows allows renaming a running program), the new one takes its name, and the new one starts. If
@@ -15,6 +19,7 @@ end in .app for it to start). When Orbit runs from its source folder, Orbit
 says how to update instead.
 """
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,6 +30,7 @@ from ..engine import Failed, Step
 from .base import Recipe, need
 
 REPO = "dash1101/orbit"
+VERSIONED = re.compile(r"^orbit-v\d+(?:\.\d+)*-(.+)$")   # orbit-v0.3.4-windows-x64.exe: a download from before 0.3.5
 
 
 def running_program():
@@ -72,6 +78,16 @@ def _beside(path, suffix):
     return path.with_name(path.name + suffix)
 
 
+def settled(u):
+    """Where the program goes at its update: its own place, except that a file named with a version
+    (orbit-v0.3.4-linux-x86_64) becomes orbit-linux-x86_64, when nothing by that name is in the way."""
+    m = VERSIONED.match(u.name)
+    if u.suffix == ".app" or not m:
+        return u
+    plain = u.with_name("orbit-" + m.group(1))
+    return u if plain.exists() or plain.is_symlink() else plain
+
+
 def waiting(exe=None):
     """The version of a checked new Orbit waiting next to this one for a restart, or ""."""
     exe = exe or running_program()
@@ -86,20 +102,22 @@ def waiting(exe=None):
 
 
 def switch(exe=None):
-    """Put the waiting new Orbit in this one's place. Returns True when it did; raises OSError (with the old one
+    """Put the waiting new Orbit in this one's place. Returns the program to start (the same path, or the plain name
+    when this one's name had its version in it), or None when nothing was waiting; raises OSError (with the old one
     back in place) when it couldn't. Call it only right before starting the new one: see the module's notes."""
-    exe = exe or running_program()
+    exe = Path(exe) if exe else running_program()
     if not exe or not waiting(exe):
-        return False
+        return None
     u = unit(exe)
-    new, old = _beside(u, ".new"), _beside(u, ".old")
+    target = settled(u)
+    new, old = _beside(u, ".new"), _beside(target, ".old")
     try:
         _remove(old)
     except OSError:
         pass
     os.replace(u, old)
     try:
-        os.replace(new, u)
+        os.replace(new, target)
     except OSError:
         os.replace(old, u)            # put the old one back
         raise
@@ -107,7 +125,10 @@ def switch(exe=None):
         _beside(u, ".new.ok").unlink()
     except OSError:
         pass
-    return True
+    if target != u:
+        from ...desktop_entry import follow
+        follow(u, target)
+    return exe if target == u else target
 
 
 class OrbitRecipe(Recipe):
@@ -129,14 +150,25 @@ class OrbitRecipe(Recipe):
     def exe(self):
         return Path(self.program) if self.program else running_program()
 
-    def asset(self, tag):
+    def asset(self, tag=""):
+        """The release file for this computer (orbit-windows-x64.exe …). With a tag: the name releases before 0.3.5
+        used (orbit-v0.3.4-windows-x64.exe)."""
         if self.host.system == "windows":
-            return f"orbit-{tag}-windows-x64.exe"
-        if self.host.system == "linux" and self.host.arch == "amd64":
-            return f"orbit-{tag}-linux-x86_64"
-        if self.host.system == "darwin":
-            return f"orbit-{tag}-macos-" + ("apple-silicon" if self.host.arch == "arm64" else "intel") + ".dmg"
-        return None
+            kind = "windows-x64.exe"
+        elif self.host.system == "linux" and self.host.arch == "amd64":
+            kind = "linux-x86_64"
+        elif self.host.system == "darwin":
+            kind = "macos-" + ("apple-silicon" if self.host.arch == "arm64" else "intel") + ".dmg"
+        else:
+            return None
+        return f"orbit-{tag}-{kind}" if tag else f"orbit-{kind}"
+
+    def pick(self, rel):
+        """The name this release gives the file: without the version (0.3.5 on), or with it (before)."""
+        for name in (self.asset(), self.asset(rel["tag"])):
+            if name in rel.get("assets", {}):
+                return name
+        return self.asset()
 
     # ---- what's here --------------------------------------------------------------------
     def detect(self):
@@ -157,7 +189,7 @@ class OrbitRecipe(Recipe):
                          "This Orbit runs from its Python source, so it can't replace itself. Update the source "
                          "(`git pull`) and run `./install.sh` again, or use the standalone program from the releases "
                          "page, which updates itself.")]
-        if not self.asset("v0"):
+        if not self.asset():
             return [need("A standalone program for this computer", False,
                          f"There's no standalone Orbit for {self.host.label} yet.")]
         where = unit(exe).parent
@@ -167,7 +199,7 @@ class OrbitRecipe(Recipe):
                      "page instead.", detail=str(where))]
 
     def assets(self, rel):
-        name = self.asset(rel["tag"])
+        name = self.asset() and self.pick(rel)
         return [name, "SHA256SUMS"] if name else []
 
     def title(self, op, rel):
@@ -177,11 +209,12 @@ class OrbitRecipe(Recipe):
     def summary(self, op, opts, rel):
         tag = rel["tag"] if rel else "the newest release"
         exe = self.exe()
-        return [f"Download Orbit {tag} from GitHub: {self.asset(tag) if rel else 'the program for this computer'}",
+        return [f"Download Orbit {tag} from GitHub: {self.pick(rel) if rel else 'the program for this computer'}",
                 "Check it against the release's checksums",
                 "Start it once to make sure it runs and is the version it should be",
                 f"Keep it next to this one ({unit(exe).name if exe else 'orbit'}) until you restart Orbit: then it takes "
-                "this one's place, and the old one is kept until the new one has started"]
+                "this one's place" + (f" as {settled(unit(exe)).name}" if exe and settled(unit(exe)) != unit(exe) else "")
+                + ", and the old one is kept until the new one has started"]
 
     def steps(self, op, opts):
         return [
@@ -194,7 +227,7 @@ class OrbitRecipe(Recipe):
     # ---- steps ------------------------------------------------------------------------------
     def _find(self, s):
         s.vars["rel"] = rel = s.release(self.repo)
-        name = self.asset(rel["tag"])
+        name = self.pick(rel)
         s.asset(rel, name, self.repo)
         s.asset(rel, "SHA256SUMS", self.repo)
         s.vars["name"] = name
@@ -273,6 +306,6 @@ class OrbitRecipe(Recipe):
         rel = sess.vars.get("rel") or {}
         v = rel.get("tag", "").lstrip("vV")
         return {"headline": f"Orbit {v} is ready.",
-                "body": "Restart Orbit to switch to it: its window closes and opens again on the new version. "
-                        "(If you just close Orbit, it switches the next time it starts.)",
+                "body": "Orbit restarts on it: its window closes and opens again on the new version, in the same "
+                        "place. (If you close Orbit instead, it switches the next time it starts.)",
                 "next": [{"id": "restart", "label": "restart orbit", "kind": "restart", "primary": True}]}

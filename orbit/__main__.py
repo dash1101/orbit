@@ -115,9 +115,10 @@ def _switch_to_waiting_update(port):
     if port and port_open("127.0.0.1", port):
         return False
     try:
-        if not switch(exe):
-            return False
+        exe = switch(exe)                 # the same file, or its new name (a download named with a version)
     except OSError:
+        return False
+    if not exe:
         return False
     if os.name == "nt":
         subprocess.Popen([str(exe)] + sys.argv[1:], creationflags=0x00000008, stdin=subprocess.DEVNULL,

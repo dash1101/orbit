@@ -83,7 +83,7 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             pyinstaller "${common[@]}" --onefile --windowed --name orbit --icon packaging/icon/orbit-1024.png packaging/entry.py
           elif [ "$RUNNER_OS" = macOS ]; then
-            pyinstaller "${common[@]}" --windowed --name Orbit --osx-bundle-identifier app.novalabs.orbit --icon packaging/icon/orbit-1024.png packaging/entry.py
+            pyinstaller "${common[@]}" --windowed --name Orbit --osx-bundle-identifier app.novalabs.orbit --icon packaging/icon/orbit-mac-1024.png packaging/entry.py
           else
             pyinstaller "${common[@]}" --onefile --name orbit packaging/entry.py
           fi
@@ -185,7 +185,12 @@ jobs:
           cd artifacts
           ls -la
           rm -f orbit-android-unsigned.apk         # never published: it can't be installed
-          for f in orbit-*; do mv "$f" "$(echo "$f" | sed "s/^orbit-/orbit-${GITHUB_REF_NAME}-/")"; done
+          # The files keep one name from release to release (orbit-windows-x64.exe …), so a program that updates
+          # itself keeps its name too. Orbit 0.3.4 and older look for names with the version in them to update
+          # themselves (orbit-v0.3.4-windows-x64.exe): through the 0.3 series they get a copy under that name as well.
+          case "$GITHUB_REF_NAME" in
+            v0.3.*) for f in orbit-*; do cp "$f" "$(echo "$f" | sed "s/^orbit-/orbit-${GITHUB_REF_NAME}-/")"; done ;;
+          esac
           sha256sum orbit-* > SHA256SUMS
           # the release may already exist (the Android app is added later): then add or replace the files
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

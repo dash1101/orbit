@@ -36,8 +36,7 @@ class SelfUpdateTests(unittest.TestCase):
         r.program, r.version = str(self.exe), "0.3.0"
         return r
 
-    def publish(self, body, listed=None):
-        name = "orbit-v9.9.9-linux-x86_64"
+    def publish(self, body, listed=None, name="orbit-linux-x86_64"):
         files = {name: body}
         self.gh.publish("dash1101/orbit", "v9.9.9", dict(files, SHA256SUMS=sums(listed or files)))
 
@@ -75,7 +74,8 @@ class SelfUpdateTests(unittest.TestCase):
         self.assertEqual(unit(exe), app)
         self.assertEqual(unit(self.exe), self.exe)                 # a plain program file is its own unit
         r = self.recipe("darwin")
-        self.assertEqual(r.asset("v1.2.3"), "orbit-v1.2.3-macos-intel.dmg")
+        self.assertEqual(r.asset(), "orbit-macos-intel.dmg")
+        self.assertEqual(r.asset("v1.2.3"), "orbit-v1.2.3-macos-intel.dmg")         # releases before 0.3.5
         new = app.with_name(".Orbit-new.app")
         (new / "Contents" / "MacOS").mkdir(parents=True)
         (new / "Contents" / "MacOS" / "Orbit").write_bytes(program("9.9.9"))
@@ -83,11 +83,56 @@ class SelfUpdateTests(unittest.TestCase):
         self.assertEqual(waiting(exe), "")                          # not checked yet: never switched to
         app.with_name(".Orbit-new.ok").write_text("orbit 9.9.9\n")
         self.assertEqual(waiting(exe), "9.9.9")
-        self.assertTrue(switch(exe))
+        self.assertEqual(switch(exe), exe)                          # the app keeps its name
         self.assertEqual((app / "Contents" / "Info.plist").read_text(), "new")
         self.assertEqual((app.with_name(".Orbit-old.app") / "Contents" / "Info.plist").read_text(), "old")
         self.assertTrue(cleanup_old(exe))
         self.assertEqual(sorted(x.name for x in app.parent.iterdir()), ["Orbit.app"])
+
+    def test_a_release_from_before_0_3_5_names_the_file_with_its_version(self):
+        self.publish(program("9.9.9"), name="orbit-v9.9.9-linux-x86_64")
+        r = self.recipe()
+        self.assertIn("orbit-v9.9.9-linux-x86_64", " ".join(r.info("install")["summary"]))
+        snap = self.run_update(r)
+        self.assertEqual(snap["state"], "done", snap["error"] + "\n".join(snap["log"]))
+        self.assertEqual(waiting(self.exe), "9.9.9")
+
+    def test_a_copy_named_with_its_version_takes_the_plain_name_and_the_menu_follows(self):
+        import os
+        import sys
+        from unittest import mock
+        versioned = self.exe.with_name("orbit-v0.3.4-linux-x86_64")
+        self.exe.rename(versioned)
+        self.exe = versioned
+        data = self.tmp / "data"
+        entry = data / "applications" / "orbit.desktop"
+        entry.parent.mkdir(parents=True)
+        entry.write_text(f"[Desktop Entry]\nName=Orbit\nExec={versioned}\nIcon=orbit\n")
+        self.publish(program("9.9.9"))
+        r = self.recipe()
+        self.assertIn("as orbit-linux-x86_64", " ".join(r.info("install")["summary"]))
+        snap = self.run_update(r)
+        self.assertEqual(snap["state"], "done", snap["error"] + "\n".join(snap["log"]))
+        self.assertEqual(versioned.read_bytes(), program("0.3.0"))     # nothing moves before the restart
+        with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(data)}):
+            plain = switch(versioned)
+        self.assertEqual(plain, versioned.with_name("orbit-linux-x86_64"))
+        self.assertEqual(plain.read_bytes(), program("9.9.9"))
+        self.assertFalse(versioned.exists())
+        self.assertTrue(cleanup_old(plain))                          # what the new Orbit does when it starts
+        self.assertEqual(sorted(p.name for p in plain.parent.iterdir()), ["orbit-linux-x86_64"])
+        if sys.platform.startswith("linux"):
+            self.assertIn(f"Exec={plain}\n", entry.read_text())
+
+    def test_a_plain_name_already_taken_keeps_the_versioned_one(self):
+        versioned = self.exe.with_name("orbit-v0.3.4-linux-x86_64")
+        self.exe.rename(versioned)
+        versioned.with_name("orbit-linux-x86_64").write_bytes(b"someone else's")
+        versioned.with_name("orbit-v0.3.4-linux-x86_64.new").write_bytes(program("9.9.9"))
+        versioned.with_name("orbit-v0.3.4-linux-x86_64.new.ok").write_text("orbit 9.9.9\n")
+        self.assertEqual(switch(versioned), versioned)
+        self.assertEqual(versioned.read_bytes(), program("9.9.9"))
+        self.assertEqual(versioned.with_name("orbit-linux-x86_64").read_bytes(), b"someone else's")
 
     def test_a_half_finished_download_is_never_switched_to(self):
         (self.exe.parent / "orbit.new").write_bytes(b"partial")       # no .new.ok: it was never checked
@@ -112,7 +157,7 @@ class SelfUpdateTests(unittest.TestCase):
 
     def test_a_tampered_download_is_never_run(self):
         self.publish(b"#!/bin/sh\ntouch " + str(self.tmp / "RAN").encode() + b"\n",
-                     listed={"orbit-v9.9.9-linux-x86_64": program("9.9.9")})
+                     listed={"orbit-linux-x86_64": program("9.9.9")})
         snap = self.run_update(self.recipe())
         self.assertEqual(snap["state"], "failed")
         self.assertIn("doesn't match its published checksum", snap["error"])

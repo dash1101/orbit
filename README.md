@@ -105,10 +105,17 @@ menu* adds a launcher for the copy you downloaded.
 **Orbit updates itself** on Linux, Windows and macOS. When a new release is out, the top bar says *update orbit to …*
 (and Orbit's own card on the install page offers it). The new program is downloaded from Orbit's GitHub release,
 checked against the release's checksums, and started once to make sure it runs and is that version; only then does it
-wait next to the running one. *restart orbit* switches to it (the window closes and opens again on the new version);
-if you just close Orbit instead, it switches the next time it starts. The old program is kept until the new one has
-started, so a failed update leaves Orbit as it was. On a Mac the whole app is replaced: the new Orbit.app comes out of
-the release's `.dmg`. Running from the source folder, update with `git pull`.
+wait next to the running one. Orbit then restarts on it by itself after a few seconds (the window closes and opens
+again on the new version), unless an app is still installing; close the update window to wait instead, and Orbit
+switches the next time it starts. The old program is kept until the new one has started, so a failed update leaves
+Orbit as it was. On a Mac the whole app is replaced: the new Orbit.app comes out of the release's `.dmg`. Running from
+the source folder, update with `git pull`.
+
+The update replaces the program **in place**: the downloads are named without the version (`orbit-windows-x64.exe`,
+`orbit-linux-x86_64`, `orbit-macos-apple-silicon.dmg`, …), so the program keeps its name and folder from version to
+version, and launchers and shortcuts keep working. A copy downloaded before 0.3.5, named with its version
+(`orbit-v0.3.4-windows-x64.exe`), takes the plain name at its next update, and Orbit's own apps-menu or Start-menu entry
+follows it.
 
 ## What each app gets
 

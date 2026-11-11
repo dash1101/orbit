@@ -423,10 +423,14 @@ class Hub:
         from .install.recipes.orbit import running_program, switch, waiting
         if self.ctx.dry_run:
             return {"ok": True, "message": "dry run: Orbit would restart now"}
+        busy = [r.name for r in self.installer.recipes.values() if r.id != "orbit" and self.installer.busy(r.id)]
+        if busy:
+            raise BadRequest(f"{' and '.join(busy)} {'is' if len(busy) == 1 else 'are'} still being installed or "
+                             "removed: restart Orbit when that's done")
         exe = running_program()
         if exe and waiting(exe):
             try:
-                switch(exe)
+                exe = switch(exe) or exe          # the same file, or its new name (a download named with a version)
             except OSError as e:
                 raise BadRequest(f"couldn't switch to the new Orbit ({e}); this one keeps running") from None
         argv = ([str(exe)] if exe else [sys.executable, "-m", "orbit"]) + sys.argv[1:]

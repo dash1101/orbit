@@ -3,7 +3,8 @@
 1. Bump `__version__` in `orbit/__init__.py`.
 2. `python3 tools/sync-icons.py` pulls the apps' current icons from their repositories (a test fails if the desktop
    and Android copies differ). Orbit's own icon is drawn by `python3 tools/make-icon.py` (`packaging/icon/`).
-3. Tag and push: `git tag -a v0.2.0 -m "Orbit v0.2.0" && git push origin v0.2.0`.
+3. Tag and push: `git tag -a v0.3.5 -m "Orbit v0.3.5" && git push origin v0.3.5`.
+4. After the release: run the *self-update-from-a-release* workflow, which updates the previous release to this one on Linux, Windows and macOS.
 
 The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel), starts each one on its own system as a check, and publishes a pre-release with all of them, each as a single file: the `.exe`, the Linux program, a `.dmg` per Mac type, and the `.apk`. The programs bundle Python, so nothing needs installing to run them. The Android app is the one piece that depends on where the signing key is.
 
@@ -30,11 +31,17 @@ leaves it unsigned (the `android` artifact, `orbit-android-unsigned.apk`). Sign 
 
 ```bash
 java -cp apksig-8.5.2.jar tools/sign-apk/Sign.java orbit-release.jks password.txt orbit \
-     orbit-android-unsigned.apk orbit-android-v0.2.0.apk
+     orbit-android-unsigned.apk orbit-android.apk
 ```
 
-Then upload it to the release with its checksum (`gh release upload v0.2.0 orbit-android-v0.2.0.apk`, and update
+Then upload it to the release with its checksum (`gh release upload v0.3.5 orbit-android.apk`, and update
 `SHA256SUMS`).
+
+**File names.** Release files keep one name from release to release (`orbit-windows-x64.exe`, `orbit-linux-x86_64`,
+`orbit-macos-apple-silicon.dmg`, `orbit-macos-intel.dmg`, `orbit-android.apk`), so a program that updates itself keeps
+its name. Orbit 0.3.4 and older (desktop and Android) only find files named with the version, so through the 0.3 series
+each file is also published under that name (`orbit-v0.3.5-windows-x64.exe`; the workflow does this for `v0.3.*` tags;
+upload the signed APK as `orbit-v0.3.5-android.apk` too). From 0.4.0 on, only the plain names are published.
 
 ## Signing in with GitHub
 

@@ -5,7 +5,9 @@
     python tools/ci-selfupdate.py --real <a published Orbit> <the newest version>
 
 A stand-in for GitHub (on 127.0.0.1, named to Orbit by ORBIT_TEST_GITHUB_API) publishes the newer build as release
-v99.0.0 with its SHA256SUMS. With --real, an Orbit downloaded from an earlier release updates itself from the real
+v99.0.0 with its SHA256SUMS, under the name releases use (orbit-linux-x86_64 …). In the "restart" run the program
+starts out named the way downloads before 0.3.5 were (orbit-v1.0.0-linux-x86_64), and must end up under the plain name,
+with Orbit's own menu entry following it (Linux and Windows). With --real, an Orbit downloaded from an earlier release updates itself from the real
 GitHub releases instead. A copy of this build is started, asked through its own API to update itself (exactly
 what the window's "update" button does), then to restart; the newer Orbit must come up on the same port and the
 old program must be gone. Run by the build workflow on Linux and Windows.
@@ -32,7 +34,7 @@ else:
     old_exe, new_exe, suffix = sys.argv[1:4]
     WANT = "99.0.0"
     TAG = "v99.0.0"
-    NAME = f"orbit-{TAG}-{suffix}"
+    NAME = f"orbit-{suffix}"
     DATA = Path(new_exe).read_bytes()
     SUMS = f"{hashlib.sha256(DATA).hexdigest()}  {NAME}\n".encode()
 
@@ -175,11 +177,19 @@ def scenario(gh, how):
         exe = bundle / "Contents" / "MacOS" / "Orbit"
         original = Path(old_exe) / "Contents" / "MacOS" / "Orbit"
     else:
-        bundle = exe = app / Path(old_exe).name
+        name = Path(old_exe).name
+        if not REAL:
+            name = f"orbit-v1.0.0-{suffix}" if how == "restart" else f"orbit-{suffix}"
+        bundle = exe = app / name
         shutil.copy2(old_exe, exe)
         original = Path(old_exe)
+    # where the program is after the update: the same place, or (named with a version) the plain name
+    final = bundle if REAL or bundle.suffix == ".app" else app / f"orbit-{suffix}"
+    final_exe = exe if final == bundle else final
     port = free_port()
-    env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"))
+    env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"),
+               XDG_DATA_HOME=str(root / "data"))
+    menu = sys.platform.startswith("linux") or sys.platform == "win32"
     if gh is not None:
         env["ORBIT_TEST_GITHUB_API"] = f"http://127.0.0.1:{gh.server_address[1]}"
 
@@ -192,6 +202,8 @@ def scenario(gh, how):
     try:
         hub = wait_for("Orbit to start", lambda: call(port, "/api/hub"))
         say(f"running Orbit {hub['version']}")
+        if menu:
+            say("menu entry: " + call(port, "/api/hub/menu", {}).get("message", ""))
         plan = call(port, "/api/install/orbit/plan", {"op": "install"})
         say(f"plan: {plan['title']} · blocked: {plan['blocked'] or 'no'}")
         if plan["blocked"] or plan["title"] != f"Update Orbit to {WANT}":
@@ -203,7 +215,7 @@ def scenario(gh, how):
             say("  " + line)
         if snap["state"] != "done":
             fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
-        old = beside(bundle, ".old")
+        old = beside(final, ".old")
         if not beside(bundle, ".new").exists() or not beside(bundle, ".new.ok").exists():
             fail("the new program isn't waiting next to the running one")
         if exe.read_bytes() != original.read_bytes():
@@ -232,16 +244,21 @@ def scenario(gh, how):
         if unpacked:
             fail(f"the new Orbit uses unpacked files that are gone (another Orbit's): {unpacked}")
         out = root / "v.txt"
-        subprocess.run([str(exe), "--write-version", str(out)], timeout=120)
+        subprocess.run([str(final_exe), "--write-version", str(out)], timeout=120)
         if out.read_text().strip() != f"orbit {WANT}":
             fail(f"the program in place says {out.read_text().strip()!r}")
         if not wait_for("the old program to be deleted", lambda: not old.exists(), 90, quiet=True):
             show_processes()
             fail("the old program is still there")
         left = sorted(x.name for x in app.iterdir())
-        if left != [bundle.name]:
-            fail(f"left next to Orbit: {left}")
-        say(f"{how}: the program in place is {WANT} and nothing else is left.")
+        if left != [final.name]:
+            fail(f"left next to Orbit: {left} (expected only {final.name})")
+        if menu:
+            target = menu_target(root)
+            say(f"the menu entry starts: {target}")
+            if os.path.normcase(target) != os.path.normcase(str(final_exe)):
+                fail(f"the menu entry doesn't start {final_exe}")
+        say(f"{how}: the program in place is {WANT}, as {final.name}, and nothing else is left.")
     finally:
         stop_everything(app)
         for log in ("first.log", "second.log"):
@@ -249,6 +266,21 @@ def scenario(gh, how):
                 say(f"--- {log}:\n" + (root / log).read_text(errors="replace")[-2000:])
             except OSError:
                 pass
+
+
+def menu_target(root):
+    """The program Orbit's own menu entry (apps menu, Start menu) starts."""
+    if sys.platform == "win32":
+        link = root / "config" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Orbit.lnk"
+        p = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                            f"(New-Object -ComObject WScript.Shell).CreateShortcut('{link}').TargetPath"],
+                           capture_output=True, text=True)
+        return p.stdout.strip()
+    entry = root / "data" / "applications" / "orbit.desktop"
+    for line in entry.read_text().splitlines():
+        if line.startswith("Exec="):
+            return line[5:].strip('"')
+    return ""
 
 
 def port_busy(port):

@@ -75,3 +75,29 @@ def add(runner, home=None):
             return {"ok": False, "message": "couldn't add Orbit to the Start menu: " + (p.stderr.strip()[:200] or "unknown error")}
         return {"ok": True, "message": "Orbit is in the Start menu"}
     return {"ok": False, "message": "on macOS, drag Orbit.app into Applications"}
+
+
+def follow(old, new):
+    """An update moved the program (orbit-v0.3.4-linux-x86_64 → orbit-linux-x86_64): Orbit's own launcher, when it
+    starts the old file, now starts the new one. Quietly; a launcher pointing anywhere else is left alone."""
+    old, new = str(old), str(new)
+    try:
+        if sys.platform.startswith("linux"):
+            entry, _ = _linux_paths()
+            lines = entry.read_text(encoding="utf-8").split("\n")
+            exe = f'"{new}"' if " " in new else new
+            changed = [f"Exec={exe}" if ln in (f"Exec={old}", f'Exec="{old}"') else ln for ln in lines]
+            if changed != lines:
+                entry.write_text("\n".join(changed), encoding="utf-8")
+        elif sys.platform == "win32":
+            link = _windows_link()
+            if not link.exists():
+                return
+            q = lambda x: "'" + str(x).replace("'", "''") + "'"
+            script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut({q(link)});"
+                      f"if ($s.TargetPath -eq {q(old)}) {{ $s.TargetPath={q(new)};"
+                      f"$s.WorkingDirectory={q(Path(new).parent)};$s.Save() }}")
+            subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                           capture_output=True, timeout=30, creationflags=0x08000000)
+    except (OSError, subprocess.SubprocessError):
+        pass

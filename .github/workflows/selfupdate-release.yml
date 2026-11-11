@@ -35,9 +35,14 @@ jobs:
           newest=$(echo "$tags" | sed -n 1p)
           from="${FROM:-$(echo "$tags" | sed -n 2p)}"
           echo "from $from to $newest"
-          gh release download "$from" -R "$GITHUB_REPOSITORY" -p "orbit-$from-${{ matrix.file }}" -D old
+          # releases from 0.3.5 on name the files without the version; before, with it
+          name="orbit-${{ matrix.file }}"
+          gh release download "$from" -R "$GITHUB_REPOSITORY" -p "$name" -D old 2>/dev/null || {
+            name="orbit-$from-${{ matrix.file }}"
+            gh release download "$from" -R "$GITHUB_REPOSITORY" -p "$name" -D old
+          }
           chmod +x old/* || true
-          old="old/orbit-$from-${{ matrix.file }}"
+          old="old/$name"
           if [ "$RUNNER_OS" = macOS ]; then         # the app, out of its disk image, as dragged to Applications
             hdiutil attach "$old" -nobrowse -readonly -mountpoint "$RUNNER_TEMP/old-dmg"
             ditto "$RUNNER_TEMP/old-dmg/Orbit.app" old/Orbit.app

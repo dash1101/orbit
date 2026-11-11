@@ -1333,6 +1333,9 @@ function finishJob() {
   art.insertAdjacentHTML("beforeend", ok
     ? '<svg viewBox="0 0 96 96"><circle class="ring" cx="48" cy="48" r="42"/><path class="mark" d="M30 50 L43 62 L67 36"/></svg>'
     : '<svg viewBox="0 0 96 96"><circle class="ring" cx="48" cy="48" r="42"/><path class="mark" d="M34 34 L62 62 M62 34 L34 62"/></svg>');
+  // Orbit updated itself: it restarts onto the new version by itself in a moment (closing this waits instead)
+  const auto = ok && W.app === "orbit" && !j.dryRun && (r.next || []).some(n => n.kind === "restart")
+    ? h("p", { class: "t-muted", style: "font-size:12.5px", "aria-live": "polite" }) : null;
   const nexts = (r.next || []).map(n => btn(n.label, async () => {
     if (n.kind === "app") { closeWizard(); return go(n.app); }
     if (n.kind === "restart") { closeWizard(); return restartOrbit(); }
@@ -1342,12 +1345,14 @@ function finishJob() {
     h("h3", {}, ok ? (r.headline || "Done.") : j.state === "cancelled" ? "Stopped." : "That didn't work."),
     h("p", {}, rt(ok ? (r.body || "") : j.error)),
     !ok && j.hint ? h("div", { class: "callout warn", style: "animation-delay:.6s;max-width:540px;margin:8px auto 0" }, rt(j.hint)) : null,
-    j.dryRun ? h("p", { class: "t-warn", style: "font-size:12.5px" }, "dry run: nothing was actually changed") : null),
+    j.dryRun ? h("p", { class: "t-warn", style: "font-size:12.5px" }, "dry run: nothing was actually changed") : null,
+    auto),
     W.el.logwrap);
   const buttons = ok ? [btn("close", () => closeWizard()), sp(), W.el.logBtn, ...nexts.reverse()]
     : [btn("close", () => closeWizard()), sp(), W.el.logBtn, btn("try again", () => { const a = W.app, o = W.op; closeWizard(true); openWizard(a, o); }, "primary go")];
   setStage(4, 1, body, buttons);
   if (!ok && !W.logOpen) toggleLog();
+  if (auto) countdownRestart(auto, j);
   S.inst = null;
   poll();
 }
@@ -1805,10 +1810,18 @@ function renderHub() {
         h("button", { class: "btn small", onclick: showHelp }, "keyboard keys"))));
 }
 
+function countdownRestart(note, job, left = 5) {
+  if (!W.open || W.job !== job) return;              // closed: the top bar's "restart for orbit …" waits instead
+  if (left <= 0) { closeWizard(); return restartOrbit(); }
+  note.textContent = `restarting in ${left} s · close this to restart later`;
+  setTimeout(() => countdownRestart(note, job, left - 1), 1000);
+}
+
 // After Orbit updated itself: a new Orbit starts, this one ends; the page follows it and reloads on the new version.
 async function restartOrbit() {
   const was = S.hub && S.hub.version;
   try { say((await api("/api/hub/restart", {})).message); } catch (e) { return say(e.message, "err"); }
+  if (S.hub && S.hub.dryRun) return;            // nothing restarts in a dry run
   clearTimeout(S.timer);
   for (let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 1000));
