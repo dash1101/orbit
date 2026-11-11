@@ -57,8 +57,23 @@ def main(argv=None):
             pass
         return 0
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    from .gui import open_window
+    from .gui import _wait_for_page, open_window
+    if restarted and _page_still_open(hub):
+        # After an update: the window from before (a browser Orbit couldn't close) is still showing Orbit and
+        # reloads onto this one by itself, so a second window isn't opened.
+        return _wait_for_page(hub)
     return open_window(url, hub=hub)
+
+
+def _page_still_open(hub, wait=6.0):
+    """Does an Orbit page from before a restart still ask this Orbit for things? (It polls every second or so.)"""
+    import time
+    since = time.time()
+    while time.time() - since < wait:
+        if hub.last_seen > since:
+            return True
+        time.sleep(0.2)
+    return False
 
 
 def _independent_children():

@@ -145,5 +145,18 @@ class ChildProgramTests(unittest.TestCase):
             got = dict(os.environ)
         self.assertEqual(got, {"PATH": "/usr/bin", "PYINSTALLER_RESET_ENVIRONMENT": "1", "LD_LIBRARY_PATH": "/opt/lib"})
 
+    def test_after_a_restart_a_window_still_showing_orbit_is_used(self):
+        import threading
+        import time
+        from orbit.__main__ import _page_still_open
+
+        class Hub:
+            last_seen = time.time() - 30
+
+        hub = Hub()
+        self.assertFalse(_page_still_open(hub, wait=0.4))          # nothing asks: open a window
+        threading.Timer(0.2, lambda: setattr(hub, "last_seen", time.time())).start()
+        self.assertTrue(_page_still_open(hub, wait=3))             # the old window polls: no second window
+
 if __name__ == "__main__":
     unittest.main()
