@@ -144,7 +144,10 @@ def show_processes():
 
 def stop_everything(app):
     if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/T", "/IM", Path(old_exe).name], capture_output=True)
+        # by program name: every name it has during a run (as downloaded, with or without a version)
+        names = {Path(old_exe).name} | ({f"orbit-{suffix}", f"orbit-v1.0.0-{suffix}"} if not REAL else set())
+        for name in sorted(names):
+            subprocess.run(["taskkill", "/F", "/T", "/IM", name], capture_output=True)
         return
     if sys.platform == "darwin":
         out = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
