@@ -181,7 +181,8 @@ class TestPieces(unittest.TestCase):
     def test_every_recipe_belongs_to_an_app(self):
         from orbit.apps import BUILTIN
         from orbit.install.recipes import ALL
-        self.assertTrue({r.id for r in ALL} <= {a.id for a in BUILTIN})
+        # (Orbit's own recipe is how Orbit updates itself; Orbit isn't an app in its own side bar)
+        self.assertTrue({r.id for r in ALL if not getattr(r, "self_app", False)} <= {a.id for a in BUILTIN})
 
     def test_host_places(self):
         w = Host(system="windows", home="/h", env={"LOCALAPPDATA": "C:/L", "APPDATA": "C:/R"}, which={})

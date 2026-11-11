@@ -8,6 +8,19 @@ import time
 import webbrowser
 
 
+_window = {"proc": None}       # the app-mode browser showing Orbit, when that's the window
+
+
+def close():
+    """Close Orbit's window before Orbit ends (a restart): the browser window is a separate program."""
+    p = _window["proc"]
+    if p is not None and p.poll() is None:
+        try:
+            p.terminate()
+        except OSError:
+            pass
+
+
 def open_window(url, title="Orbit", hub=None):
     """Show Orbit. Returns when the person closes the window, so a program with no terminal doesn't linger."""
     try:
@@ -24,6 +37,7 @@ def open_window(url, title="Orbit", hub=None):
             try:
                 p = subprocess.Popen([exe, f"--app={url}", "--class=Orbit", "--window-size=1180,760",
                                       f"--user-data-dir={profile}", "--no-first-run", "--no-default-browser-check"])
+                _window["proc"] = p
                 p.wait()
             except KeyboardInterrupt:
                 return 0

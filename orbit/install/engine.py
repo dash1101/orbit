@@ -68,6 +68,14 @@ class Sources:
         self._cache = {}
         self._lock = threading.Lock()
 
+    @classmethod
+    def from_env(cls):
+        """GitHub, or (for Orbit's own build checks only) a stand-in named by ORBIT_TEST_GITHUB_API."""
+        stand_in = os.environ.get("ORBIT_TEST_GITHUB_API", "").rstrip("/")
+        if stand_in.startswith("http://127.0.0.1:"):
+            return cls(api=stand_in, allow=(stand_in + "/",), token=lambda: "")
+        return cls()
+
     def token(self):
         return (self._token() if self._token is not None else net.github_token()) or ""
 

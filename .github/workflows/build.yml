@@ -120,6 +120,26 @@ jobs:
           done
           kill $pid || true
           echo "smoke test passed"
+      # Orbit updates itself on Linux and Windows: a second build that says 99.0.0 is published by a stand-in GitHub, and
+      # this build must update itself to it through its own API, restart on it, and delete the old program.
+      - name: "Self-update (a real update to a newer build, then a restart)"
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          cp orbit/__init__.py "$RUNNER_TEMP/init.py"
+          sed -i.bak 's/^__version__ = .*/__version__ = "99.0.0"/' orbit/__init__.py
+          sep=":"; [ "$RUNNER_OS" = Windows ] && sep=";"
+          common=(--noconfirm --paths . --collect-submodules orbit --add-data "orbit/static${sep}orbit/static"
+                  --distpath dist-next --workpath build-next)
+          if [ "$RUNNER_OS" = Windows ]; then
+            pyinstaller "${common[@]}" --onefile --windowed --name orbit packaging/entry.py
+            cp "$RUNNER_TEMP/init.py" orbit/__init__.py
+            python tools/ci-selfupdate.py dist/orbit.exe dist-next/orbit.exe windows-x64.exe
+          else
+            pyinstaller "${common[@]}" --onefile --name orbit packaging/entry.py
+            cp "$RUNNER_TEMP/init.py" orbit/__init__.py
+            python tools/ci-selfupdate.py dist/orbit dist-next/orbit linux-x86_64
+          fi
       # One file per download, nothing to unpack: the .exe and the Linux program as they are; on macOS the app is a
       # folder (Orbit.app), so it goes in a disk image with an Applications shortcut to drag it onto.
       - name: Package

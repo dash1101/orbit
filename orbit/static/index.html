@@ -985,6 +985,12 @@ async function renderInstall(full) {
     } else if (!inst.installed) {
       line = [h("span", { class: "dot s-off" }), h("span", {}, "not installed"), a.latest ? h("span", { class: "t-muted" }, "· latest " + pv(a.latest)) : null];
       acts.push(h("button", { class: "btn primary", onclick: () => openWizard(a.id, "install") }, "install"));
+    } else if (a.self) {
+      line = a.pending ? [h("span", { class: "dot s-warn" }), h("span", {}, `${pv(a.pending)} is ready · restart Orbit to use it`)]
+        : a.update ? [h("span", { class: "dot s-warn" }), h("span", { class: "upd" }, "UPDATE"), h("span", {}, `${pv(a.latest)} is out`)]
+        : [h("span", { class: "dot s-ok" }), h("span", {}, "this app"), a.latest ? h("span", { class: "t-muted" }, "· up to date") : null];
+      if (a.pending) acts.push(h("button", { class: "btn primary", onclick: restartOrbit }, "restart orbit"));
+      else if (a.update) acts.push(h("button", { class: "btn primary", onclick: () => openWizard(a.id, "install") }, "update to " + pv(a.latest)));
     } else {
       line = a.update
         ? [h("span", { class: "dot s-warn" }), h("span", { class: "upd" }, "UPDATE"), h("span", {}, `${pv(a.latest)} is out`)]
@@ -1328,6 +1334,7 @@ function finishJob() {
     : '<svg viewBox="0 0 96 96"><circle class="ring" cx="48" cy="48" r="42"/><path class="mark" d="M34 34 L62 62 M62 34 L34 62"/></svg>');
   const nexts = (r.next || []).map(n => btn(n.label, async () => {
     if (n.kind === "app") { closeWizard(); return go(n.app); }
+    if (n.kind === "restart") { closeWizard(); return restartOrbit(); }
     try { say((await api(`/api/install/jobs/${j.id}/next`, { id: n.id })).message, "ok"); } catch (e) { say(e.message, "err"); }
   }, n.primary ? "primary go" : ""));
   const body = h("div", { class: "stage" }, h("div", { class: "result " + tone }, art,
@@ -1609,7 +1616,9 @@ async function loadHub() {
   $("#dry").hidden = !S.hub.dryRun;
   const u = S.hub.orbitUpdate, ub = $("#orbitupd");
   ub.hidden = !u;
-  if (u) { ub.textContent = `orbit ${u.version} is out ↗`; ub.onclick = () => api("/api/hub/open-release", {}).then(r => say(r.message, "ok")).catch(e => say(e.message, "err")); }
+  if (u && u.pending) { ub.textContent = `restart for orbit ${pv(u.version)}`; ub.onclick = restartOrbit; }
+  else if (u && u.here) { ub.textContent = `update orbit to ${pv(u.version)}`; ub.onclick = () => openWizard("orbit", "install"); }
+  else if (u) { ub.textContent = `orbit ${pv(u.version)} is out ↗`; ub.onclick = () => api("/api/hub/open-release", {}).then(r => say(r.message, "ok")).catch(e => say(e.message, "err")); }
 }
 
 // ---- themes: built-in ones are CSS blocks above; custom ones are tokens saved in Orbit's settings
@@ -1795,6 +1804,17 @@ function renderHub() {
         h("button", { class: "btn small", onclick: showHelp }, "keyboard keys"))));
 }
 
+// After Orbit updated itself: a new Orbit starts, this one ends; the page follows it and reloads on the new version.
+async function restartOrbit() {
+  const was = S.hub && S.hub.version;
+  try { say((await api("/api/hub/restart", {})).message); } catch (e) { return say(e.message, "err"); }
+  clearTimeout(S.timer);
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try { const hub = await api("/api/hub"); if (hub.version !== was) return location.reload(); } catch {}
+  }
+  say("Orbit didn't come back by itself: open it again", "err");
+}
 async function openLink(which) {
   try { say((await api("/api/hub/open-link", { which })).message, "ok"); } catch (e) { say(e.message, "err"); }
 }

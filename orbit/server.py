@@ -131,7 +131,7 @@ class Hub:
         self.terminals = Terminals()
         self.last_seen = time.time()   # when a page last asked for anything
         self.host = host or Host()
-        sources = sources or Sources()
+        sources = sources or Sources.from_env()
         self.installer = Installer(self.host, sources,
                                    recipes if recipes is not None else recipes_mod.load(self.host, sources),
                                    dry_run=self.ctx.dry_run, spawn=self.ctx.runner.spawn, on_change=self._installed)
@@ -277,8 +277,9 @@ class Hub:
         latest = rel["tag"].lstrip("vV") if rel else ""
         from .net import is_newer
         return {"installed": inst["installed"], "version": inst.get("version", ""), "supported": sup["level"],
-                "latest": latest, "busy": self.installer.busy(app_id),
-                "update": bool(inst["installed"] and latest and inst.get("version") and is_newer(latest, inst["version"]))}
+                "latest": latest, "busy": self.installer.busy(app_id), "pending": inst.get("pending", ""),
+                "update": bool(inst["installed"] and latest and inst.get("version") and not inst.get("pending")
+                               and is_newer(latest, inst["version"]))}
 
     def install_list(self):
         if self.ctx.config.get("checkUpdates"):
@@ -291,6 +292,8 @@ class Hub:
             d = r.describe()
             if r.id in self.apps:
                 d["icon"] = self.apps[r.id].describe().get("icon", "")
+            elif getattr(r, "self_app", False):
+                d.update(icon="/icon.svg", self=True)
             d.update(self.install_brief(r.id))
             d["installed"] = r.installed()
             out.append(d)
@@ -311,9 +314,11 @@ class Hub:
         if not job:
             raise KeyError(jid)
         item = next((n for n in (job.result or {}).get("next", []) if n.get("id") == nid), None)
-        if not item or item.get("kind") not in ("url", "terminal", "shortcut", "program"):
+        if not item or item.get("kind") not in ("url", "terminal", "shortcut", "program", "restart"):
             raise BadRequest("that isn't available")
         runner = self.ctx.runner
+        if item["kind"] == "restart":
+            return self.restart()
         if item["kind"] == "program":
             # a window the app itself installed (a recipe's own fixed path, never one from the request)
             if not runner.launch(item["argv"]):
@@ -399,8 +404,44 @@ class Hub:
         self.reload()
         return {"ok": True, "id": spec["id"]}
 
+    def restart(self):
+        """Start Orbit again (after it updated itself): the waiting new version takes this one's place, starts, and
+        this one closes its window and ends."""
+        import os
+        import subprocess
+        import sys
+        from . import gui                  # everything this Orbit still needs is loaded before its file changes
+        from .install.recipes.orbit import running_program, switch, waiting
+        if self.ctx.dry_run:
+            return {"ok": True, "message": "dry run: Orbit would restart now"}
+        exe = running_program()
+        if exe and waiting(exe):
+            try:
+                switch(exe)
+            except OSError as e:
+                raise BadRequest(f"couldn't switch to the new Orbit ({e}); this one keeps running") from None
+        argv = ([str(exe)] if exe else [sys.executable, "-m", "orbit"]) + sys.argv[1:]
+        env = dict(os.environ, ORBIT_RESTARTED="1")
+        kw = {"creationflags": 0x00000008} if sys.platform == "win32" else {"start_new_session": True}
+        try:
+            subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, **kw)
+        except OSError as e:
+            raise BadRequest(f"couldn't start Orbit again: {e}; close it and open it yourself") from None
+
+        def leave():
+            gui.close()
+            os._exit(0)
+
+        threading.Timer(0.8, leave).start()
+        return {"ok": True, "message": "restarting Orbit…"}
+
     def orbit_update(self):
-        """A newer Orbit on GitHub? Looked up in the background (with the release checks), never blocking."""
+        """A newer Orbit on GitHub? Looked up in the background (with the release checks), never blocking.
+        A newer Orbit already downloaded and waiting for a restart comes first."""
+        from .install.recipes.orbit import waiting
+        if waiting():
+            return {"version": waiting(), "url": ORBIT_RELEASES, "here": True, "pending": True}
         if not self.ctx.config.get("checkUpdates"):
             return None
         info = self.ctx.releases.cached(ORBIT_REPO)
@@ -410,7 +451,9 @@ class Hub:
         rel = info.get("release") if info.get("ok") else None
         if not rel or not net.is_newer(rel.get("tag", ""), __version__):
             return None
-        return {"version": rel["tag"].lstrip("vV"), "url": rel.get("url") or ORBIT_RELEASES}
+        r = self.installer.recipes.get("orbit")
+        here = bool(r and not any(x["blocking"] for x in r.requirements("install")))
+        return {"version": rel["tag"].lstrip("vV"), "url": rel.get("url") or ORBIT_RELEASES, "here": here}
 
     def github_access(self):
         repos = [r.repo for r in self.installer.recipes.values()] + [ORBIT_REPO]
@@ -583,6 +626,8 @@ def make_handler(hub, port_ref):
                     return self._send(200, hub.check_updates())
                 if path == "/api/hub/menu":
                     return self._send(200, desktop_entry.add(hub.ctx.runner))
+                if path == "/api/hub/restart":
+                    return self._send(200, hub.restart())
                 if path == "/api/hub/open-link":
                     url = LINKS.get(body.get("which"))
                     if not url:

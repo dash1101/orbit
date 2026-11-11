@@ -1,0 +1,191 @@
+"""For CI only: a real standalone Orbit updates itself to a newer build and restarts on it.
+
+    python tools/ci-selfupdate.py <this build> <a build that says 99.0.0> <asset suffix, e.g. linux-x86_64>
+
+A stand-in for GitHub (on 127.0.0.1, named to Orbit by ORBIT_TEST_GITHUB_API) publishes the newer build as release
+v99.0.0 with its SHA256SUMS. A copy of this build is started, asked through its own API to update itself (exactly
+what the window's "update" button does), then to restart; the newer Orbit must come up on the same port and the
+old program must be gone. Run by the build workflow on Linux and Windows.
+"""
+import hashlib
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import urllib.error
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+old_exe, new_exe, suffix = sys.argv[1:4]
+TAG = "v99.0.0"
+NAME = f"orbit-{TAG}-{suffix}"
+DATA = Path(new_exe).read_bytes()
+SUMS = f"{hashlib.sha256(DATA).hexdigest()}  {NAME}\n".encode()
+
+
+def say(text):
+    print(text, flush=True)
+
+
+def fail(text):
+    say(f"::error::{text}")
+    sys.exit(1)
+
+
+class GitHub(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def send(self, code, body, ctype="application/octet-stream"):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        base = f"http://127.0.0.1:{self.server.server_address[1]}"
+        path = self.path.split("?", 1)[0]
+        if path == "/repos/dash1101/orbit/releases":
+            assets = [{"name": n, "size": len(b), "url": f"{base}/api-assets/{n}", "browser_download_url": f"{base}/files/{n}"}
+                      for n, b in ((NAME, DATA), ("SHA256SUMS", SUMS))]
+            rel = [{"tag_name": TAG, "draft": False, "prerelease": True, "published_at": "2026-11-11T00:00:00Z",
+                    "html_url": "", "assets": assets}]
+            return self.send(200, json.dumps(rel).encode(), "application/json")
+        if path == f"/files/{NAME}":
+            return self.send(200, DATA)
+        if path == "/files/SHA256SUMS":
+            return self.send(200, SUMS)
+        self.send(404, b"{}", "application/json")
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def call(port, path, body=None, timeout=10):
+    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method="POST" if body is not None else "GET",
+                                 data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json", "Host": f"127.0.0.1:{port}"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def wait_for(what, check, seconds=90):
+    end = time.time() + seconds
+    while time.time() < end:
+        try:
+            got = check()
+            if got:
+                return got
+        except (OSError, urllib.error.URLError, ValueError):
+            pass
+        time.sleep(1)
+    fail(f"timed out waiting for {what}")
+
+
+def stop_everything(app):
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/IM", Path(old_exe).name], capture_output=True)
+        return
+    for pid in os.listdir("/proc"):
+        if pid.isdigit():
+            try:
+                if os.readlink(f"/proc/{pid}/exe").startswith(str(app)):
+                    os.kill(int(pid), 15)
+            except OSError:
+                pass
+
+
+def scenario(gh, how):
+    """how = "restart" (the window's restart button) or "reopen" (Orbit closed, then started again)."""
+    say(f"\n===== update, then {how}")
+    root = Path(tempfile.mkdtemp(prefix="orbit-selfupdate-"))
+    app = root / "app"
+    app.mkdir()
+    exe = app / Path(old_exe).name
+    shutil.copy2(old_exe, exe)
+    port = free_port()
+    env = dict(os.environ, ORBIT_TEST_GITHUB_API=f"http://127.0.0.1:{gh.server_address[1]}",
+               XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"))
+
+    def start(log):
+        say(f"starting {exe} on port {port}")
+        return subprocess.Popen([str(exe), "--no-window", "--port", str(port)], env=env, stdin=subprocess.DEVNULL,
+                                stdout=open(root / log, "w"), stderr=subprocess.STDOUT)
+
+    start("first.log")
+    try:
+        hub = wait_for("Orbit to start", lambda: call(port, "/api/hub"))
+        say(f"running Orbit {hub['version']}")
+        plan = call(port, "/api/install/orbit/plan", {"op": "install"})
+        say(f"plan: {plan['title']} · blocked: {plan['blocked'] or 'no'}")
+        if plan["blocked"] or plan["title"] != "Update Orbit to 99.0.0":
+            fail("the update isn't offered")
+        job = call(port, "/api/install/orbit/start", {"op": "install"})
+        snap = wait_for("the update", lambda: (lambda j: j if j["state"] != "running" else None)(
+            call(port, f"/api/install/jobs/{job['id']}")), 180)
+        for line in snap["log"]:
+            say("  " + line)
+        if snap["state"] != "done":
+            fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
+        old = exe.with_name(exe.name + ".old")
+        if not exe.with_name(exe.name + ".new").exists() or not exe.with_name(exe.name + ".new.ok").exists():
+            fail("the new program isn't waiting next to the running one")
+        if exe.read_bytes() != Path(old_exe).read_bytes():
+            fail("the running program's file changed before the restart")
+        tag = call(port, "/api/hub").get("orbitUpdate") or {}
+        say(f"the window offers: {tag}")
+        if not tag.get("pending") or tag.get("version") != "99.0.0":
+            fail("the window doesn't offer the restart")
+        if how == "restart":
+            call(port, "/api/hub/restart", {})
+        else:
+            stop_everything(app)
+            wait_for("the port to be free", lambda: not port_busy(port), 30)
+            start("second.log")
+        hub = wait_for("the new Orbit on the same port",
+                       lambda: (lambda h: h if h["version"] == "99.0.0" else None)(call(port, "/api/hub")), 90)
+        say(f"Orbit {hub['version']} answers on port {port}")
+        out = root / "v.txt"
+        subprocess.run([str(exe), "--write-version", str(out)], timeout=120)
+        if out.read_text().strip() != "orbit 99.0.0":
+            fail(f"the program in place says {out.read_text().strip()!r}")
+        wait_for("the old program to be deleted", lambda: not old.exists(), 90)
+        left = sorted(x.name for x in app.iterdir())
+        if left != [exe.name]:
+            fail(f"left next to Orbit: {left}")
+        say(f"{how}: the program in place is 99.0.0 and nothing else is left.")
+    finally:
+        stop_everything(app)
+        for log in ("first.log", "second.log"):
+            try:
+                say(f"--- {log}:\n" + (root / log).read_text(errors="replace")[-2000:])
+            except OSError:
+                pass
+
+
+def port_busy(port):
+    with socket.socket() as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def main():
+    gh = ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
+    threading.Thread(target=gh.serve_forever, daemon=True).start()
+    scenario(gh, "restart")
+    scenario(gh, "reopen")
+    say("\nSelf-update works: after a restart from the window, and after closing Orbit and opening it again.")
+
+
+if __name__ == "__main__":
+    main()

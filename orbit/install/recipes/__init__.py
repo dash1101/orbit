@@ -1,9 +1,10 @@
 """Install recipes for the apps Orbit knows how to install. Add one: subclass `base.Recipe`, list it here."""
 from .beacon import BeaconRecipe
 from .nova import NovaRecipe
+from .orbit import OrbitRecipe
 from .pocketfader import PocketfaderRecipe
 
-ALL = (PocketfaderRecipe, NovaRecipe, BeaconRecipe)
+ALL = (PocketfaderRecipe, NovaRecipe, BeaconRecipe, OrbitRecipe)
 
 
 def load(host, sources):
