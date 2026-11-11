@@ -1047,7 +1047,8 @@ const W = { open: false };
 
 function openWizard(appId, op, jobId) {
   if (W.open) closeWizard(true);
-  const meta = (S.inst && S.inst.apps.find(a => a.id === appId)) || S.apps.find(a => a.id === appId) || { id: appId, name: appId, glyph: "?", color: "#888" };
+  const meta = (S.inst && S.inst.apps.find(a => a.id === appId)) || S.apps.find(a => a.id === appId) ||
+    (appId === "orbit" ? { id: "orbit", name: "Orbit", icon: "/icon.svg", color: "#f0668e", blurb: "This app" } : { id: appId, name: appId, glyph: "?", color: "#888" });
   Object.assign(W, { open: true, app: appId, op, meta, stage: -1, info: null, opts: {}, job: null, logFrom: 0,
                      shown: 0, target: 0, rows: [], logOpen: false, poll: null, failed: false, noOptions: false });
   const wiz = $("#wiz");
