@@ -39,11 +39,11 @@ object Catalog {
         ),
         Listing(
             id = "nova", name = "Nova",
-            blurb = "Secure remote for your Linux home server",
+            blurb = "Secure remote for your home server",
             repo = "dash1101/Nova", pkgs = listOf("app.novalabs.nova"), icon = "nova.svg", color = 0xFF5EC4B6,
             sums = "SHA256SUMS", signature = "SHA256SUMS.sig", signingKey = NOVA_KEY,
             apk = { names -> names.firstOrNull { it == "nova-universal.apk" } ?: names.firstOrNull { it.endsWith("-universal.apk") } },
-            note = "The Nova app pairs with a Nova server on Linux (sudo nova add shows the code).",
+            note = "The Nova app pairs with a Nova server on Linux or Windows: Nova Server on that computer (or sudo nova add) shows the code.",
             extra = "Comes with five home-screen widgets: status, live stats, quick actions, inbox and storage. In Nova: Menu → Home-screen widgets.",
         ),
         Listing(
@@ -52,7 +52,7 @@ object Catalog {
             repo = "dash1101/orbit", pkgs = listOf("app.novalabs.orbit"), icon = "orbit.svg", color = 0xFFF0668E,
             sums = "SHA256SUMS",
             apk = { names -> names.firstOrNull { Regex("""orbit-v[^/]*-android\.apk""").matches(it) } },
-            note = "Orbit updates itself from its GitHub releases. While its repository is private, sign in with GitHub first.",
+            note = "Orbit updates itself from its GitHub releases.",
             self = true,
         ),
     )

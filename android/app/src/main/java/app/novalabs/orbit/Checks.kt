@@ -1,11 +1,6 @@
 package app.novalabs.orbit
 
 import android.util.Base64
-import java.security.KeyFactory
-import java.security.NoSuchAlgorithmException
-import java.security.Signature
-import java.security.spec.InvalidKeySpecException
-import java.security.spec.X509EncodedKeySpec
 
 object Checks {
     /** "<sha256>  <name>" lines -> name to sha256 (also under GitHub's spelling, which turns "~" into "."). */
@@ -22,24 +17,18 @@ object Checks {
         return out
     }
 
-    /** true = signed with the key, false = not, null = this Android can't check ed25519 signatures. */
-    fun ed25519(publicKeyB64: String, message: ByteArray, signatureB64: String): Boolean? {
+    /** Signed with the key? Checked by Orbit itself ([Ed25519]), so it works on every Android version. */
+    fun ed25519(publicKeyB64: String, message: ByteArray, signatureB64: String): Boolean {
         val key = try {
-            KeyFactory.getInstance("Ed25519").generatePublic(X509EncodedKeySpec(Base64.decode(publicKeyB64, Base64.DEFAULT)))
-        } catch (e: NoSuchAlgorithmException) {
-            return null
-        } catch (e: InvalidKeySpecException) {
-            return null
-        }
-        return try {
-            val s = Signature.getInstance("Ed25519")
-            s.initVerify(key)
-            s.update(message)
-            s.verify(Base64.decode(signatureB64.trim(), Base64.DEFAULT))
-        } catch (e: NoSuchAlgorithmException) {
+            Ed25519.keyFromSpki(Base64.decode(publicKeyB64, Base64.DEFAULT))
+        } catch (e: IllegalArgumentException) {
             null
-        } catch (e: Exception) {
-            false
+        } ?: return false
+        val sig = try {
+            Base64.decode(signatureB64.trim(), Base64.DEFAULT)
+        } catch (e: IllegalArgumentException) {
+            return false
         }
+        return Ed25519.verify(key, message, sig)
     }
 }

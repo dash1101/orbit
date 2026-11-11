@@ -14,6 +14,7 @@ DEFAULTS = {
     "order": [],              # app ids in the order they appear in the side bar
     "github": {},             # Orbit's own GitHub sign-in: {"token", "login", "since"} (this file is readable by you only)
     "themes": [],             # custom themes: [{"id": "custom-…", "label", "tokens": {name: "#rrggbb", "radius": 0-14}}]
+    "window": [],             # the window's last size, [width, height] (Linux's own window; browsers keep their own)
 }
 
 

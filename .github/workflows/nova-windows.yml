@@ -22,6 +22,7 @@ jobs:
       - name: Install, check, update and remove Nova through Orbit
         run: python tools/ci-nova-windows.py
         env:
+          PYTHONIOENCODING: utf-8
           GITHUB_TOKEN: ${{ github.token }}     # GitHub's machines share addresses: without it, release lookups get rate-limited
       - name: Nova's own logs
         if: always()

@@ -33,6 +33,9 @@ class WindowsTests(unittest.TestCase):
         net.forget_ports()
         self.addCleanup(net.forget_ports)
         self.addCleanup(lambda: net.set_login_provider(None))
+        ports = mock.patch.multiple("orbit.apps.nova", PORT=9, PLAIN_PORT=9)   # whatever this computer runs on 8095/8495
+        ports.start()
+        self.addCleanup(ports.stop)
 
     def hub(self):
         cfg = Config(Path(self.tmp) / "config.json")

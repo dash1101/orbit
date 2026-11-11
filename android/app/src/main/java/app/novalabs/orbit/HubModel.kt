@@ -291,12 +291,11 @@ class HubModel(app: Application) : AndroidViewModel(app) {
                 s = step("signature")
                 val sigAsset = rel.assets[a.signature] ?: throw Problem("This release isn't signed, so Orbit won't install it.")
                 val sig = withContext(Dispatchers.IO) { GitHub.text(sigAsset, a.repo, token) }
-                when (Checks.ed25519(a.signingKey!!, sums.toByteArray(), sig)) {
-                    true -> { s.detail = "signed with ${a.name}'s release key"; s.end() }
-                    false -> throw Problem("The release's signature doesn't match ${a.name}'s release key, so it won't be installed.",
+                if (!Checks.ed25519(a.signingKey!!, sums.toByteArray(), sig))
+                    throw Problem("The release's signature doesn't match ${a.name}'s release key, so it won't be installed.",
                         "Don't install this download. Check the ${a.name} repository for news.")
-                    null -> { s.detail = "this Android can't check it; the checksum is still checked"; s.end(StepState.SKIPPED) }
-                }
+                s.detail = "signed with ${a.name}'s release key"
+                s.end()
             }
 
             // 4 · download

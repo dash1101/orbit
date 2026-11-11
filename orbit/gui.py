@@ -81,8 +81,14 @@ def _gtk(url, title):
     gi.require_version("WebKit2", "4.1")
     from gi.repository import Gtk, WebKit2
 
+    from .config import Config
+    cfg = Config()
+    size = cfg.get("window")
     win = Gtk.Window(title=title)
-    win.set_default_size(1180, 760)
+    if (isinstance(size, list) and len(size) == 2 and all(isinstance(x, int) and 480 <= x <= 10000 for x in size)):
+        win.set_default_size(*size)
+    else:
+        win.set_default_size(1180, 760)
     win.set_wmclass("orbit", "Orbit")
     try:
         from pathlib import Path
@@ -112,6 +118,13 @@ def _gtk(url, title):
     view.connect("decide-policy", leave)
     view.load_uri(url)
     win.add(view)
+    def remember(*_):
+        w, h = win.get_size()
+        if [w, h] != cfg.get("window"):
+            cfg.update({"window": [w, h]})
+        return False
+
+    win.connect("delete-event", remember)
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
     try:

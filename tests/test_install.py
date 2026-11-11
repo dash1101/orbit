@@ -383,7 +383,7 @@ class TestNova(Base):
         host = Host(system="windows", arch="amd64", home=self.home, env={"ProgramFiles": str(pf), "ProgramData": str(pd)},
                     which={"powershell": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"})
         r = NovaRecipe(host, self.sources)
-        r.release_key, r.port, r.start_tries = self.pub, CLOSED_PORT, 1
+        r.release_key, r.port, r.plain_port, r.start_tries = self.pub, CLOSED_PORT, CLOSED_PORT, 1
         return r
 
     def publish_windows(self):

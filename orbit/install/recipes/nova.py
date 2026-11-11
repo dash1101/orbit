@@ -62,6 +62,7 @@ class NovaRecipe(Recipe):
     version_file = VERSION_FILE
     setup_gui, nova_gui = SETUP_GUI, NOVA_GUI
     port = PORT
+    plain_port = 8095
     start_tries = 30
 
     def support(self):
@@ -329,12 +330,16 @@ class NovaRecipe(Recipe):
             s.pause(0.4)
             return
         s.detail("waiting for Nova to answer")
+        urls = [f"https://127.0.0.1:{self.port}/api/v1/ping"]
+        if self.windows:     # there the plain port is the one that answers on the computer itself
+            urls.insert(0, f"http://127.0.0.1:{self.plain_port}/api/v1/ping")
         for _ in range(self.start_tries):
-            try:
-                if (get_json(f"https://127.0.0.1:{self.port}/api/v1/ping", timeout=1, insecure=True) or {}).get("ok"):
-                    return
-            except HttpError:
-                pass
+            for url in urls:
+                try:
+                    if (get_json(url, timeout=1, insecure=True) or {}).get("ok"):
+                        return
+                except HttpError:
+                    pass
             s.sleep(1)
         s.vars["slow"] = True
         s.log("Nova hasn't answered on this computer yet. It starts answering once it's set up.")

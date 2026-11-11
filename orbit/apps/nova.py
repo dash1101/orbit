@@ -27,6 +27,7 @@ from .. import systemd
 from .base import App, BadRequest, field
 
 PORT = 8495
+PLAIN_PORT = 8095     # Nova web without TLS; on Windows the one that answers on the computer itself
 UNITS = (
     ("nova-api.service", "api"),
     ("nova-gate.service", "access-code gate"),
@@ -122,16 +123,24 @@ class Nova(App):
         hosts = ["127.0.0.1"] + [h for h in out.split() if rc == 0 and ":" not in h]
         return hosts
 
+    def _web_ports(self):
+        """(port, scheme) to look for Nova web on. On Windows the plain port answers on the computer itself
+        (the encrypted one is for the network), so it comes first there."""
+        return ((PLAIN_PORT, "http"), (PORT, "https")) if self._windows() else ((PORT, "https"),)
+
     def address(self):
         url = (self.hub.get("url") or "").rstrip("/")
         if url and urlsplit(url).scheme in ("http", "https"):
             return url
-        if self._found and net.port_open(urlsplit(self._found).hostname, PORT):
-            return self._found
-        for h in self._candidates():
-            if net.port_open(h, PORT):
-                self._found = f"https://{h}:{PORT}"
+        if self._found:
+            u = urlsplit(self._found)
+            if net.port_open(u.hostname, u.port):
                 return self._found
+        for h in self._candidates():
+            for port, scheme in self._web_ports():
+                if net.port_open(h, port):
+                    self._found = f"{scheme}://{h}:{port}"
+                    return self._found
         self._found = None
         return None
 

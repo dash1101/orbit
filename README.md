@@ -9,7 +9,7 @@ change its settings, read its log and update it when a new release is out. It co
 
 Orbit is a small Python program (standard library only) with its own window. It runs on Linux, Windows and
 macOS, only listens on `127.0.0.1`, and only asks for the administrator password when an app has to be installed
-system-wide (Nova), through your system's own password window.
+system-wide (Nova), through your system's own password window or Windows' permission prompt.
 
 ## Install
 
@@ -47,14 +47,16 @@ here. Installing, updating and removing all go through the same five steps:
 |---|---|---|---|
 | **Pocketfader** | its own Python environment in `~/.local/share/pocketfader`, apps-menu entry, systemd user service | the standalone program in `%LOCALAPPDATA%\Programs\Pocketfader`, Start-menu entry, starts at logon | its own Python environment and a LaunchAgent. The YouTube Music remote works; controlling the Mac's volume and other players isn't available on macOS yet |
 | **YTM Beacon** | Beacon's own installer (`ytm-beacon install`): program, browser extension, start at login | same | same |
-| **Nova** | the `.deb` on Debian/Ubuntu (so apt keeps it updated), Nova's one-file installer elsewhere; needs systemd | not available: Nova's server runs on Linux | not available |
+| **Nova** | the `.deb` on Debian/Ubuntu (so apt keeps it updated), Nova's one-file installer elsewhere; needs systemd | a preview: Nova's Windows installer (`nova-windows.zip`) puts it in `C:\Program Files\Nova` with three background tasks that start with Windows, and its own uninstaller removes it. Pairing, devices, approvals, live graphs, alerts, the task manager, power and Docker Desktop work; programs and updates, files, the terminal and backups aren't there yet | not available |
 
-Only Nova needs the administrator password, and Orbit never sees it: your desktop's password window asks for it
-(`pkexec`), or a terminal with `sudo` when there's no such window.
+Only Nova needs the administrator password, and Orbit never sees it: on Linux your desktop's password window asks for
+it (`pkexec`), or a terminal with `sudo` when there's no such window; on Windows, Windows asks for permission once and
+Nova's installer runs without a window of its own, its output in Orbit's progress log.
 
 **What Orbit checks.** Downloads only come from the app's own GitHub releases. Each file is checked against the
 SHA-256 checksums published with the release before it is unpacked or run. Nova's checksums are also checked against
-Nova's release signing key, which is built into Orbit rather than downloaded. Archives can't write outside their
+Nova's release signing key, which is built into Orbit rather than downloaded; Orbit checks the Ed25519 signature
+itself, so this works the same on every system with nothing else installed. Archives can't write outside their
 folder.
 
 **Private repositories** need a GitHub sign-in. Orbit uses, in this order: its own (orbit settings → *github* →
@@ -75,8 +77,8 @@ its Discord status controls are built into Pocketfader.
 
 Installing works like the desktop installer: review what will happen, then each step ticks off with the download's
 progress, then a result. The APK comes from the app's GitHub release and is checked before Android sees it: its
-SHA-256 against the release's checksums, Nova's checksums against Nova's release key (built into Orbit) where the
-phone can check ed25519 signatures, and that the file really is that app. Android's own installer then asks you to
+SHA-256 against the release's checksums, Nova's checksums against Nova's release key (built into Orbit, and checked
+by Orbit itself, so on every Android version), and that the file really is that app. Android's own installer then asks you to
 confirm.
 
 Android only lets an app install others once you allow it ("install unknown apps"). Orbit checks this first and says
@@ -106,8 +108,10 @@ menu* adds a launcher for the copy you downloaded.
 |---|---|---|---|
 | **Pocketfader** | running or not, output device, volume, what's playing, YouTube Music extension, EQ, release | *Pause other players*; address and access token | open web app, desktop window, start/stop/restart, start at login |
 | **YTM Beacon** | what Discord shows and why, Discord connection, extension last seen, what's playing, release; details: Discord user and app (Discord, Vesktop…), application ID, extension build, version, uptime, files | everything on the Discord card: show/hide, private mode, name in member list, album art, progress, badge, button, when paused, words never to show, and the Discord application ID | dashboard, hide for 30 min / 1 h / 3 h, show now, doctor, check for update, update, extension folders, start/stop/restart, start at login |
-| **Nova** | answering or not, version and API level; how the server itself is doing: what needs attention, containers, websites, the fullest drive, the last backup, uptime; every Nova service and timer (the assistant and lighting when set up), failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web; status, doctor, recent actions; pair a phone, a view-only device or a phone that's away from home, paired devices, what's waiting for approval, approve a browser, remove a device; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API; linked servers, plugins |
+| **Nova** | answering or not, version and API level; how the server itself is doing: what needs attention, containers, websites, the fullest drive, the last backup, uptime; every Nova service and timer (the assistant and lighting when set up), failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web and the Nova Server window (Nova 0.9.16 and newer); status, doctor, recent actions, the API's log; pair a phone, a view-only device or a phone that's away from home, paired devices, what's waiting for approval, approve a browser, remove a device; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API; linked servers, plugins |
 | **Your own apps** | the service's state and/or a health address | name, service, health address, web page | open, start/stop/restart, start at login, remove |
+
+**Nova on Windows** (a preview) shows whether Nova answers, its version and API level; its health file and logs are only readable by the administrator there, so *api log* and Nova's commands open in an administrator PowerShell window, and *nova server* opens the Nova Server window from the Start menu.
 
 **Why Nova is mostly read-only here.** Every Nova request except `/ping` must be signed by a paired phone, and risky
 ones are approved on it. Orbit doesn't get around that. It shows Nova's health and opens Nova web or a terminal for
@@ -125,18 +129,20 @@ can't send its own. In a dry run, commands that would change something are shown
 private temporary file that is deleted afterwards, so it never appears on a command line.
 
 **System services** (like Nova's) are never started or stopped directly by Orbit; their actions go through `sudo` in
-Orbit's terminal, so you approve each one with your password.
+Orbit's terminal, so you approve each one with your password. On Windows, Nova's commands open in an administrator
+PowerShell window instead (Windows asks for permission each time); what you type for them, such as a device's name,
+travels encoded, so it can never be read as another command.
 
 ## Themes
 
 Orbit's look is a theme. All of the first ones are text-interface themes: square boxes with the title set into the
 border, monospace type and a small square for each app's status. Pick one in **orbit settings**, or press `t` to cycle.
 
-- **tui · dusk** (default): charcoal with a pink accent
-- **tui · phosphor**: green screen
-- **tui · amber**: amber screen
-- **tui · paper**: light
-- **tui · frost**, **ember**, **ocean**, **lilac**, **mono**
+- **dusk** (default): charcoal with a pink accent
+- **phosphor**: green screen
+- **amber**: amber screen
+- **paper**: light
+- **frost**, **ember**, **ocean**, **lilac**, **mono**
 
 **Your own themes:** *+ new theme* (or *copy & edit* on any theme) opens an editor with every colour, the corner
 rounding and glow, and the whole window previews your changes as you make them. Custom themes are saved in Orbit's
@@ -147,7 +153,7 @@ A theme is a block of colour and shape tokens in `orbit/static/index.html` (`[da
 
 ## Keys
 
-`j`/`k` or `↓`/`↑` move · `1`–`9` jump to an app · `o` overview · `i` install · `,` settings · `r` refresh · `t` next theme · `?` help
+`j`/`k` or `↓`/`↑` move · `1`–`9` jump to an app · `o` overview · `i` install · `,` settings · `r` refresh · `t` next theme · `?` the list of keys
 
 In the installer: `Enter` continues, `Esc` closes (an install keeps going in the background).
 
