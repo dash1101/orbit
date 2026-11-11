@@ -978,7 +978,7 @@ async function renderInstall(full) {
     const sup = a.support.level, inst = a.installed, busy = progress[a.id];
     let line, acts = [];
     if (busy) {
-      line = [spin(), h("span", { style: "margin-left:8px" }, `${busy.op === "uninstall" ? "removing" : "installing"}… ${Math.round(busy.progress * 100)}%`)];
+      line = [spin(), h("span", { style: "margin-left:8px" }, `${busy.op === "uninstall" ? "removing" : inst.installed ? "updating" : "installing"}… ${Math.round(busy.progress * 100)}%`)];
       acts.push(h("button", { class: "btn primary", onclick: () => openWizard(a.id, busy.op, busy.id) }, "show progress"));
     } else if (sup === "none") {
       line = [h("span", { class: "dot s-off" }), h("span", { class: "t-muted" }, `not available on ${d.host.systemName}`)];
