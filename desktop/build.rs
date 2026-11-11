@@ -4,6 +4,7 @@ fn main() {
     #[cfg(feature = "window")]
     tauri_build::build();
     println!("cargo:rerun-if-env-changed=ORBIT_WINDOW_BIN");
+    println!("cargo:rerun-if-env-changed=ORBIT_VERSION");
     if let Ok(p) = std::env::var("ORBIT_WINDOW_BIN") {
         if !p.is_empty() {
             println!("cargo:rerun-if-changed={p}");

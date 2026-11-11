@@ -21,7 +21,11 @@ mod window;
 
 use std::time::{Duration, Instant};
 
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The version; ORBIT_VERSION at build time overrides it (Orbit's own update check builds a "99.0.0").
+pub const VERSION: &str = match option_env!("ORBIT_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 struct Args {
     port: u16,
