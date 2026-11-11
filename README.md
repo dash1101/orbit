@@ -198,6 +198,8 @@ The tests use fakes and small stub servers, so they never touch real services. T
 downloads, checksum and signature checks against a stub GitHub, with fake `pkexec`, `apt-get`, `python3` and
 `systemctl` in a temporary home folder, and the Windows and macOS installs as dry runs.
 
-Two checks run on real machines in CI instead: `tools/ci-nova-windows.py` installs, updates and removes Nova through
-Orbit on GitHub's Windows Server 2022 and 2025 machines, and `tools/ci-selfupdate.py` has a real standalone Orbit
-update itself to a newer build and restart on it, on Linux and Windows.
+The tests run on Linux, Windows and macOS. Two more checks run on real machines in CI: `tools/ci-nova-windows.py`
+installs the newest Nova, Pocketfader and YTM Beacon through the built `orbit.exe` on GitHub's Windows machines,
+checks each one answers, and removes them again (and installs Nova over itself through Orbit's Python code); and
+`tools/ci-selfupdate.py` has a real standalone Orbit update itself to a newer build and restart on it, on Linux and
+Windows.

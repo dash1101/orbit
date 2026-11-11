@@ -1,6 +1,7 @@
 name: apps-on-windows
-# Orbit's own installer puts Nova (its newest published release) on GitHub's Windows machines, checks that it
-# answers and that Orbit's Nova page sees it, installs it again over itself, then removes it: tools/ci-nova-windows.py.
+# On GitHub's Windows machines, Orbit installs the newest releases of its apps for real, checks that each answers and
+# that Orbit's page for it sees that, and removes them again (tools/ci-nova-windows.py): Nova through Orbit's Python
+# code (installed again over itself, too), and Nova, Pocketfader and YTM Beacon through the built orbit.exe.
 on:
   push:
     branches: [main]

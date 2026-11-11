@@ -1,5 +1,11 @@
 **Orbit** by NovaLabs: one place for Pocketfader, Nova and YTM Beacon. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.3.2**
+
+- **Windows: installing Pocketfader no longer fails when the Start menu folder is missing** (as on a new or redirected profile); Orbit's own *Orbit in the Start menu* had the same problem. Found by installing Pocketfader, YTM Beacon and Nova through the real `orbit.exe` on GitHub's Windows machines, which now happens on every change.
+- **Windows: removing YTM Beacon no longer reports its program as left behind.** Beacon deletes itself a moment after it ends, and Orbit now waits for that.
+- If you have 0.3.1, Orbit offers this update itself: *update orbit to 0.3.2* in the top bar.
+
 **New in 0.3.1**
 
 - **Orbit updates itself** on Linux and Windows. When a new version is out, the top bar says *update orbit to …*: Orbit downloads it, checks it against the release's checksums, starts it once to make sure it runs and is that version, and switches to it when you press *restart orbit* (or the next time you open Orbit). The old program is kept until the new one has started, so a failed update leaves Orbit as it was. This is checked on every build by updating a real Orbit to a newer one and restarting it, on Linux and on Windows. On a Mac, download the new `.dmg` as before.
