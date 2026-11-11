@@ -108,10 +108,11 @@ jobs:
           grep -q '"name": "Orbit"' hub.json
           curl -sf http://127.0.0.1:8799/ -o page.html && grep -q "<title>Orbit</title>" page.html
           curl -sf http://127.0.0.1:8799/apps/nova.svg -o /dev/null
+          curl -sf http://127.0.0.1:8799/apps/ytm-starcast.svg -o /dev/null
           curl -sf http://127.0.0.1:8799/api/install -o install.json && grep -q '"host"' install.json
           # Pages must answer quickly although none of the apps run here (Windows takes ~2 s per refused connection).
           for round in cold warm; do
-            for path in /api/apps /api/apps/pocketfader /api/apps/ytm-beacon /api/apps/nova /api/apps/pocketfader/logs /api/hub /api/install; do
+            for path in /api/apps /api/apps/ytm-starcast /api/apps/nova /api/apps/ytm-starcast/logs /api/hub /api/install; do
               t=$(curl -s -o /dev/null -w "%{time_total}" "http://127.0.0.1:8799$path")
               echo "$round $path ${t}s"
               awk -v t="$t" 'BEGIN { exit !(t < 3.0) }' || { echo "too slow: $path took ${t}s"; exit 1; }
@@ -187,9 +188,11 @@ jobs:
           rm -f orbit-android-unsigned.apk         # never published: it can't be installed
           # The files keep one name from release to release (orbit-windows-x64.exe …), so a program that updates
           # itself keeps its name too. Orbit 0.3.4 and older look for names with the version in them to update
-          # themselves (orbit-v0.3.4-windows-x64.exe): through the 0.3 series they get a copy under that name as well.
+          # themselves (orbit-v0.3.4-windows-x64.exe): through the 0.3 series, and 0.4.0 (the release that moves
+          # Pocketfader and YTM Beacon to YTM Starcast, which they can't install), they get a copy under that name as
+          # well.
           case "$GITHUB_REF_NAME" in
-            v0.3.*) for f in orbit-*; do cp "$f" "$(echo "$f" | sed "s/^orbit-/orbit-${GITHUB_REF_NAME}-/")"; done ;;
+            v0.3.*|v0.4.0) for f in orbit-*; do cp "$f" "$(echo "$f" | sed "s/^orbit-/orbit-${GITHUB_REF_NAME}-/")"; done ;;
           esac
           sha256sum orbit-* > SHA256SUMS
           # the release may already exist (the Android app is added later): then add or replace the files

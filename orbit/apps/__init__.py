@@ -1,10 +1,9 @@
 """The apps Orbit knows. Add a built-in one by writing an App subclass and listing it in BUILTIN."""
-from .beacon import Beacon
 from .custom import CustomApp
 from .nova import Nova
-from .pocketfader import Pocketfader
+from .starcast import Starcast
 
-BUILTIN = (Pocketfader, Nova, Beacon)
+BUILTIN = (Starcast, Nova)
 
 
 def load(ctx):

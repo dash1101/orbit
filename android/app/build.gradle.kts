@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "app.novalabs.orbit"
-        // Android 5.0, like Pocketfader's app: the oldest release Jetpack Compose supports.
+        // Android 5.0, like YTM Starcast's app: the oldest release Jetpack Compose supports.
         minSdk = 21
         targetSdk = 34
         versionCode = (findProperty("orbitVersionCode") ?: "1").toString().toInt()

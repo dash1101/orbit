@@ -11,9 +11,10 @@ UA = "orbit-hub"
 
 
 class HttpError(Exception):
-    def __init__(self, status, message):
+    def __init__(self, status, message, text=""):
         super().__init__(message)
         self.status = status
+        self.text = text        # the app's own explanation (the "message" of its JSON reply), when it sent one
 
 
 def _ctx(insecure):
@@ -81,11 +82,14 @@ def request(method, url, body=None, timeout=2.0, headers=None, insecure=False, r
         with urllib.request.urlopen(req, timeout=timeout, context=_ctx(insecure)) as r:
             payload = r.read(4 << 20)
     except urllib.error.HTTPError as e:
+        text = ""
         try:
-            msg = json.loads(e.read(64 << 10) or b"{}").get("error") or e.reason
+            reply = json.loads(e.read(64 << 10) or b"{}")
+            msg = reply.get("error") or e.reason
+            text = reply.get("message") if isinstance(reply.get("message"), str) else ""
         except (ValueError, AttributeError):
             msg = e.reason
-        raise HttpError(e.code, str(msg)) from None
+        raise HttpError(e.code, str(msg), text) from None
     except (urllib.error.URLError, socket.timeout, ConnectionError, OSError) as e:
         if local:
             _note(local, False)

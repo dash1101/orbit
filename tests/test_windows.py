@@ -7,9 +7,8 @@ from pathlib import Path
 from unittest import mock
 
 from orbit import net
-from orbit.apps.beacon import Beacon
 from orbit.apps.nova import Nova
-from orbit.apps.pocketfader import Pocketfader
+from orbit.apps.starcast import Starcast
 from orbit.config import Config
 from orbit.install.engine import Sources
 from orbit.install.host import Host
@@ -20,11 +19,6 @@ from tests.test_orbit import NoReleases
 
 CREATE_NO_WINDOW = 0x08000000
 LINUX_ONLY = {"hostname", "systemctl", "journalctl", "tailscale", "xdg-open", "pactl", "busctl"}
-
-
-class QuietBeacon(Beacon):
-    def __init__(self, ctx):
-        super().__init__(ctx, ports=(9, 10, 11))       # nothing listens there
 
 
 class WindowsTests(unittest.TestCase):
@@ -39,10 +33,10 @@ class WindowsTests(unittest.TestCase):
 
     def hub(self):
         cfg = Config(Path(self.tmp) / "config.json")
-        cfg.update({"apps": {"pocketfader": {"url": "http://127.0.0.1:9"}}})
+        cfg.update({"apps": {"ytm-starcast": {"url": "http://127.0.0.1:9"}}})
         host = Host(system="windows", arch="amd64", home=self.tmp, env={}, which={}, systemd=False)
         src = Sources(api="http://127.0.0.1:9", allow=("http://127.0.0.1:9",), token=lambda: "")
-        return Hub(config=cfg, runner=Runner(), releases=NoReleases(), app_classes=[Pocketfader, Nova, QuietBeacon],
+        return Hub(config=cfg, runner=Runner(), releases=NoReleases(), app_classes=[Starcast, Nova],
                    host=host, sources=src, recipes=load_recipes(host, src))
 
     def test_no_console_windows_and_no_linux_tools(self):
@@ -64,12 +58,12 @@ class WindowsTests(unittest.TestCase):
             for _ in range(2):
                 hub._cache.clear()
                 hub.overview()
-            for app in ("pocketfader", "nova", "ytm-beacon"):
+            for app in ("ytm-starcast", "nova"):
                 hub.detail(app)
                 hub.app(app).logs()
             hub.hub_info()
             nova = next(a for a in hub.overview() if a["id"] == "nova")
-            service_buttons = [a for a in hub.detail("pocketfader")["actions"] if a["id"].startswith("svc:")]
+            service_buttons = [a for a in hub.detail("ytm-starcast")["actions"] if a["id"].startswith("svc:")]
         self.assertEqual(nova["headline"], "Not installed on this computer")
         self.assertFalse(nova.get("unavailable"))          # Nova runs on Windows now (a preview): installable
         for argv, flags in calls:

@@ -1,6 +1,6 @@
 """The install engine: runs a recipe's steps one after another in the background and reports progress.
 
-A recipe (see `recipes/`) turns "install Pocketfader on this Windows PC" into a list of small steps.
+A recipe (see `recipes/`) turns "install YTM Starcast on this Windows PC" into a list of small steps.
 Each step gets a `Session` with everything it may do — download a release file, check its SHA-256,
 unpack it, run a command, ask for the administrator password — and every one of those goes through
 here, so that:

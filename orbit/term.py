@@ -1,4 +1,4 @@
-"""Terminals inside Orbit: an app's command (`sudo nova status`, `ytm-beacon doctor`) runs here, in a real
+"""Terminals inside Orbit: an app's command (`sudo nova status`, `sudo nova doctor`) runs here, in a real
 pseudo-terminal, and the window shows its output and sends what you type — sudo's password prompt and
 interactive questions work as they would in a terminal window.
 
