@@ -56,7 +56,8 @@ class LoginTests(unittest.TestCase):
         st = lg.state()
         self.assertEqual((st["source"], st["login"], st["pending"]), ("orbit", "octo", None))
         self.assertEqual(self.cfg.get("github")["token"], "ghu_secret")
-        self.assertEqual(oct(os.stat(self.cfg.path).st_mode & 0o777), "0o600")
+        if os.name != "nt":      # on Windows the settings folder itself is only yours
+            self.assertEqual(oct(os.stat(self.cfg.path).st_mode & 0o777), "0o600")
         self.assertEqual(gh.calls[-1][1]["grant_type"], "urn:ietf:params:oauth:grant-type:device_code")
         self.assertNotIn("client_secret", gh.calls[-1][1])
         net.set_login_provider(lg.token)

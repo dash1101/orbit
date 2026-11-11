@@ -13,7 +13,8 @@ from orbit.install.engine import Sources
 from orbit.install.host import Host
 from orbit.install.recipes import load as load_recipes
 from orbit.term import Terminals
-from tests.test_orbit import RUNNING, Stub, make_hub
+from tests import unix_only
+from tests.test_orbit import RUNNING, AsOnLinux, Stub, make_hub
 
 
 def wait_done(session, timeout=10):
@@ -28,6 +29,7 @@ class TerminalTests(unittest.TestCase):
         self.t = Terminals()
         self.addCleanup(self.t.stop_all)
 
+    @unix_only
     def test_real_terminal_input_and_hidden_password(self):
         s = self.t.start(["bash", "-c", 'tty >/dev/null && echo tty-ok; read -s -p "pw? " p; echo; echo "len ${#p}"'],
                          "t", cols=77)
@@ -87,7 +89,7 @@ class TerminalActionTests(unittest.TestCase):
             hub.run_action(a, "nope", {})
 
 
-class NovaActionTests(unittest.TestCase):
+class NovaActionTests(AsOnLinux):
     def nova(self, dry_run=False):
         hub = make_hub(dry_run=dry_run, app_classes=())
         return Nova(hub.ctx, local_hosts=[])

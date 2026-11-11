@@ -8,6 +8,7 @@ from pathlib import Path
 from orbit.install.engine import Installer, Sources
 from orbit.install.host import Host
 from orbit.install.recipes.orbit import OrbitRecipe, cleanup_old, switch, waiting
+from tests import unix_only
 from tests.test_install import StubGitHub, sums, wait
 
 
@@ -16,6 +17,7 @@ def program(version):
     return ('#!/bin/sh\nif [ "$1" = "--write-version" ]; then echo "orbit ' + version + '" > "$2"; exit 0; fi\nexit 3\n').encode()
 
 
+@unix_only
 class SelfUpdateTests(unittest.TestCase):
     def setUp(self):
         self.gh = StubGitHub()

@@ -115,7 +115,20 @@ def make_hub(units=None, dry_run=False, app_classes=None, tmp=None):
 
 
 # ------------------------------------------------------------------------------------ units
-class SystemdTests(unittest.TestCase):
+class AsOnLinux(unittest.TestCase):
+    """Adapter tests fake systemctl/journalctl themselves, so they run on any system: Orbit is told it has systemd
+    (and isn't on Windows), which it only checks to avoid running Linux tools elsewhere."""
+
+    def setUp(self):
+        from unittest import mock
+        for target, value in (("orbit.systemd.here", lambda: True), ("orbit.apps.nova.Nova._windows", staticmethod(lambda: False))):
+            m = mock.patch(target, value)
+            m.start()
+            self.addCleanup(m.stop)
+        super().setUp()
+
+
+class SystemdTests(AsOnLinux):
     def test_states(self):
         self.assertEqual(systemd.summarize("a.service", RUNNING)["state"], "running")
         self.assertEqual(systemd.summarize("a.service", STOPPED)["state"], "stopped")
@@ -191,8 +204,9 @@ def beacon_status(**over):
     return s
 
 
-class BeaconTests(unittest.TestCase):
+class BeaconTests(AsOnLinux):
     def setUp(self):
+        super().setUp()
         self.state = beacon_status()
         self.stub = Stub({
             ("GET", "/v1/ping"): lambda b: (200, {"app": "ytm-beacon", "version": "v0.1.4"}),
@@ -261,8 +275,9 @@ class BeaconTests(unittest.TestCase):
 
 
 # ------------------------------------------------------------------------------------ pocketfader
-class PocketfaderTests(unittest.TestCase):
+class PocketfaderTests(AsOnLinux):
     def setUp(self):
+        super().setUp()
         self.prefs = {"pauseOthers": False}
         self.stub = Stub({
             ("GET", "/api/info"): lambda b: (200, {"name": "pocketfader", "version": "0.1.0a9", "auth": False}),
@@ -324,7 +339,7 @@ class PocketfaderTests(unittest.TestCase):
 
 
 # ------------------------------------------------------------------------------------ nova
-class NovaTests(unittest.TestCase):
+class NovaTests(AsOnLinux):
     def test_not_installed(self):
         hub = make_hub(app_classes=())
         n = Nova(hub.ctx, local_hosts=[])
@@ -432,7 +447,7 @@ class NovaTests(unittest.TestCase):
 
 
 # ------------------------------------------------------------------------------------ custom apps
-class CustomTests(unittest.TestCase):
+class CustomTests(AsOnLinux):
     def test_validate(self):
         spec = validate({"name": "My App", "unit": "myapp", "healthUrl": "http://127.0.0.1:1/"})
         self.assertEqual(spec["id"], "my-app")

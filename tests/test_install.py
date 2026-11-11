@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from orbit import net
+from tests import unix_only
 from orbit.install import engine
 from orbit.install.engine import Failed, Installer, Session, Sources, Job, Step, parse_sums, safe_extract
 from orbit.install.host import Host
@@ -186,7 +187,7 @@ class TestPieces(unittest.TestCase):
 
     def test_host_places(self):
         w = Host(system="windows", home="/h", env={"LOCALAPPDATA": "C:/L", "APPDATA": "C:/R"}, which={})
-        self.assertEqual(str(w.local_app_data), "C:/L")
+        self.assertEqual(w.local_app_data, Path("C:/L"))
         self.assertIn("Start Menu", str(w.start_menu))
         m = Host(system="darwin", home="/Users/x", env={}, which={})
         self.assertEqual(str(m.local_app_data), "/Users/x/Library/Application Support")
@@ -222,6 +223,7 @@ class TestSources(Base):
 FAKE_BEACON = 'echo "beacon $*" >> "$MARK"\n[ "$1" = version ] && echo "ytm-beacon v0.1.9 (abc) linux/amd64"\nexit 0\n'
 
 
+@unix_only
 class TestBeacon(Base):
     def recipe(self, system="linux", **kw):
         r = BeaconRecipe(self.host(system, **kw), self.sources)
@@ -287,6 +289,7 @@ class TestBeacon(Base):
 
 
 # ---- Nova ----------------------------------------------------------------------------------
+@unix_only
 @unittest.skipUnless(shutil.which("openssl"), "needs openssl")
 class TestNova(Base):
     def setUp(self):
@@ -501,6 +504,7 @@ exit 3
 '''
 
 
+@unix_only
 class TestPocketfader(Base):
     def setUp(self):
         super().setUp()
@@ -632,6 +636,7 @@ class TestInstallHTTP(Base):
     def call(self, path, body=None):
         return net.request("GET" if body is None else "POST", self.url + path, body=body, timeout=5)
 
+    @unix_only      # opens the result's address the Windows way (os.startfile), not through the recorded launcher
     def test_list_plan_start_follow(self):
         lst = self.call("/api/install")
         self.assertEqual(lst["host"]["system"], "linux")
