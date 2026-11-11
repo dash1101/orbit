@@ -237,8 +237,12 @@ class OrbitRecipe(Recipe):
         try:
             from ...proc import hidden
             p = subprocess.run([str(new_exe), "--write-version", out], stdin=subprocess.DEVNULL,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120, **hidden())
+                               capture_output=True, timeout=120, **hidden())
             code = p.returncode
+            printed = (p.stdout + p.stderr).decode("utf-8", "replace").strip()
+            if code != 0 and printed:
+                for line in printed.splitlines()[-15:]:
+                    s.log("  " + line)
             said = Path(out).read_text(encoding="utf-8").strip()
         except (OSError, subprocess.TimeoutExpired) as e:
             problem = str(e)
