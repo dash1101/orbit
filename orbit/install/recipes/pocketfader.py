@@ -415,7 +415,9 @@ class PocketfaderRecipe(Recipe):
 
     def _win_shortcut(self, s):
         target = self.app_dir() / "pocketfader-gui.exe"
-        self._ps(s, "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(" + _ps_str(self.shortcut_path()) + ");"
+        # the Start menu's folder can be missing (a new or redirected profile): make it first
+        self._ps(s, "New-Item -ItemType Directory -Force -Path " + _ps_str(self.shortcut_path().parent) + " | Out-Null;"
+                    "$s=(New-Object -ComObject WScript.Shell).CreateShortcut(" + _ps_str(self.shortcut_path()) + ");"
                     f"$s.TargetPath={_ps_str(target)};$s.WorkingDirectory={_ps_str(self.app_dir())};"
                     "$s.Description='Phone remote for your computer''s volume and music';$s.Save()",
                  fail="Couldn't add Pocketfader to the Start menu.")

@@ -65,6 +65,7 @@ def add(runner, home=None):
             return {"ok": True, "message": "dry run: would add Orbit to the Start menu"}
         q = lambda x: "'" + str(x).replace("'", "''") + "'"
         args = " ".join(cmd[1:])
+        link.parent.mkdir(parents=True, exist_ok=True)      # a new or redirected profile may not have it yet
         script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut({q(link)});"
                   f"$s.TargetPath={q(cmd[0])};$s.Arguments={q(args)};$s.WorkingDirectory={q(Path(cmd[0]).parent)};"
                   "$s.Description='One place for Pocketfader, Nova and YTM Beacon';$s.Save()")
