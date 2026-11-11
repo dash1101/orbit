@@ -39,7 +39,7 @@ def _post(url, fields, timeout=15):
             return json.loads(e.read(64 << 10) or b"{}")
         except ValueError:
             raise LoginError(f"GitHub answered {e.code}") from None
-    except (urllib.error.URLError, OSError) as e:
+    except (urllib.error.URLError, OSError):
         raise LoginError("Couldn't reach GitHub. Check your internet connection.") from None
 
 

@@ -25,7 +25,7 @@ from .install import recipes as recipes_mod
 from .install.engine import Failed, Installer, Sources
 from .install.host import Host
 from .net import Releases
-from .runner import Runner, open_argv, terminal_argv
+from .runner import Runner, terminal_argv
 from .term import Terminals
 
 STATIC = Path(__file__).parent / "static"

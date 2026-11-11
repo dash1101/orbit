@@ -8,7 +8,7 @@ from pathlib import Path
 from orbit.install.engine import Installer, Sources
 from orbit.install.host import Host
 from orbit.install.recipes.orbit import OrbitRecipe, cleanup_old, switch, waiting
-from tests.test_install import StubGitHub, script, sums, wait
+from tests.test_install import StubGitHub, sums, wait
 
 
 def program(version):

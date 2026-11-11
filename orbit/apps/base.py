@@ -14,7 +14,7 @@ import re
 
 from .. import systemd
 from ..net import HttpError
-from ..runner import open_argv, terminal_argv
+from ..runner import terminal_argv
 
 STATES = ("ok", "warn", "down", "off", "unknown")
 
