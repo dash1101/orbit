@@ -26,7 +26,7 @@ macOS, Orbit opens as an app window in Edge, Chrome or Brave, or as a tab in you
 
 | Option | |
 |---|---|
-| `--dry-run` | Read everything, change nothing: actions and settings are recorded instead of applied, and installs play out step by step without downloading, writing or running anything. |
+| `--dry-run` | Read everything, change nothing: actions and the apps' settings are recorded instead of applied, and installs play out step by step without downloading, writing or running anything. Orbit's own settings (its theme, the order of the apps) are still saved. |
 | `--no-window` | Only run the server and print its address. |
 | `--port N` | Use another port (default 8790). |
 

@@ -13,7 +13,7 @@ def main(argv=None):
     p.add_argument("--port", type=int, default=8790, help="local port (default 8790; 0 = any free port)")
     p.add_argument("--no-window", action="store_true", help="only run the server; open the printed address yourself")
     p.add_argument("--dry-run", action="store_true",
-                   help="read everything, change nothing: actions and settings are recorded instead of applied")
+                   help="read everything, change nothing: actions and the apps' settings are recorded instead of applied")
     p.add_argument("--version", action="version", version=f"orbit {__version__}")
     p.add_argument("--write-version", metavar="FILE", help=argparse.SUPPRESS)   # for Orbit's own updater
     a = p.parse_args(argv)
