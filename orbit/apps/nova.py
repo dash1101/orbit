@@ -1,4 +1,4 @@
-"""Nova: secure remote for a Linux home server (system services; its API is signed by a paired phone).
+"""Nova: secure remote for a home server (system services; its API is signed by a paired phone).
 
 Orbit can't — and shouldn't — use Nova's API: every request except /ping must be signed by a paired device,
 and risky ones are approved on the phone. So here Nova gets: reachability and version (public /ping),
@@ -7,9 +7,16 @@ the state of its systemd units, release checks, and doors into Nova web and the 
 How the *server* is doing (what needs attention, containers, drives, the last backup) comes from the file Nova's
 own monitor writes for dashboards, which anyone on this computer may read. It is only read, and only when Nova
 runs on this computer.
+
+On Windows (a preview of Nova there) the server is three Task Scheduler tasks, its files are only readable by the
+administrator, and the `nova` command needs an administrator window: Orbit shows whether Nova answers and its
+version, and opens an administrator PowerShell window for each command (Windows asks for permission).
 """
+import base64
 import json
+import os
 import re
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +44,7 @@ OPTIONAL_UNITS = (
 )
 # What Nova's monitor last saw (nova_alerts.py writes it for dashboards, world-readable).
 STATUS_FILE = Path("/var/lib/nova-alerts/www/status.json")
+NOVA_GUI = "/usr/sbin/nova-gui"           # the Nova Server window (Nova 0.9.16 and newer); asks for the password itself
 STALE_AFTER = 15 * 60          # the monitor runs every few seconds to minutes; older than this, it has stopped
 _LEAD = re.compile(r"^[^\w/~]+\s*", re.UNICODE)          # the status emoji in front of a title
 
@@ -49,7 +57,7 @@ class Nova(App):
     id = "nova"
     icon = "nova.svg"
     name = "Nova"
-    blurb = "Secure remote for your Linux home server"
+    blurb = "Secure remote for your home server"
     glyph = "NV"
     color = "#5ec4b6"
     repo = "dash1101/Nova"
@@ -61,6 +69,44 @@ class Nova(App):
         super().__init__(ctx)
         self._local_hosts = local_hosts
         self._found = None
+
+    # ---- Windows ------------------------------------------------------------------------
+    @staticmethod
+    def _windows():
+        return sys.platform == "win32"
+
+    @staticmethod
+    def win_dir():
+        return os.path.join(os.environ.get("ProgramFiles") or "C:\\Program Files", "Nova")
+
+    def win_version(self):
+        try:
+            with open(os.path.join(self.win_dir(), "lib", "VERSION"), encoding="utf-8") as f:
+                return f.read().strip()
+        except OSError:
+            return ""
+
+    WIN_TERM = {   # what the Windows server's `nova` command can do (docs/WINDOWS.md in Nova)
+        "status": ["status"], "doctor": ["doctor"], "log": ["log"], "add": ["add"], "add-viewer": ["add", "--viewer"],
+        "add-remote": ["add", "--remote"], "approvals": ["approve"], "links": ["link"], "plugins": ["plugin", "list"],
+        "devices": ["devices"],
+    }
+
+    def win_admin_window(self, title, words):
+        """An administrator PowerShell window running `nova <words>` (or a script), left open to read.
+        The command travels base64-encoded (-EncodedCommand), so nothing in it can be misread as more commands."""
+        q = lambda s: "'" + str(s).replace("'", "''") + "'"
+        if words and words[0] == "@script":
+            body = words[1]
+        else:
+            body = "& " + q(os.path.join(self.win_dir(), "nova.cmd")) + "".join(" " + q(w) for w in words)
+        inner = f"$host.UI.RawUI.WindowTitle = {q(title)}; {body}"
+        enc = base64.b64encode(inner.encode("utf-16-le")).decode("ascii")
+        outer = ("Start-Process powershell.exe -Verb RunAs -ArgumentList "
+                 f"'-NoExit','-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','{enc}'")
+        if not self.ctx.runner.launch(["powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-Command", outer]):
+            raise BadRequest("couldn't start PowerShell")
+        return {"ok": True, "message": f"opened an administrator window: {title} (Windows asks for permission)"}
 
     def hub_fields(self):
         return [field("url", "Nova web address", "text", self.hub.get("url") or "", scope="hub",
@@ -145,6 +191,8 @@ class Nova(App):
         return out
 
     def status(self):
+        if self._windows():
+            return self.win_status()
         names = dict(UNITS)
         units = []
         for u, label in UNITS:
@@ -208,6 +256,40 @@ class Nova(App):
             s["update"] = rel
         return s
 
+    def win_status(self):
+        version = self.win_version()
+        s = {"units": [], "facts": []}
+        addr = self.address()
+        ping = None
+        if addr:
+            try:
+                ping = net.get_json(addr + "/api/v1/ping", timeout=2, insecure=True)
+            except net.HttpError as e:
+                s["detail"] = str(e)
+        f = s["facts"]
+        if not version and not ping:
+            s.update(state="off", headline="Not installed on this computer" + ("" if self.hub.get("url") else
+                                                                                  " — set its address in settings"))
+            return s
+        if addr:
+            f.append(["web", addr])
+        if version:
+            f.append(["installed", f"{self.win_dir()} (a preview on Windows)"])
+        if ping and ping.get("ok"):
+            s["version"] = ping.get("api", "") or version
+            f.append(["api level", f"{ping.get('api_level')} (oldest served {ping.get('min_level')})"])
+            s.update(state="ok", headline="Running")
+        else:
+            s["version"] = version
+            s.update(state="down", headline="Nova isn't answering",
+                     detail="Its three tasks are in Task Scheduler (folder \\Nova\\); its logs are in C:\\ProgramData\\Nova\\log.")
+        if self.ctx.runner.available("tailscale"):
+            f.extend(x for x in self.remote_facts() if x[0] == "tailscale")
+        rel = self.release_info(s.get("version", ""))
+        if rel:
+            s["update"] = rel
+        return s
+
     def remote_facts(self):
         """Away-from-home: Tailscale and the Cloudflare tunnel, read without root."""
         out = []
@@ -235,18 +317,45 @@ class Nova(App):
         return out
 
     def settings(self):
+        how = "“nova server” in actions" if self._windows() else "“sudo nova setup”"
         return [
             {"title": "nova", "fields": [field("_note", "", "note",
                 "Nova's own settings live in Nova web and the Nova app; risky changes are approved on your phone, "
-                "so they aren't changed from here. Use “open nova web” or “sudo nova setup”.")]},
+                f"so they aren't changed from here. Use “open nova web” or {how}.")]},
             {"title": "connection", "fields": self.hub_fields()},
         ]
 
-    def actions(self):
+    def win_actions(self):
+        w = lambda id_, label, group, **kw: dict(id="win:" + id_, label=label, group=group, **kw)
+        acts = [{"id": "open", "label": "open nova web", "group": "open", "primary": True}]
+        if self.win_version():
+            acts.append({"id": "gui", "label": "nova server", "group": "open"})
+        acts.append({"id": "releases", "label": "releases", "group": "open"})
+        if not self.win_version():
+            return acts
+        approve = next(a for a in self.actions(linux=True) if a["id"] == "term:approve")
+        remove = next(a for a in self.actions(linux=True) if a["id"] == "term:remove")
+        acts += [
+            w("status", "status", "check"), w("doctor", "doctor", "check"), w("log", "recent actions", "check"),
+            w("journal", "api log", "check"),
+            w("add", "pair a phone", "phones & browsers"), w("add-viewer", "pair a view-only device", "phones & browsers"),
+            w("add-remote", "pair a phone that's away from home", "phones & browsers"),
+            w("devices", "paired devices", "phones & browsers"), w("approvals", "waiting for approval", "phones & browsers"),
+            w("approve", "approve a browser", "phones & browsers", ask=approve["ask"]),
+            w("remove", "remove a device", "phones & browsers", danger=True, ask=remove["ask"]),
+            w("links", "linked servers", "more"), w("plugins", "plugins", "more"),
+        ]
+        return acts
+
+    def actions(self, linux=False):
+        if self._windows() and not linux:
+            return self.win_actions()
         t = lambda id_, label, group, changes=False, **kw: dict(id=id_, label=label, group=group, term=True,
                                                                changes=changes, **kw)
+        gui = [{"id": "gui", "label": "nova server", "group": "open"}] if os.path.exists(NOVA_GUI) else []
         return [
             {"id": "open", "label": "open nova web", "group": "open", "primary": True},
+            *gui,
             {"id": "releases", "label": "releases", "group": "open"},
             t("term:status", "status", "check"),
             t("term:doctor", "doctor", "check"),
@@ -343,6 +452,31 @@ class Nova(App):
         return None
 
     def run_action(self, action, args):
+        if action == "gui" and not self._windows():
+            if not os.path.exists(NOVA_GUI) or not self.ctx.runner.launch([NOVA_GUI]):
+                raise BadRequest("Nova Server's window isn't installed (it comes with Nova 0.9.16 and newer)")
+            return {"ok": True, "message": "opened Nova Server (it asks for your password)"}
+        if action == "gui" and self._windows():
+            lnk = os.path.join(os.environ.get("ProgramData") or "C:\\ProgramData", "Microsoft", "Windows", "Start Menu",
+                               "Programs", "Nova Server.lnk")
+            if not os.path.exists(lnk) or not self.ctx.runner.open_file(lnk):
+                raise BadRequest("Nova Server isn't in the Start menu; reinstall Nova to bring it back")
+            return {"ok": True, "message": "opened Nova Server"}
+        if action.startswith("win:") and self._windows():
+            key = action[4:]
+            label = next((a["label"] for a in self.win_actions() if a["id"] == action), key)
+            if key == "approve":
+                return self.win_admin_window("Nova · approve a browser",
+                                             ["approve", self.ask_value(action, args).replace(" ", "")])
+            if key == "remove":
+                return self.win_admin_window("Nova · remove a device", ["remove", self.ask_value(action, args)])
+            if key == "journal":
+                log = os.path.join(os.environ.get("ProgramData") or "C:\\ProgramData", "Nova", "log", "api.log")
+                return self.win_admin_window("Nova · api log",
+                                             ["@script", "Get-Content -Tail 300 '" + log.replace("'", "''") + "'"])
+            if key in self.WIN_TERM:
+                return self.win_admin_window(f"Nova · {label}", self.WIN_TERM[key])
+            raise BadRequest("unknown action")
         if action == "open":
             addr = self.address()
             if not addr:
@@ -353,6 +487,9 @@ class Nova(App):
         raise BadRequest("unknown action")
 
     def logs(self):
+        if self._windows():
+            return ("(Nova's logs are in C:\\ProgramData\\Nova\\log, which only the administrator can read.\n"
+                    " Use “api log” under actions to open the newest lines in an administrator window.)")
         out = systemd.journal(self.ctx.runner, "nova-api.service", user=False)
         if not out.strip() or "No entries" in out:
             return ("(Nothing here that your account may read. Nova runs as a system service, and its log is only "

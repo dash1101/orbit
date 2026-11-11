@@ -16,6 +16,7 @@ import threading
 import time
 import unittest
 import zipfile
+from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -305,6 +306,7 @@ class TestNova(Base):
         which.update(kw.pop("which", {}))
         r = NovaRecipe(self.host("linux", which=which, **kw), self.sources)
         r.release_key, r.version_file, r.port, r.start_tries = self.pub, self.vfile, CLOSED_PORT, 1
+        r.setup_gui, r.nova_gui = getattr(self, "gui", None) or (str(self.tmp / "no-setup"), str(self.tmp / "no-gui"))
         return r
 
     def publish(self, sign_with=None):
@@ -351,20 +353,128 @@ class TestNova(Base):
         self.assertEqual(snap["state"], "failed")
         self.assertIn("password window was closed", snap["error"])
 
+    def test_novas_own_windows_after_installing_when_it_has_them(self):
+        self.publish()
+        self.gui = (script(self.bin / "setup-desktop", "exit 0\n"), script(self.bin / "nova-gui", "exit 0\n"))
+        snap = wait(self.installer(self.recipe()).start("nova", "install", {}))
+        self.assertEqual(snap["state"], "done", snap["error"])
+        nxt = {n["id"]: n for n in snap["result"]["next"]}
+        self.assertEqual((nxt["setup"]["kind"], nxt["setup"]["argv"]), ("program", [self.gui[0]]))
+        self.assertEqual((nxt["pair"]["kind"], nxt["pair"]["argv"]), ("program", [self.gui[1]]))
+
     def test_other_linux_uses_the_one_file_installer(self):
         self.publish()
         r = self.recipe(which={"apt-get": None, "dpkg": None})
         self.assertEqual(r.assets(self.sources.latest("dash1101/Nova"))[0], "nova-installer.run")
 
-    def test_not_on_windows_macos_or_without_systemd(self):
-        for system in ("windows", "darwin"):
-            r = NovaRecipe(self.host(system), self.sources)
-            info = r.info("install")
-            self.assertEqual(info["support"]["level"], "none")
-            self.assertIn("runs on Linux", info["blocked"])
-            with self.assertRaises(Failed):
-                r.plan("install")
+    def test_not_on_macos_or_without_systemd(self):
+        r = NovaRecipe(self.host("darwin"), self.sources)
+        info = r.info("install")
+        self.assertEqual(info["support"]["level"], "none")
+        self.assertIn("runs on Linux", info["blocked"])
+        with self.assertRaises(Failed):
+            r.plan("install")
         self.assertIn("systemd", NovaRecipe(self.host(systemd=False), self.sources).support()["note"])
+
+    # ---- Windows (a preview of Nova there) --------------------------------------------------
+    def win_recipe(self):
+        pf, pd = self.tmp / "Program Files", self.tmp / "ProgramData"
+        pf.mkdir(exist_ok=True)
+        host = Host(system="windows", arch="amd64", home=self.home, env={"ProgramFiles": str(pf), "ProgramData": str(pd)},
+                    which={"powershell": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"})
+        r = NovaRecipe(host, self.sources)
+        r.release_key, r.port, r.start_tries = self.pub, CLOSED_PORT, 1
+        return r
+
+    def publish_windows(self):
+        import base64
+        import io
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("Nova/windows/install.ps1", "# Nova's installer\r\n")
+            z.writestr("Nova/windows/uninstall.ps1", "# Nova's uninstaller\r\n")
+            z.writestr("Nova/api/server.py", "API_VERSION = \"0.9.20-alpha\"\n")
+        files = {"nova-windows.zip": buf.getvalue()}
+        listed = sums(files)
+        sumfile = self.tmp / "SUMS"
+        sumfile.write_bytes(listed)
+        sig = subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(self.key), "-rawin", "-in", str(sumfile)],
+                             check=True, capture_output=True).stdout
+        self.gh.publish("dash1101/Nova", "v0.9.20-alpha",
+                        dict(files, SHA256SUMS=listed, **{"SHA256SUMS.sig": base64.b64encode(sig) + b"\n"}))
+
+    def test_windows_preview_installs_with_one_permission_prompt(self):
+        self.publish_windows()
+        r = self.win_recipe()
+        info = r.info("install")
+        self.assertEqual(info["support"]["level"], "limited")
+        self.assertFalse(info["blocked"], info)
+        self.assertEqual(info["needsAdmin"], "Windows asks once")
+        self.assertEqual(r.assets(self.sources.latest("dash1101/Nova")), ["nova-windows.zip", "SHA256SUMS", "SHA256SUMS.sig"])
+        self.assertEqual([o["key"] for o in info["options"]], ["firewall"])
+        self.assertIn("unpack", [s["id"] for s in info["steps"]])
+        ran = []
+
+        def admin(sess, script, args=(), what="", hint=""):
+            ran.append((Path(script), list(args)))
+            (r.win_dir / "lib").mkdir(parents=True, exist_ok=True)
+            (r.win_dir / "lib" / "VERSION").write_text("0.9.20-alpha\r\n")
+            return 0, ""
+
+        with mock.patch.object(Session, "admin_windows", admin):
+            snap = wait(self.installer(r).start("nova", "install", {"firewall": False}))
+        self.assertEqual(snap["state"], "done", snap["error"] + "\n" + "\n".join(snap["log"]))
+        self.assertIn("Release signature checks out", "\n".join(snap["log"]))
+        script_path, args = ran[0]
+        self.assertEqual(script_path.parts[-3:], ("Nova", "windows", "install.ps1"))
+        self.assertTrue(str(script_path).startswith(tempfile.gettempdir()) or "orbit-install-" in str(script_path))
+        self.assertEqual(args, ["-NoFirewall"])
+        self.assertEqual(r.detect(), {"installed": True, "version": "0.9.20-alpha", "where": str(r.win_dir),
+                                      "how": "Nova's Windows installer"})
+        nxt = {n["id"]: n for n in snap["result"]["next"]}
+        self.assertEqual(nxt["gui"]["kind"], "shortcut")
+        self.assertTrue(nxt["gui"]["path"].endswith("Nova Server.lnk"))
+
+    def test_windows_tampered_zip_never_reaches_the_installer(self):
+        self.publish_windows()
+        self.gh.files["/files/dash1101/Nova/v0.9.20-alpha/nova-windows.zip"] = b"PK not the zip that was signed"
+        r = self.win_recipe()
+        with mock.patch.object(Session, "admin_windows", side_effect=AssertionError("ran the installer")):
+            snap = wait(self.installer(r).start("nova", "install", {}))
+        self.assertEqual(snap["state"], "failed")
+        self.assertIn("doesn't match its published checksum", snap["error"])
+
+    def test_windows_remove_uses_novas_uninstaller(self):
+        r = self.win_recipe()
+        self.assertIn("isn't installed", r.info("uninstall")["blocked"])
+        (r.win_dir / "lib").mkdir(parents=True)
+        (r.win_dir / "lib" / "VERSION").write_text("0.9.20-alpha")
+        r.forget()
+        self.assertIn("uninstaller isn't in", r.info("uninstall")["blocked"])
+        (r.win_dir / "uninstall.ps1").write_text("# uninstaller")
+        r.forget()
+        self.assertFalse(r.info("uninstall")["blocked"])
+        ran = []
+
+        def admin(sess, script, args=(), what="", hint=""):
+            ran.append((Path(script).name, list(args)))
+            shutil.rmtree(r.win_dir)
+            return 0, ""
+
+        with mock.patch.object(Session, "admin_windows", admin):
+            snap = wait(self.installer(r).start("nova", "uninstall", {"purge": True}))
+        self.assertEqual(snap["state"], "done", snap["error"])
+        self.assertEqual(ran, [("uninstall.ps1", ["-Purge"])])
+        self.assertFalse(r.detect()["installed"])
+
+    def test_windows_dry_run_changes_nothing(self):
+        self.publish_windows()
+        r = self.win_recipe()
+        snap = wait(self.installer(r, dry_run=True).start("nova", "install", {}))
+        self.assertEqual(snap["state"], "done", snap["error"])
+        self.assertIn("would run, as the administrator", "\n".join(snap["log"]))
+        self.assertFalse(r.win_dir.exists() and any(r.win_dir.iterdir()))
 
     def test_uninstall_only_for_the_debian_package(self):
         self.vfile.write_text("0.9.13~alpha")

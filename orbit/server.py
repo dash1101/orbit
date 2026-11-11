@@ -297,9 +297,20 @@ class Hub:
         if not job:
             raise KeyError(jid)
         item = next((n for n in (job.result or {}).get("next", []) if n.get("id") == nid), None)
-        if not item or item.get("kind") not in ("url", "terminal"):
+        if not item or item.get("kind") not in ("url", "terminal", "shortcut", "program"):
             raise BadRequest("that isn't available")
         runner = self.ctx.runner
+        if item["kind"] == "program":
+            # a window the app itself installed (a recipe's own fixed path, never one from the request)
+            if not runner.launch(item["argv"]):
+                raise BadRequest("couldn't open it; run: " + " ".join(item["argv"]))
+            return {"ok": True, "message": "opened " + item["label"]}
+        if item["kind"] == "shortcut":
+            # a Start-menu entry the install just made (a recipe's own path, never one from the request)
+            path = str(item.get("path") or "")
+            if not path.lower().endswith(".lnk") or not runner.open_file(path):
+                raise BadRequest("couldn't open it; look for it in the Start menu")
+            return {"ok": True, "message": "opened " + path.rsplit("\\", 1)[-1].rsplit("/", 1)[-1][:-4]}
         if item["kind"] == "url":
             url = item["url"]
             if not url.startswith(("http://127.0.0.1:", "https://127.0.0.1:", "http://localhost:")):

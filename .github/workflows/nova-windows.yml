@@ -1,0 +1,30 @@
+name: nova-on-windows
+# Orbit's own installer puts Nova (its newest published release) on GitHub's Windows machines, checks that it
+# answers and that Orbit's Nova page sees it, installs it again over itself, then removes it: tools/ci-nova-windows.py.
+on:
+  push:
+    branches: [main]
+    paths: ["orbit/install/**", "orbit/apps/nova.py", "orbit/ed25519.py", "orbit/net.py", "tools/ci-nova-windows.py",
+            ".github/workflows/nova-windows.yml"]
+  workflow_dispatch:
+jobs:
+  nova:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install, check, update and remove Nova through Orbit
+        run: python tools/ci-nova-windows.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}     # GitHub's machines share addresses: without it, release lookups get rate-limited
+      - name: Nova's own logs
+        if: always()
+        shell: powershell
+        run: |
+          foreach ($f in Get-ChildItem "$env:ProgramData\Nova\log\*.log" -ErrorAction SilentlyContinue) { Write-Host "`n===== $($f.Name)"; Get-Content $f.FullName -Tail 60 }

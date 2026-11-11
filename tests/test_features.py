@@ -193,17 +193,17 @@ class ThemeTests(unittest.TestCase):
 class AvailabilityTests(unittest.TestCase):
     def test_not_available_on_this_system_yet(self):
         tmp = tempfile.mkdtemp()
-        host = Host(system="windows", arch="amd64", home=tmp, env={}, which={}, systemd=False)
+        host = Host(system="darwin", arch="arm64", home=tmp, env={}, which={}, systemd=False)
         src = Sources(api="http://127.0.0.1:9", allow=("http://127.0.0.1:9",), token=lambda: "")
         hub = make_hub(app_classes=[Nova], tmp=tmp)
         hub2 = type(hub)(config=hub.ctx.config, runner=hub.ctx.runner, releases=hub.ctx.releases, app_classes=[Nova],
                          host=host, sources=src, recipes=load_recipes(host, src))
         card = next(a for a in hub2.overview() if a["id"] == "nova")
-        self.assertEqual(card["headline"], "Not available on Windows yet")
+        self.assertEqual(card["headline"], "Not available on macOS yet")
         self.assertEqual(card["state"], "off")
         self.assertTrue(card["unavailable"])
         self.assertEqual(card["icon"], "/apps/nova.svg")
-        self.assertIn("isn't available on Windows yet", hub2.detail("nova")["status"]["detail"])
+        self.assertIn("isn't available on macOS yet", hub2.detail("nova")["status"]["detail"])
 
 
 if __name__ == "__main__":

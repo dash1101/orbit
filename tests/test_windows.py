@@ -67,12 +67,66 @@ class WindowsTests(unittest.TestCase):
             hub.hub_info()
             nova = next(a for a in hub.overview() if a["id"] == "nova")
             service_buttons = [a for a in hub.detail("pocketfader")["actions"] if a["id"].startswith("svc:")]
-        self.assertEqual(nova["headline"], "Not available on Windows yet")
+        self.assertEqual(nova["headline"], "Not installed on this computer — set its address in settings")
+        self.assertFalse(nova.get("unavailable"))          # Nova runs on Windows now (a preview): installable
         for argv, flags in calls:
             self.assertTrue(flags & CREATE_NO_WINDOW, f"{argv} would flash a console window")
         ran = {Path(argv[0]).name.lower().removesuffix(".exe") for argv, _ in calls}
         self.assertFalse(ran & LINUX_ONLY, f"ran Linux-only tools on Windows: {ran & LINUX_ONLY}")
         self.assertFalse(service_buttons, "no systemd service buttons on Windows")
+
+    def test_nova_commands_open_an_administrator_window_safely(self):
+        import base64
+        import os
+        pf = Path(self.tmp) / "pf"
+        (pf / "Nova" / "lib").mkdir(parents=True)
+        (pf / "Nova" / "lib" / "VERSION").write_text("0.9.16-alpha")
+        launched = []
+
+        class R(Runner):
+            def launch(self, argv):
+                launched.append(argv)
+                return True
+
+        cfg = Config(Path(self.tmp) / "config.json")
+        from orbit.server import Ctx, Jobs
+        with mock.patch("sys.platform", "win32"), mock.patch.dict(os.environ, {"ProgramFiles": str(pf)}):
+            nova = Nova(Ctx(cfg, R(), NoReleases(), Jobs()), local_hosts=[])
+            ids = [a["id"] for a in nova.actions()]
+            self.assertIn("win:add", ids)
+            self.assertIn("gui", ids)
+            self.assertNotIn("term:update", ids)             # not on a Windows server yet
+            from orbit.apps.base import BadRequest
+            with self.assertRaises(BadRequest):     # not a device name: never reaches a window
+                nova.run_action("win:remove", {"value": "Pat's phone'; Remove-Item C:\\ -Recurse"})
+            self.assertEqual(launched, [])
+            nova.run_action("win:remove", {"value": "Pat's phone"})
+        argv = launched[0]
+        self.assertEqual(argv[:2], ["powershell.exe", "-NoProfile"])
+        enc = argv[-1].split("'-EncodedCommand','")[1].rstrip("'")
+        inner = base64.b64decode(enc).decode("utf-16-le")
+        # the device name is one quoted argument to nova.cmd, its quote doubled: never a second command
+        self.assertIn("'remove' 'Pat''s phone'", inner)
+        self.assertTrue(inner.split("; ", 1)[1].startswith("& '"))
+        self.assertIn("nova.cmd'", inner)
+
+    def test_nova_page_on_windows(self):
+        import os
+        pf = Path(self.tmp) / "pf2"
+        with mock.patch("sys.platform", "win32"), mock.patch.dict(os.environ, {"ProgramFiles": str(pf)}), \
+                mock.patch("shutil.which", lambda n, *a, **k: None):
+            hub = self.hub()
+            d = hub.detail("nova")
+            self.assertEqual(d["status"]["headline"], "Not installed on this computer — set its address in settings")
+            self.assertEqual([a["id"] for a in d["actions"]], ["open", "releases"])
+            self.assertIn("only the administrator can read", hub.app("nova").logs())
+            (pf / "Nova" / "lib").mkdir(parents=True)
+            (pf / "Nova" / "lib" / "VERSION").write_text("0.9.16-alpha")
+            hub._cache.clear()
+            d = hub.detail("nova")
+        self.assertEqual(d["status"]["state"], "down")         # installed, not answering (nothing listens in tests)
+        self.assertEqual(d["status"]["version"], "0.9.16-alpha")
+        self.assertIn("win:status", [a["id"] for a in d["actions"]])
 
     def test_links_open_through_the_windows_shell(self):
         with mock.patch("sys.platform", "win32"), mock.patch("os.startfile", create=True) as start:

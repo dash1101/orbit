@@ -402,6 +402,87 @@ class Session:
                 return 0, ""
         raise Failed("Gave up waiting for the terminal window.", "Run it again when you're ready.")
 
+    def admin_windows(self, script, args=(), what="make the change", hint=""):
+        """Run a PowerShell script as the administrator (Windows): Windows asks for permission once (the UAC
+        prompt), the script runs without a window of its own, and what it prints lands in this job's log.
+
+        The elevated PowerShell can't hand its output back directly, so it writes it to a file in the
+        temporary folder that is read as it grows. Its exit code comes back through Start-Process.
+        """
+        script = Path(script)
+        args = [str(a) for a in args]
+        shown = " ".join([_q(str(script))] + args)
+        self.detail("waiting for you to allow it in Windows' prompt")
+        self.log(f"Asking Windows for permission to {what}: {shown}")
+        if self.dry_run:
+            self.pause(0.6)
+            self.log(f"dry run: would run, as the administrator, powershell -File {shown}")
+            return 0, ""
+        log = self.tmp / "admin-output.log"
+        run = self.tmp / "admin-run.ps1"
+        lit = lambda s: "'" + str(s).replace("'", "''") + "'"
+        # UTF-8 with a byte-order mark: Windows PowerShell 5 misreads UTF-8 without one (user names can have accents).
+        run.write_text(
+            "$ErrorActionPreference = 'Continue'\r\n"
+            f"& powershell.exe -NoProfile -ExecutionPolicy Bypass -File {lit(script)} {' '.join(lit(a) for a in args)} "
+            f"*>&1 | Out-File -FilePath {lit(log)} -Encoding utf8\r\n"
+            "exit $LASTEXITCODE\r\n", encoding="utf-8-sig")
+        outer = ("$ErrorActionPreference = 'Stop'; try { $p = Start-Process -FilePath powershell.exe -Verb RunAs "
+                 "-WindowStyle Hidden -Wait -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', "
+                 f"'-File', '\"{str(run).replace(chr(39), chr(39) * 2)}\"'); exit $p.ExitCode }} catch {{ Write-Output $_.Exception.Message; "
+                 # 1223 = ERROR_CANCELLED: the person chose No in the prompt (checked by number, any language)
+                 "$e = $_.Exception; while ($e) { if ($e.NativeErrorCode -eq 1223) { exit 1223 }; $e = $e.InnerException }; "
+                 "exit 1 }")
+        ps = self.host.which("powershell") or "powershell.exe"
+        tail = {"pos": 0, "buf": b""}
+
+        def drain():
+            try:
+                with open(log, "rb") as f:
+                    f.seek(tail["pos"])
+                    data = f.read()
+            except OSError:
+                return
+            tail["pos"] += len(data)
+            lines = (tail["buf"] + data).split(b"\n")
+            tail["buf"] = lines.pop()
+            for ln in lines:
+                text = strip_ansi(ln.decode("utf-8", "replace").lstrip("﻿").rstrip("\r"))
+                if text.strip():
+                    self.log(text)
+                    self.detail(text.strip()[:90])
+
+        from ..proc import hidden
+        try:
+            p = subprocess.Popen([ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", outer],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **hidden())
+        except OSError as e:
+            raise Failed(f"Couldn't start PowerShell: {e.strerror or e}", hint) from None
+        self._proc = p
+        try:
+            while p.poll() is None:
+                if self.job.cancel_requested:
+                    # Only the waiting PowerShell can be stopped from here; the elevated script finishes by itself.
+                    p.terminate()
+                    raise Cancelled()
+                drain()
+                time.sleep(0.3)
+        finally:
+            self._proc = None
+        drain()
+        if tail["buf"].strip():
+            self.log(strip_ansi(tail["buf"].decode("utf-8", "replace").lstrip("﻿").strip()))
+        said = (p.stdout.read() or b"").decode("utf-8", "replace").strip()
+        p.stdout.close()
+        if p.returncode == 1223 or "canceled by the user" in said.lower() or "cancelled by the user" in said.lower():
+            raise Failed("Windows' permission prompt was declined, so nothing was changed.",
+                         "Try again and choose Yes when Windows asks.")
+        if p.returncode != 0:
+            if said:
+                self.log(said)
+            raise Failed(f"Couldn't {what} (code {p.returncode}).", hint or "The log below shows what it said.")
+        return 0, ""
+
     def write(self, path, text, mode=None):
         path = Path(path)
         if self.dry_run:

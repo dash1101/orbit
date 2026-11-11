@@ -64,6 +64,17 @@ class Runner:
                 return False
         return self.launch(open_argv(url))
 
+    def open_file(self, path):
+        """Open a file the way double-clicking it would (a Start-menu shortcut, a folder). Windows and macOS/Linux."""
+        if sys.platform == "win32":
+            try:
+                import os
+                os.startfile(path)
+                return True
+            except OSError:
+                return False
+        return self.launch(open_argv(path))
+
     def launch(self, argv):
         """Open something for the person to look at (a browser, a window, a terminal). Changes nothing,
         so it happens in dry-run too."""
