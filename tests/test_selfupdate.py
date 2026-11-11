@@ -76,16 +76,16 @@ class SelfUpdateTests(unittest.TestCase):
         self.assertEqual(unit(self.exe), self.exe)                 # a plain program file is its own unit
         r = self.recipe("darwin")
         self.assertEqual(r.asset("v1.2.3"), "orbit-v1.2.3-macos-intel.dmg")
-        new = app.with_name("Orbit.app.new")
+        new = app.with_name(".Orbit-new.app")
         (new / "Contents" / "MacOS").mkdir(parents=True)
         (new / "Contents" / "MacOS" / "Orbit").write_bytes(program("9.9.9"))
         (new / "Contents" / "Info.plist").write_text("new")
         self.assertEqual(waiting(exe), "")                          # not checked yet: never switched to
-        app.with_name("Orbit.app.new.ok").write_text("orbit 9.9.9\n")
+        app.with_name(".Orbit-new.ok").write_text("orbit 9.9.9\n")
         self.assertEqual(waiting(exe), "9.9.9")
         self.assertTrue(switch(exe))
         self.assertEqual((app / "Contents" / "Info.plist").read_text(), "new")
-        self.assertEqual((app.with_name("Orbit.app.old") / "Contents" / "Info.plist").read_text(), "old")
+        self.assertEqual((app.with_name(".Orbit-old.app") / "Contents" / "Info.plist").read_text(), "old")
         self.assertTrue(cleanup_old(exe))
         self.assertEqual(sorted(x.name for x in app.parent.iterdir()), ["Orbit.app"])
 

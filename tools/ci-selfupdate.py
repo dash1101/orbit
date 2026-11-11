@@ -73,6 +73,14 @@ class GitHub(BaseHTTPRequestHandler):
         self.send(404, b"{}", "application/json")
 
 
+def beside(path, suffix):
+    """Where Orbit keeps the new and old copies (the same rule as orbit/install/recipes/orbit.py)."""
+    if path.suffix == ".app":
+        s = path.stem
+        return path.with_name({".new": f".{s}-new.app", ".old": f".{s}-old.app", ".new.ok": f".{s}-new.ok"}[suffix])
+    return path.with_name(path.name + suffix)
+
+
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -195,8 +203,8 @@ def scenario(gh, how):
             say("  " + line)
         if snap["state"] != "done":
             fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
-        old = bundle.with_name(bundle.name + ".old")
-        if not bundle.with_name(bundle.name + ".new").exists() or not bundle.with_name(bundle.name + ".new.ok").exists():
+        old = beside(bundle, ".old")
+        if not beside(bundle, ".new").exists() or not beside(bundle, ".new.ok").exists():
             fail("the new program isn't waiting next to the running one")
         if exe.read_bytes() != original.read_bytes():
             fail("the running program's file changed before the restart")

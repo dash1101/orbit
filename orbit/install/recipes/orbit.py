@@ -10,7 +10,8 @@ parts of itself from its own file, so that file can't change under it. At the sw
 anything goes wrong while switching, the old one is put back. The new Orbit deletes `orbit.old` once it runs.
 
 On macOS what's replaced is the whole app (Orbit.app, a folder): the new one is copied out of the release's .dmg as
-`Orbit.app.new`, and at the switch the old one becomes `Orbit.app.old`. When Orbit runs from its source folder, Orbit
+`.Orbit-new.app`, and at the switch the old one becomes `.Orbit-old.app` (hidden in Finder; an app's folder has to
+end in .app for it to start). When Orbit runs from its source folder, Orbit
 says how to update instead.
 """
 import os
@@ -63,6 +64,11 @@ def cleanup_old(exe=None):
 
 
 def _beside(path, suffix):
+    """The new or old copy next to `path` (suffix ".new", ".old" or ".new.ok"). An app's folder must keep ending
+    in .app to start, so for a Mac app these are hidden names: .Orbit-new.app, .Orbit-old.app, .Orbit-new.ok."""
+    if path.suffix == ".app":
+        s = path.stem
+        return path.with_name({".new": f".{s}-new.app", ".old": f".{s}-old.app", ".new.ok": f".{s}-new.ok"}[suffix])
     return path.with_name(path.name + suffix)
 
 
