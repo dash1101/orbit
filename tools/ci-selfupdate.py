@@ -256,7 +256,11 @@ def scenario(gh, how):
         if menu:
             target = menu_target(root)
             say(f"the menu entry starts: {target}")
-            if os.path.normcase(target) != os.path.normcase(str(final_exe)):
+            try:
+                same = os.path.samefile(target, final_exe)      # the same file, however its path is written
+            except OSError:
+                same = False
+            if not same:
                 fail(f"the menu entry doesn't start {final_exe}")
         say(f"{how}: the program in place is {WANT}, as {final.name}, and nothing else is left.")
     finally:

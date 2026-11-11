@@ -94,10 +94,17 @@ def follow(old, new):
             if not link.exists():
                 return
             q = lambda x: "'" + str(x).replace("'", "''") + "'"
-            script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut({q(link)});"
-                      f"if ($s.TargetPath -eq {q(old)}) {{ $s.TargetPath={q(new)};"
-                      f"$s.WorkingDirectory={q(Path(new).parent)};$s.Save() }}")
-            subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-                           capture_output=True, timeout=30, creationflags=0x08000000)
+            shortcut = f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut({q(link)});"
+
+            def ps(script):
+                return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", shortcut + script],
+                                      capture_output=True, text=True, timeout=30, creationflags=0x08000000)
+            target = ps("$s.TargetPath").stdout.strip()
+            # The same folder can be written two ways (C:\Users\RUNNER~1\… and C:\Users\runneradmin\…): ask
+            # Windows whether it's the same folder rather than comparing the text.
+            if (not target or Path(target).name.lower() != Path(old).name.lower()
+                    or not os.path.samefile(Path(target).parent, Path(old).parent)):
+                return
+            ps(f"$s.TargetPath={q(new)};$s.WorkingDirectory={q(Path(new).parent)};$s.Save()")
     except (OSError, subprocess.SubprocessError):
         pass
