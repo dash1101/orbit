@@ -331,7 +331,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             s.detail = "installed ${archived.versionName}"
             s.end()
 
-            j.headline = if (before == null) "${a.name} is installed." else "${a.name} is up to date."
+            j.headline = if (before == null) "${a.name} is installed." else "${a.name} is updated."
             if (a.self) j.body = "Orbit restarts on the new version."
             if (!a.self) j.body = a.note
             j.state = JobState.DONE
