@@ -148,8 +148,15 @@ class BeaconRecipe(Recipe):
 
     def _gone(self, s):
         self.forget()
-        if not s.dry_run and self.exe().exists():
-            raise Failed("YTM Beacon's program is still there.", f"Delete {self.exe()} by hand.")
+        if s.dry_run:
+            return
+        # On Windows a program can't delete itself while it runs: Beacon's uninstaller has it deleted a few
+        # seconds after it ends, so give that a moment.
+        for _ in range(30):
+            if not self.exe().exists():
+                return
+            s.sleep(0.5)
+        raise Failed("YTM Beacon's program is still there.", f"Delete {self.exe()} by hand.")
 
     def finish(self, sess, op, opts):
         if op == "uninstall":
