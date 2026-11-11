@@ -1,10 +1,11 @@
-name: nova-on-windows
+name: apps-on-windows
 # Orbit's own installer puts Nova (its newest published release) on GitHub's Windows machines, checks that it
 # answers and that Orbit's Nova page sees it, installs it again over itself, then removes it: tools/ci-nova-windows.py.
 on:
   push:
     branches: [main]
-    paths: ["orbit/install/**", "orbit/apps/nova.py", "orbit/ed25519.py", "orbit/net.py", "tools/ci-nova-windows.py",
+    paths: ["orbit/install/**", "orbit/apps/**", "orbit/ed25519.py", "orbit/net.py", "orbit/server.py",
+            "orbit/__main__.py", "tools/ci-nova-windows.py",
             ".github/workflows/nova-windows.yml"]
   workflow_dispatch:
 jobs:
@@ -33,9 +34,9 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
           GITHUB_TOKEN: ${{ github.token }}
-      - name: Install, check and remove Nova through the standalone Orbit
+      - name: Install, check and remove Nova, Pocketfader and YTM Beacon through the standalone Orbit
         if: matrix.how == 'program'
-        run: python tools/ci-nova-windows.py --exe dist/orbit.exe
+        run: python tools/ci-nova-windows.py --exe dist/orbit.exe nova,pocketfader,ytm-beacon
         env:
           PYTHONIOENCODING: utf-8
           GITHUB_TOKEN: ${{ github.token }}     # GitHub's machines share addresses: without it, release lookups get rate-limited

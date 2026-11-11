@@ -6,7 +6,8 @@ grant without a prompt), checks that Nova answers and that Orbit's Nova page see
 itself (an update), then removes it with its settings and makes sure nothing is left.
 
     python tools/ci-nova-windows.py                   through Orbit's Python code
-    python tools/ci-nova-windows.py --exe orbit.exe   through a built standalone Orbit, the way its window does it
+    python tools/ci-nova-windows.py --exe orbit.exe [nova,pocketfader,ytm-beacon]
+                                                      through a built standalone Orbit, the way its window does it
 """
 import os
 import sys
@@ -124,8 +125,15 @@ def main():
     say("\nNova installed, answered, updated and was removed through Orbit.")
 
 
-def through_the_program(exe):
-    """The same, through the standalone program's own API (what its install window calls)."""
+# What each app is installed with, and removed with, through the program (the window's own choices).
+APPS = {"nova": ({"firewall": True}, {"purge": True}),
+        "pocketfader": ({}, {"purge": True}),
+        "ytm-beacon": ({"setup": False}, {"purge": True})}
+
+
+def through_the_program(exe, apps):
+    """Install each app through the standalone program's own API (what its install window calls), check that it
+    answers and that Orbit's page for it sees that, then remove it and check it's gone."""
     import json
     import socket
     import subprocess
@@ -155,9 +163,13 @@ def through_the_program(exe):
             time.sleep(2)
         fail(f"timed out waiting for {what}")
 
-    def job(op, options):
-        say(f"\n===== {op} {options} (through {Path(exe).name})")
-        j = call("/api/install/nova/start", {"op": op, "options": options})
+    def job(app, op, options):
+        say(f"\n===== {app}: {op} {options} (through {Path(exe).name})")
+        plan = call(f"/api/install/{app}/plan", {"op": op, "options": options})
+        say(f"{plan['title']} · {plan['support']['level']} · blocked: {plan['blocked'] or 'no'}")
+        if plan["blocked"]:
+            fail("blocked: " + plan["blocked"])
+        j = call(f"/api/install/{app}/start", {"op": op, "options": options})
         seen = 0
         while True:
             snap = call(f"/api/install/jobs/{j['id']}?from={seen}")
@@ -168,8 +180,11 @@ def through_the_program(exe):
                 break
             time.sleep(1)
         if snap["state"] != "done":
-            fail(f"{op} {snap['state']}: {snap['error']} {snap['hint']}")
+            fail(f"{app} {op} {snap['state']}: {snap['error']} {snap['hint']}")
         say(f"  result: {snap['result'].get('headline')} {snap['result'].get('body')}")
+
+    def installed(app):
+        return next(a for a in call("/api/install")["apps"] if a["id"] == app)["installed"]["installed"]
 
     home = Path(tempfile.mkdtemp())
     env = dict(os.environ, APPDATA=str(home))
@@ -178,22 +193,23 @@ def through_the_program(exe):
     try:
         hub = until("Orbit to start", lambda: call("/api/hub"), 90)
         say(f"Orbit {hub['version']} on port {port}")
-        plan = call("/api/install/nova/plan", {"op": "install"})
-        say(f"{plan['title']} · {plan['support']['level']} · blocked: {plan['blocked'] or 'no'}")
-        if plan["blocked"]:
-            fail("blocked: " + plan["blocked"])
-        job("install", {"firewall": True})
-        page = until("Nova's page to show it running",
-                     lambda: (lambda d: d if d["status"]["state"] == "ok" else None)(call("/api/apps/nova")), 120)
-        say(f"Orbit's Nova page: {page['status']['state']} · {page['status']['headline']} · {page['status'].get('version')}")
-        acts = [a["id"] for a in page["actions"]]
-        if "win:add" not in acts or "gui" not in acts:
-            fail(f"the Windows actions are missing: {acts}")
-        job("uninstall", {"purge": True})
-        page = until("Nova's page to show it gone",
-                     lambda: (lambda d: d if d["status"]["state"] == "off" else None)(call("/api/apps/nova")), 60)
-        say(f"after removing: {page['status']['headline']}")
-        say("\nNova installed, answered and was removed through the standalone Orbit.")
+        for app in apps:
+            install, remove = APPS[app]
+            if installed(app):
+                fail(f"{app} is already installed here")
+            job(app, "install", install)
+            page = until(f"{app} to answer on its page",
+                         lambda: (lambda d: d if d["status"].get("version") and d["status"]["state"] != "down" else None)(
+                             call(f"/api/apps/{app}")), 180)
+            st = page["status"]
+            say(f"Orbit's {app} page: {st['state']} · {st['headline']} · {st.get('version')}")
+            say("  " + " · ".join(f"{f[0]}: {f[1]}" for f in st.get("facts", [])))
+            if app == "nova" and not {"win:add", "gui"} <= {a["id"] for a in page["actions"]}:
+                fail(f"Nova's Windows actions are missing: {[a['id'] for a in page['actions']]}")
+            job(app, "uninstall", remove)
+            until(f"{app} to be gone", lambda: not installed(app), 120)
+            say(f"{app}: installed, answered and removed through the standalone Orbit.")
+        say(f"\nAll of {', '.join(apps)}: installed, answered and removed through the standalone Orbit.")
     finally:
         p.kill()
         try:
@@ -204,6 +220,6 @@ def through_the_program(exe):
 
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[1] == "--exe":
-        through_the_program(sys.argv[2])
+        through_the_program(sys.argv[2], sys.argv[3].split(",") if len(sys.argv) > 3 else ["nova"])
     else:
         main()
