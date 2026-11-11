@@ -1,6 +1,7 @@
 name: self-update-from-a-release
 # Run by hand after a release: the standalone Orbit from an earlier release (by default the one before the newest)
-# updates itself from GitHub to the newest release and restarts on it, on Linux and Windows (tools/ci-selfupdate.py).
+# updates itself from GitHub to the newest release and restarts on it, on Linux, Windows and macOS
+# (tools/ci-selfupdate.py). On a Mac, Orbit updates itself from 0.3.4 on.
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +16,7 @@ jobs:
         include:
           - { os: windows-latest, file: windows-x64.exe }
           - { os: ubuntu-22.04, file: linux-x86_64 }
+          - { os: macos-latest, file: macos-apple-silicon.dmg }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -35,4 +37,11 @@ jobs:
           echo "from $from to $newest"
           gh release download "$from" -R "$GITHUB_REPOSITORY" -p "orbit-$from-${{ matrix.file }}" -D old
           chmod +x old/* || true
-          python tools/ci-selfupdate.py --real "old/orbit-$from-${{ matrix.file }}" "${newest#v}"
+          old="old/orbit-$from-${{ matrix.file }}"
+          if [ "$RUNNER_OS" = macOS ]; then         # the app, out of its disk image, as dragged to Applications
+            hdiutil attach "$old" -nobrowse -readonly -mountpoint "$RUNNER_TEMP/old-dmg"
+            ditto "$RUNNER_TEMP/old-dmg/Orbit.app" old/Orbit.app
+            hdiutil detach "$RUNNER_TEMP/old-dmg"
+            old=old/Orbit.app
+          fi
+          python tools/ci-selfupdate.py --real "$old" "${newest#v}"
