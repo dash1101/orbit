@@ -424,7 +424,7 @@ impl Hub {
         }
         json!({"name": "Orbit", "version": crate::VERSION, "dryRun": self.dry_run(), "github": self.github.state(), "system": self.host.system,
                "orbitUpdate": self.orbit_update(), "menu": desktop_entry::state(), "themes": themes, "themeTokens": THEME_COLORS,
-               "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"]},
+               "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"]},
                "apps": self.apps().iter().map(|a| { let mut d = a.describe(); d["enabled"] = json!(self.enabled(&a.id())); d }).collect::<Vec<_>>()})
     }
 
@@ -465,6 +465,9 @@ impl Hub {
                 None => return Err(bad("refresh must be 1–60 seconds")),
             }
         }
+        if let Some(v) = b.get("autoUpdate") {
+            patch.insert("autoUpdate".into(), json!(v.as_bool().ok_or_else(|| bad("autoUpdate is true or false"))?));
+        }
         if let Some(v) = b.get("checkUpdates") {
             patch.insert("checkUpdates".into(), json!(v.as_bool().ok_or_else(|| bad("checkUpdates is true or false"))?));
         }
@@ -490,7 +493,7 @@ impl Hub {
                 self.ctx.config.update_app(k, p);
             }
         }
-        if b.keys().any(|k| !["theme", "themes", "refreshSec", "checkUpdates", "order", "enabled"].contains(&k.as_str())) {
+        if b.keys().any(|k| !["theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "order", "enabled"].contains(&k.as_str())) {
             return Err(bad("unknown hub setting"));
         }
         let reorder = patch.contains_key("order");
@@ -575,6 +578,35 @@ impl Hub {
         }
         let here = self.installer.get("orbit").map(|r| !r.requirements("install").iter().any(|x| x["blocking"].as_bool().unwrap_or(false))).unwrap_or(false);
         json!({"version": crate::util::version_of(tag), "url": rel["url"].as_str().filter(|u| !u.is_empty()).unwrap_or(ORBIT_RELEASES), "here": here})
+    }
+
+    /// Orbit updates itself (the "update Orbit by itself" setting, on unless turned off): shortly after it starts, a
+    /// newer release is downloaded, checked and tried in the background, exactly as the update button does. It takes
+    /// over the next time Orbit starts (the top bar offers "restart for orbit …" to switch now): nothing restarts by
+    /// itself while it's in use.
+    pub fn update_itself_later(self: &Arc<Hub>) {
+        let h = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(5));
+            let on = |k: &str| h.ctx.config.get(k).as_bool().unwrap_or(true);
+            if h.dry_run() || !on("autoUpdate") || !on("checkUpdates") || !crate::recipes::orbit::waiting(None).is_empty() {
+                return;
+            }
+            // the installer's own source of releases (the one the update downloads from)
+            let Ok(rel) = h.installer.sources.latest(ORBIT_REPO, true) else { return };
+            let tag = rel["tag"].as_str().unwrap_or("").to_string();
+            if !net::is_newer(&tag, crate::VERSION) {
+                return;
+            }
+            let Some(r) = h.installer.get("orbit") else { return };
+            if r.requirements("install").iter().any(|x| x["blocking"].as_bool().unwrap_or(false)) || h.installer.busy("orbit").is_some() {
+                return; // can't replace itself here (a folder it can't write to): the top bar offers the download page
+            }
+            match h.installer.start("orbit", "install", &Value::Null) {
+                Ok(_) => println!("Orbit {tag} is out: downloading it in the background; it takes over at the next start"),
+                Err(e) => eprintln!("orbit: couldn't update by itself: {e}"),
+            }
+        });
     }
 
     pub fn github_access(&self) -> Value {

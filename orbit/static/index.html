@@ -1754,6 +1754,13 @@ function renderHub() {
         const v = !hub.settings.checkUpdates; await setHub({ checkUpdates: v }, "release checks · " + (v ? "on" : "off")); renderHub(); } },
         hub.settings.checkUpdates ? "on" : "off"); return c; })(),
       h("div", { class: "help" }, "At most every 12 hours, one request per app to api.github.com. Nothing else leaves this computer.")),
+    h("div", { class: "row" }, h("span", {}, "Update Orbit by itself"),
+      (() => { const c = h("button", { class: "chk" + (hub.settings.autoUpdate !== false ? " on" : ""), role: "switch",
+        "aria-checked": String(hub.settings.autoUpdate !== false), onclick: async () => {
+        const v = hub.settings.autoUpdate === false; await setHub({ autoUpdate: v }, "update by itself · " + (v ? "on" : "off")); renderHub(); } },
+        hub.settings.autoUpdate !== false ? "on" : "off"); return c; })(),
+      h("div", { class: "help" }, "When Orbit starts and a newer version is out, it downloads it, checks it and keeps it ready; it takes " +
+        "Orbit's place the next time you open Orbit (or now, with “restart for orbit …” at the top). Needs release checks on.")),
     h("div", { class: "row" }, h("span", {}, "Check for releases now"),
       h("button", { class: "btn small", onclick: async () => { try { say((await api("/api/hub/check-updates", {})).message); setTimeout(async () => { await loadHub(); poll(); }, 2500); } catch (e) { say(e.message, "err"); } } }, "check")),
     hub.menu && hub.menu.supported ? h("div", { class: "row" }, h("span", {}, `Orbit in ${hub.menu.where}`),

@@ -139,7 +139,7 @@ run once with `chmod +x`, since browsers don't keep that). The programs start in
 MB. On Linux and Windows, *orbit settings → Orbit in your apps
 menu* adds a launcher for the copy you downloaded.
 
-**Orbit updates itself** on Linux, Windows and macOS. When a new release is out, the top bar says *update orbit to …*
+**Orbit updates itself** on Linux, Windows and macOS. With *Update Orbit by itself* on (it is unless you turn it off in Orbit's settings), Orbit downloads a new release in the background when it starts, and the new version takes over the next time you open Orbit. You can also update by hand: when a new release is out, the top bar says *update orbit to …*
 (and Orbit's own card on the install page offers it). The new program is downloaded from Orbit's GitHub release,
 checked against the release's checksums, and started once to make sure it runs and is that version; only then does it
 wait next to the running one. Orbit then restarts on it by itself after a few seconds (the window closes and opens

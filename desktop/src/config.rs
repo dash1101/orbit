@@ -9,6 +9,7 @@ pub fn defaults() -> Map<String, Value> {
         "theme": "tui",
         "refreshSec": 3,
         "checkUpdates": true,   // ask GitHub (at most every 12 hours) whether a newer release exists
+        "autoUpdate": true,     // a newer Orbit is downloaded and checked by itself, and takes over at the next start
         "apps": {},             // per-app hub settings: {"<id>": {"enabled": true, ...}}
         "custom": [],           // apps added from the hub
         "order": [],            // app ids in the order they appear in the side bar

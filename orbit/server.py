@@ -362,7 +362,8 @@ class Hub:
                 "system": self.host.system,
                 "orbitUpdate": self.orbit_update(), "menu": desktop_entry.state(),
                 "themes": THEMES + [dict(t, custom=True) for t in c.get("themes", [])], "themeTokens": THEME_COLORS,
-                "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"]},
+                "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"],
+                             "autoUpdate": c["autoUpdate"]},
                 "apps": [dict(a.describe(), enabled=self.enabled(i)) for i, a in self.apps.items()]}
 
     def set_hub(self, body):
@@ -387,6 +388,10 @@ class Hub:
             if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= 60:
                 raise BadRequest("refresh must be 1–60 seconds")
             patch["refreshSec"] = v
+        if "autoUpdate" in body:
+            if not isinstance(body["autoUpdate"], bool):
+                raise BadRequest("autoUpdate is true or false")
+            patch["autoUpdate"] = body["autoUpdate"]
         if "checkUpdates" in body:
             if not isinstance(body["checkUpdates"], bool):
                 raise BadRequest("checkUpdates is true or false")
@@ -402,7 +407,7 @@ class Hub:
                 raise BadRequest("enabled is {app id: true/false}")
             for k, v in en.items():
                 self.ctx.config.update_app(k, {"enabled": v})
-        if set(body) - {"theme", "themes", "refreshSec", "checkUpdates", "order", "enabled"}:
+        if set(body) - {"theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "order", "enabled"}:
             raise BadRequest("unknown hub setting")
         if patch:
             self.ctx.config.update(patch)
