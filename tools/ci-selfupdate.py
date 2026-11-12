@@ -216,7 +216,8 @@ def scenario(gh, how):
         hub = wait_for("Orbit to start", lambda: call(port, "/api/hub"))
         say(f"running Orbit {hub['version']}")
         if menu:
-            say("menu entry: " + call(port, "/api/hub/menu", {}).get("message", ""))
+            # (on Windows this starts PowerShell, which takes a while the first time on a fresh machine)
+            say("menu entry: " + call(port, "/api/hub/menu", {}, timeout=60).get("message", ""))
         if how == "auto":
             tag = wait_for("Orbit to get the update ready by itself",
                            lambda: (lambda t: t if t.get("pending") else None)(call(port, "/api/hub").get("orbitUpdate") or {}), 180)
