@@ -169,7 +169,8 @@ def stop_everything(app):
 
 
 def scenario(gh, how):
-    """how = "restart" (the window's restart button) or "reopen" (Orbit closed, then started again)."""
+    """how = "restart" (the window's restart button), "reopen" (Orbit closed, then started again) or "auto" (nobody
+    presses anything: Orbit downloads the update by itself after it starts, and it takes over when Orbit is reopened)."""
     say(f"\n===== update, then {how}")
     root = Path(tempfile.mkdtemp(prefix="orbit-selfupdate-"))
     app = root / "app"
@@ -207,17 +208,22 @@ def scenario(gh, how):
         say(f"running Orbit {hub['version']}")
         if menu:
             say("menu entry: " + call(port, "/api/hub/menu", {}).get("message", ""))
-        plan = call(port, "/api/install/orbit/plan", {"op": "install"})
+        if how == "auto":
+            tag = wait_for("Orbit to get the update ready by itself",
+                           lambda: (lambda t: t if t.get("pending") else None)(call(port, "/api/hub").get("orbitUpdate") or {}), 180)
+            say(f"by itself, the window offers: {tag}")
+        plan = call(port, "/api/install/orbit/plan", {"op": "install"}) if how != "auto" else {"title": f"Update Orbit to {WANT}", "blocked": ""}
         say(f"plan: {plan['title']} · blocked: {plan['blocked'] or 'no'}")
         if plan["blocked"] or plan["title"] != f"Update Orbit to {WANT}":
             fail("the update isn't offered")
-        job = call(port, "/api/install/orbit/start", {"op": "install"})
-        snap = wait_for("the update", lambda: (lambda j: j if j["state"] != "running" else None)(
-            call(port, f"/api/install/jobs/{job['id']}")), 180)
-        for line in snap["log"]:
-            say("  " + line)
-        if snap["state"] != "done":
-            fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
+        if how != "auto":
+            job = call(port, "/api/install/orbit/start", {"op": "install"})
+            snap = wait_for("the update", lambda: (lambda j: j if j["state"] != "running" else None)(
+                call(port, f"/api/install/jobs/{job['id']}")), 180)
+            for line in snap["log"]:
+                say("  " + line)
+            if snap["state"] != "done":
+                fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
         old = beside(final, ".old")
         if not beside(bundle, ".new").exists() or not beside(bundle, ".new.ok").exists():
             fail("the new program isn't waiting next to the running one")
@@ -303,6 +309,8 @@ def main():
         threading.Thread(target=gh.serve_forever, daemon=True).start()
     scenario(gh, "restart")
     scenario(gh, "reopen")
+    if not REAL:
+        scenario(gh, "auto")
     say("\nSelf-update works: after a restart from the window, and after closing Orbit and opening it again.")
 
 

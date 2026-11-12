@@ -9,6 +9,7 @@ DEFAULTS = {
     "theme": "tui",
     "refreshSec": 3,
     "checkUpdates": True,     # ask GitHub (at most every 12 hours) whether a newer release exists
+    "autoUpdate": True,       # the program downloads a newer Orbit by itself; it takes over at the next start
     "apps": {},               # per-app hub settings: {"<id>": {"enabled": true, ...}}
     "custom": [],             # apps added from the hub: [{"id","name","unit","scope","healthUrl","openUrl"}]
     "order": [],              # app ids in the order they appear in the side bar

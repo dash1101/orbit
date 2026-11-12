@@ -1,5 +1,9 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.1**
+
+- **Orbit updates itself.** When Orbit starts and a newer version is out, it downloads it, checks it against the release's checksums and starts it once to make sure it works, all in the background. The new version takes Orbit's place the next time you open Orbit, in the same file and folder (or right away: *restart for orbit …* at the top). Nothing restarts while you're using it. Turn it off in Orbit's settings: *Update Orbit by itself*.
+
 **New in 0.5.0**
 
 - **Orbit is rebuilt as one small program with its own window.** It no longer needs a browser: the window is drawn by the web engine that comes with your system (WebView2 on Windows, WebKit on a Mac, WebKitGTK on Linux), with Orbit's own icon in the taskbar and the Dock. Everything looks and works as before, every animation included.
