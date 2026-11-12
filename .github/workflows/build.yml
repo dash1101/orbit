@@ -64,8 +64,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-22.04, name: linux-x86_64 }          # older glibc: runs on more distributions
+          - { os: ubuntu-22.04, name: linux-x86_64, deb: amd64 }         # older glibc: runs on more distributions
+          - { os: ubuntu-22.04-arm, name: linux-arm64, deb: arm64 }
           - { os: windows-latest, name: windows-x64 }
+          - { os: windows-11-arm, name: windows-arm64 }
           - { os: macos-latest, name: macos-apple-silicon }
           - { os: macos-15-intel, name: macos-intel }
     runs-on: ${{ matrix.os }}
@@ -149,12 +151,12 @@ jobs:
             Linux)
               xvfb-run -a -s "-screen 0 1400x900x24" bash -c '
                 desktop/target/release/orbit --port 8798 > win.log 2>&1 &
-                sleep 12; import -window root shots/window-linux.png; kill %1' || true
+                sleep 12; import -window root shots/window-${{ matrix.name }}.png; kill %1' || true
               cat win.log || true ;;
             Windows)
               desktop/target/release/orbit.exe --port 8798 > win.log 2>&1 &
               sleep 15
-              powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; \$i=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; \$g=[System.Drawing.Graphics]::FromImage(\$i); \$g.CopyFromScreen(\$b.Location,[System.Drawing.Point]::Empty,\$b.Size); \$i.Save('shots/window-windows.png')"
+              powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; \$i=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; \$g=[System.Drawing.Graphics]::FromImage(\$i); \$g.CopyFromScreen(\$b.Location,[System.Drawing.Point]::Empty,\$b.Size); \$i.Save('shots/window-${{ matrix.name }}.png')"
               taskkill //F //IM orbit.exe || true ;;
             macOS)
               open dist/Orbit.app --args --port 8798
@@ -172,31 +174,41 @@ jobs:
           ORBIT_VERSION=99.0.0 CARGO_TARGET_DIR=target-next cargo build --release
           cd ..
           case "$RUNNER_OS" in
-            Windows) python tools/ci-selfupdate.py desktop/target/release/orbit.exe desktop/target-next/release/orbit.exe windows-x64.exe ;;
+            Windows) python tools/ci-selfupdate.py desktop/target/release/orbit.exe desktop/target-next/release/orbit.exe "${{ matrix.name }}.exe" ;;
             macOS)
               tools/make-mac-app.sh desktop/target-next/release/orbit 99.0.0 dist-next
               mkdir -p dmg-next && cp -R dist-next/Orbit.app dmg-next/ && ln -s /Applications dmg-next/Applications
               hdiutil create -volname Orbit -srcfolder dmg-next -ov -format UDZO next.dmg
               python tools/ci-selfupdate.py dist/Orbit.app next.dmg "${{ matrix.name }}.dmg" ;;
-            *) python tools/ci-selfupdate.py desktop/target/release/orbit desktop/target-next/release/orbit linux-x86_64 ;;
+            *) python tools/ci-selfupdate.py desktop/target/release/orbit desktop/target-next/release/orbit "${{ matrix.name }}" ;;
           esac
+      - name: "Linux: the Debian package installs, and updates itself through apt"
+        if: matrix.deb
+        run: |
+          version=$(desktop/target/release/orbit --version | cut -d' ' -f2)
+          tools/make-deb.sh "$RUNNER_TEMP/orbit-window" "$version" "${{ matrix.deb }}" "$RUNNER_TEMP/orbit.deb"
+          tools/make-deb.sh desktop/target-next/release/orbit 99.0.0 "${{ matrix.deb }}" "$RUNNER_TEMP/orbit-next.deb"
+          dpkg-deb --info "$RUNNER_TEMP/orbit.deb"; dpkg-deb --contents "$RUNNER_TEMP/orbit.deb"
+          python tools/ci-selfupdate.py --deb "$RUNNER_TEMP/orbit.deb" "$RUNNER_TEMP/orbit-next.deb" "${{ matrix.name }}"
       - name: "Windows: install, check and remove Nova and YTM Starcast through the program"
-        if: runner.os == 'Windows'
+        if: matrix.name == 'windows-x64'
         env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
         run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe nova,ytm-starcast
       - name: "Windows: move a computer from Pocketfader and YTM Beacon to YTM Starcast through the program"
-        if: runner.os == 'Windows'
+        if: matrix.name == 'windows-x64'
         env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
         run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe ytm-starcast --migrate
       - name: Package
         run: |
           mkdir -p out
           case "$RUNNER_OS" in
-            Windows) cp desktop/target/release/orbit.exe out/orbit-windows-x64.exe ;;
+            Windows) cp desktop/target/release/orbit.exe "out/orbit-${{ matrix.name }}.exe" ;;
             macOS)
               mkdir -p dmg && cp -R dist/Orbit.app dmg/ && ln -s /Applications dmg/Applications
               hdiutil create -volname Orbit -srcfolder dmg -ov -format UDZO "out/orbit-${{ matrix.name }}.dmg" ;;
-            *) cp desktop/target/release/orbit out/orbit-linux-x86_64 ;;
+            *)
+              cp desktop/target/release/orbit "out/orbit-${{ matrix.name }}"
+              tools/make-deb.sh "$RUNNER_TEMP/orbit-window" "$(desktop/target/release/orbit --version | cut -d' ' -f2)" "${{ matrix.deb }}" "out/orbit-${{ matrix.name }}.deb" ;;
           esac
           ls -la out
       - uses: actions/upload-artifact@v4
@@ -220,13 +232,8 @@ jobs:
           ls -la
           rm -f orbit-android-unsigned.apk         # never published: it can't be installed
           # The files keep one name from release to release (orbit-windows-x64.exe …), so a program that updates
-          # itself keeps its name too. Orbit 0.3.4 and older look for names with the version in them to update
-          # themselves (orbit-v0.3.4-windows-x64.exe): through the 0.3 series, 0.4.0 (the release that moves
-          # Pocketfader and YTM Beacon to YTM Starcast, which they can't install) and 0.5 (the Rust Orbit), they get a
-          # copy under that name as well.
-          case "$GITHUB_REF_NAME" in
-            v0.3.*|v0.4.0|v0.5.*) for f in orbit-*; do cp "$f" "$(echo "$f" | sed "s/^orbit-/orbit-${GITHUB_REF_NAME}-/")"; done ;;
-          esac
+          # itself keeps its name too. (Up to 0.5.1 each file was also published under a name with the version, for
+          # Orbit 0.3.4 and older; those update to 0.5.1 first.)
           sha256sum orbit-* > SHA256SUMS
           # the release may already exist (the Android app is added later): then add or replace the files
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

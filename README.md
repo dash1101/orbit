@@ -133,6 +133,10 @@ an earlier copy, give the workflow a signing key as repository secrets: `ORBIT_K
 
 ## The programs
 
+On Debian, Ubuntu and their relatives, the `.deb` is the easiest: open it with your software installer (or `sudo apt
+install ./orbit-linux-x86_64.deb`) and Orbit is in your apps menu; it updates itself through apt (the system asks for your
+password). There are builds for 64-bit Intel/AMD and ARM on Windows and Linux, and for both kinds of Mac.
+
 Each download on the releases page is the program itself, with nothing to unpack and nothing else to install: the `.exe`
 on Windows, a `.dmg` on macOS (open it and drag Orbit onto Applications), and the program file on Linux (allow it to
 run once with `chmod +x`, since browsers don't keep that). The programs start in a fraction of a second and are 4 to 10

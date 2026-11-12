@@ -28,7 +28,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REAL = len(sys.argv) > 1 and sys.argv[1] == "--real"
-if REAL:
+DEB = len(sys.argv) > 1 and sys.argv[1] == "--deb"
+if DEB:
+    # python tools/ci-selfupdate.py --deb <this build's .deb> <a .deb that says 99.0.0> <asset suffix, e.g. linux-x86_64>
+    old_deb, new_deb, suffix = sys.argv[2:5]
+    old_exe = "/usr/bin/orbit"
+    WANT, TAG = "99.0.0", "v99.0.0"
+    NAME = f"orbit-{suffix}.deb"
+    DATA = Path(new_deb).read_bytes()
+    SUMS = f"{hashlib.sha256(DATA).hexdigest()}  {NAME}\n".encode()
+elif REAL:
     old_exe, WANT = sys.argv[2:4]
 else:
     old_exe, new_exe, suffix = sys.argv[1:4]
@@ -302,8 +311,66 @@ def port_busy(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def deb_version():
+    p = subprocess.run(["dpkg-query", "-W", "-f=${Status}|${Version}", "orbit"], capture_output=True, text=True)
+    return p.stdout.rsplit("|", 1)[-1].strip() if "install ok installed" in p.stdout else ""
+
+
+def deb_scenario(gh):
+    """Orbit installed from its Debian package updates itself: it downloads the newer .deb, apt installs it in place,
+    and a restart brings up the new version from /usr/bin/orbit."""
+    say("\n===== the Debian package: update through apt, then restart")
+    subprocess.run(["sudo", "apt-get", "install", "-y", "--allow-downgrades", os.path.abspath(old_deb)], check=True,
+                   stdout=subprocess.DEVNULL)
+    before = deb_version()
+    say(f"installed the orbit package {before}")
+    root = Path(tempfile.mkdtemp(prefix="orbit-deb-"))
+    port = free_port()
+    env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), XDG_DATA_HOME=str(root / "data"),
+               ORBIT_TEST_GITHUB_API=f"http://127.0.0.1:{gh.server_address[1]}")
+    first = subprocess.Popen(["/usr/bin/orbit", "--no-window", "--port", str(port)], env=env, stdin=subprocess.DEVNULL,
+                             stdout=open(root / "first.log", "w"), stderr=subprocess.STDOUT)
+    try:
+        hub = wait_for("Orbit to start", lambda: call(port, "/api/hub"))
+        say(f"running Orbit {hub['version']} from /usr/bin/orbit")
+        plan = call(port, "/api/install/orbit/plan", {"op": "install"})
+        say(f"plan: {plan['title']} · {plan['installed'].get('how')} · blocked: {plan['blocked'] or 'no'}")
+        if plan["blocked"] or plan["installed"].get("how") != "the Debian package" or plan["title"] != f"Update Orbit to {WANT}":
+            fail("the update through apt isn't offered")
+        job = call(port, "/api/install/orbit/start", {"op": "install"})
+        snap = wait_for("the update", lambda: (lambda j: j if j["state"] != "running" else None)(
+            call(port, f"/api/install/jobs/{job['id']}")), 300)
+        for line in snap["log"]:
+            say("  " + line)
+        if snap["state"] != "done":
+            fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
+        if deb_version() != WANT:
+            fail(f"apt lists orbit {deb_version()}, not {WANT}")
+        tag = call(port, "/api/hub").get("orbitUpdate") or {}
+        if not tag.get("pending") or tag.get("version") != WANT:
+            fail(f"the window doesn't offer the restart: {tag}")
+        call(port, "/api/hub/restart", {})
+        hub = wait_for("the new Orbit on the same port",
+                       lambda: (lambda h: h if h["version"] == WANT else None)(call(port, "/api/hub")), 90)
+        first.wait(30)
+        say(f"deb: Orbit {hub['version']} answers from /usr/bin/orbit; the package is {deb_version()}")
+    finally:
+        subprocess.run(["pkill", "-x", "orbit"], capture_output=True)
+        subprocess.run(["sudo", "apt-get", "remove", "-y", "orbit"], stdout=subprocess.DEVNULL)
+        try:
+            say("--- first.log:\n" + (root / "first.log").read_text(errors="replace")[-1500:])
+        except OSError:
+            pass
+
+
 def main():
     gh = None
+    if DEB:
+        gh = ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
+        threading.Thread(target=gh.serve_forever, daemon=True).start()
+        deb_scenario(gh)
+        say("\nThe Debian package updates itself through apt and restarts on the new version.")
+        return
     if not REAL:
         gh = ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
         threading.Thread(target=gh.serve_forever, daemon=True).start()

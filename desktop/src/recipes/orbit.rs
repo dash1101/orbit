@@ -79,9 +79,29 @@ pub fn cleanup_old(exe: Option<&Path>) -> bool {
     util::remove_any(&beside(&unit(&exe), ".old")).is_ok() // Windows: the old one may still be closing
 }
 
-/// The version of a checked new Orbit waiting next to this one for a restart, or "".
+/// Orbit installed from its Debian/Ubuntu package: /usr/bin/orbit, which the orbit package owns. It updates through
+/// apt (the new .deb is installed in place; the system asks for the password).
+pub fn deb_install(exe: &Path) -> bool {
+    cfg!(target_os = "linux") && exe == Path::new("/usr/bin/orbit") && deb_version().is_some()
+}
+
+/// The orbit package's installed version, when the package is installed.
+pub fn deb_version() -> Option<String> {
+    if !cfg!(target_os = "linux") || crate::runner::which("dpkg-query").is_none() {
+        return None;
+    }
+    let (rc, out) = crate::runner::run_capture(&["dpkg-query".into(), "-W".into(), "-f=${Status}|${Version}".into(), "orbit".into()],
+                                               Duration::from_secs(8), true);
+    (rc == 0 && out.contains("install ok installed")).then(|| out.rsplit('|').next().unwrap_or("").trim().to_string())
+}
+
+/// The version of a checked new Orbit waiting next to this one for a restart, or "". For the Debian package: a newer
+/// version apt has already put in place.
 pub fn waiting(exe: Option<&Path>) -> String {
     let Some(exe) = exe.map(Path::to_path_buf).or_else(running_program) else { return String::new() };
+    if deb_install(&exe) {
+        return deb_version().filter(|v| crate::net::is_newer(v, crate::VERSION)).unwrap_or_default();
+    }
     let u = unit(&exe);
     let said = std::fs::read_to_string(beside(&u, ".new.ok")).unwrap_or_default();
     let said = said.trim();
@@ -96,8 +116,8 @@ pub fn waiting(exe: Option<&Path>) -> String {
 /// starting the new one.
 pub fn switch(exe: Option<&Path>) -> std::io::Result<Option<PathBuf>> {
     let Some(exe) = exe.map(Path::to_path_buf).or_else(running_program) else { return Ok(None) };
-    if waiting(Some(&exe)).is_empty() {
-        return Ok(None);
+    if waiting(Some(&exe)).is_empty() || deb_install(&exe) {
+        return Ok(None); // the Debian package: apt has already put the new program in place
     }
     let u = unit(&exe);
     let target = settled(&u);
@@ -136,16 +156,26 @@ impl OrbitRecipe {
     pub fn asset(&self, tag: &str) -> Option<String> {
         let h = &self.base.host;
         let kind = match (h.system.as_str(), h.arch.as_str()) {
+            ("windows", "arm64") => "windows-arm64.exe".to_string(),
             ("windows", _) => "windows-x64.exe".to_string(),
             ("linux", "amd64") => "linux-x86_64".to_string(),
+            ("linux", "arm64") => "linux-arm64".to_string(),
             ("darwin", a) => format!("macos-{}.dmg", if a == "arm64" { "apple-silicon" } else { "intel" }),
             _ => return None,
         };
         Some(if tag.is_empty() { format!("orbit-{kind}") } else { format!("orbit-{tag}-{kind}") })
     }
 
-    /// The name this release gives the file: without the version (0.3.5 on), or with it (before).
+    fn deb(&self) -> bool {
+        self.program.is_none() && self.exe().map(|e| deb_install(&e)).unwrap_or(false)
+    }
+
+    /// The name this release gives the file: without the version (0.3.5 on), or with it (before). Orbit installed
+    /// from the Debian package gets the package.
     pub fn pick(&self, rel: &Value) -> String {
+        if self.deb() {
+            return format!("{}.deb", self.asset("").unwrap_or_default());
+        }
         let tag = rel["tag"].as_str().unwrap_or("");
         for name in [self.asset(""), self.asset(tag)].into_iter().flatten() {
             if rel["assets"].get(&name).is_some() {
@@ -177,6 +207,21 @@ impl OrbitRecipe {
         let rel = s.vars["rel"].clone();
         let sums = s.fetch_text(&rel, "SHA256SUMS", REPO)?;
         s.verify(&PathBuf::from(s.var_str("file")), &sums, &s.var_str("name"))?;
+        Ok(true)
+    }
+
+    /// The Debian package: apt installs the new .deb in place (the running Orbit keeps going until it restarts).
+    fn apt_install(&self, s: &mut Session) -> Res<bool> {
+        let want = util::version_of(s.vars["rel"]["tag"].as_str().unwrap_or(""));
+        let file = s.var_str("file");
+        let done = || deb_version().map(|v| v == want || crate::net::is_newer(&v, crate::VERSION)).unwrap_or(false);
+        let argv: Vec<String> = ["env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", "--allow-downgrades", &file]
+            .iter().map(|x| x.to_string()).collect();
+        s.admin(&argv, "install Orbit's update", Some(&done), "The log below shows what apt said.")?;
+        if !s.dry_run && !done() {
+            return Err(failed(format!("apt finished, but the orbit package isn't {want}."), "The log below shows what apt said."));
+        }
+        s.log(&format!("Orbit {want} is installed; it takes over when Orbit restarts."));
         Ok(true)
     }
 
@@ -276,6 +321,10 @@ impl Recipe for OrbitRecipe {
 
     fn detect(&self) -> Value {
         let exe = self.exe();
+        if self.deb() {
+            return json!({"installed": true, "version": self.version, "pending": waiting(exe.as_deref()),
+                          "where": "/usr/bin/orbit", "how": "the Debian package"});
+        }
         json!({"installed": true, "version": self.version, "pending": waiting(exe.as_deref()),
                "where": exe.map(|e| e.to_string_lossy().into_owned()).unwrap_or_default(), "how": "the program"})
     }
@@ -292,6 +341,12 @@ impl Recipe for OrbitRecipe {
             return vec![need("A program for this computer", false, &format!("There's no Orbit for {} yet.", self.base.host.label()), true, "")];
         }
         let Some(exe) = self.exe() else { return vec![] };
+        if self.deb() {
+            let h = &self.base.host;
+            let way = (h.which("pkexec").is_some() && h.has_display()) || h.which("sudo").is_some();
+            return vec![need("A way to ask for the administrator password", way,
+                             "Orbit installs its update with apt, which needs the administrator. Install pkexec (polkit), or update with                               `sudo apt install ./orbit-linux-…deb` from the releases page.", true, "")];
+        }
         let place = unit(&exe).parent().map(Path::to_path_buf).unwrap_or_default();
         vec![need("Orbit's folder can be written to", writable(&place),
                   &format!("Orbit can't replace itself in {}. Download the new version from the releases page instead.", place.display()),
@@ -312,6 +367,12 @@ impl Recipe for OrbitRecipe {
         let exe = self.exe();
         let u = exe.as_ref().map(|e| unit(e));
         let name = u.as_ref().and_then(|u| u.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "orbit".into());
+        if self.deb() {
+            return vec![format!("Download Orbit {tag} from GitHub: {}", rel.map(|r| self.pick(r)).unwrap_or_else(|| "its Debian package".into())),
+                        "Check it against the release's checksums".into(),
+                        "Install it with apt, as the administrator (the system asks for your password)".into(),
+                        "Restart Orbit on it".into()];
+        }
         let moved = u.as_ref().filter(|u| settled(u) != **u).map(|u| format!(" as {}", settled(u).file_name().unwrap_or_default().to_string_lossy())).unwrap_or_default();
         vec![format!("Download Orbit {tag} from GitHub: {}", rel.map(|r| self.pick(r)).unwrap_or_else(|| "the program for this computer".into())),
              "Check it against the release's checksums".into(),
@@ -324,11 +385,13 @@ impl Recipe for OrbitRecipe {
             let r = self.clone();
             move |s: &mut Session| f(&r, s)
         };
+        let last = if self.deb() { step("install", "Install it with apt", 2.0, me(Self::apt_install)) }
+                   else { step("try", "Make sure it runs", 1.0, me(Self::try_it)) };
         vec![
             step("find", "Find the latest release", 0.5, me(Self::find)),
             step("download", "Download", 4.0, me(Self::download)),
             step("verify", "Check the download", 0.5, me(Self::verify)),
-            step("try", "Make sure it runs", 1.0, me(Self::try_it)),
+            last,
         ]
     }
 

@@ -564,6 +564,14 @@ impl Session {
                 other => other,
             });
         }
+        // allowed without a password here (sudo set up that way): no window or terminal needed
+        if self.host.which("sudo").is_some()
+            && crate::runner::run_capture(&["sudo".into(), "-n".into(), "true".into()], Duration::from_secs(5), true).0 == 0 {
+            self.log(&format!("Running as the administrator (sudo) to {what}"));
+            let mut full = vec!["sudo".to_string(), "-n".to_string()];
+            full.extend_from_slice(argv);
+            return self.run(&full, &[0], false, None, hint);
+        }
         let mut sudo = vec!["sudo".to_string()];
         sudo.extend_from_slice(argv);
         let shown = argv.iter().map(|a| q(a)).collect::<Vec<_>>().join(" ");
