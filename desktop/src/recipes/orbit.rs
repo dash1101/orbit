@@ -22,7 +22,11 @@ pub const REPO: &str = "dash1101/orbit";
 
 /// The program Orbit is running from.
 pub fn running_program() -> Option<PathBuf> {
-    let p = std::env::current_exe().ok()?;
+    let mut p = std::env::current_exe().ok()?;
+    // Linux: once apt (or anything) has put a new file in its place, the running program's path ends in " (deleted)"
+    if let Some(s) = p.to_str().and_then(|s| s.strip_suffix(" (deleted)")) {
+        p = PathBuf::from(s);
+    }
     if cfg!(windows) {
         return Some(p); // canonical paths there start with \\?\, which shortcuts and logs shouldn't show
     }
@@ -231,6 +235,11 @@ impl OrbitRecipe {
         let u = unit(&exe);
         let new = beside(&u, ".new");
         let want = util::version_of(s.vars["rel"]["tag"].as_str().unwrap_or(""));
+        if waiting(Some(&exe)) == want {
+            // already checked and waiting (Orbit got it ready by itself, or an earlier update did): leave it be
+            s.log(&format!("Orbit {want} is already ready next to this one; it takes over when Orbit restarts."));
+            return Ok(false);
+        }
         s.detail(&format!("starting it once · it should say {want}"));
         if s.dry_run {
             s.pause(0.4)?;
