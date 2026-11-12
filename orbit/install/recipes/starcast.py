@@ -57,6 +57,26 @@ NEW = Names("ytm-starcast", "starcast", ("ytm_starcast", "ytm-starcast"), "YTM S
             "app.novalabs.starcast.server", "YTM Starcast")
 OLD = Names("pocketfader", "pocketfader", ("pocketfader",), "Pocketfader", "Pocketfader", "app.pocketfader.server",
             "Pocketfader")
+# Options of the server that an update keeps from the install before it (as YTM Starcast's own install.sh does);
+# --lan isn't one of them: it follows the installer's "home Wi-Fi" choice.
+KEPT = ("--token", "--port", "--bind", "--allow-host", "--audio", "--eq", "--media")
+
+
+def kept_options(words):
+    """The kept options in a server command line (after the program itself)."""
+    out, i = [], 1
+    while i < len(words):
+        w = words[i]
+        if w in KEPT and i + 1 < len(words):
+            out += [w, words[i + 1]]
+            i += 2
+            continue
+        if any(w.startswith(k + "=") for k in KEPT):
+            out.append(w)
+        i += 1
+    return out
+
+
 MOVED = "Pocketfader (its old name)"      # how detect() describes a Pocketfader that is still the install here
 OTHER_WAY = "installed another way"
 
@@ -487,6 +507,11 @@ class StarcastRecipe(Recipe):
         s.vars["asset"] = self.zip_name(rel) if self.host.system == "windows" else self.wheel_name(rel)
         s.asset(rel, "SHA256SUMS.txt", self.repo)
         s.detail(f"{rel['tag']} · {s.vars['asset']}")
+        s.vars["kept"] = kept = kept_options(self._existing_command())
+        if kept:
+            shown = ["••••••" if i and kept[i - 1] == "--token" else ("--token=••••••" if w.startswith("--token=") else w)
+                     for i, w in enumerate(kept)]
+            s.log("Keeping its options: " + " ".join(shown))
 
     def _download(self, s):
         s.vars["file"] = s.download(s.vars["rel"], s.vars["asset"], self.repo)
@@ -495,10 +520,38 @@ class StarcastRecipe(Recipe):
         sums = s.fetch_text(s.vars["rel"], "SHA256SUMS.txt", self.repo)
         s.verify(s.vars["file"], sums, s.vars["asset"])
 
+    def _existing_command(self):
+        """The server's command line as the install here has it (the service, the login entry or the LaunchAgent; YTM
+        Starcast's first, else Pocketfader's), split into words."""
+        h = self.host
+        if h.system == "linux":
+            for path, key in ((self.unit_path(NEW), "ExecStart="), (self.unit_path(OLD), "ExecStart="),
+                              (self.autostart_path(NEW), "Exec="), (self.autostart_path(OLD), "Exec=")):
+                try:
+                    lines = path.read_text(encoding="utf-8").splitlines()
+                except OSError:
+                    continue
+                for line in lines:
+                    if line.startswith(key):
+                        return line[len(key):].split()
+        elif h.system == "darwin":
+            for path in (self.plist_path(NEW), self.plist_path(OLD)):
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                arr = text.split("<key>ProgramArguments</key>", 1)[-1].split("</array>", 1)[0]
+                return [x.split("</string>", 1)[0].replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+                        for x in arr.split("<string>")[1:]]
+        return []
+
     def _args(self, s):
-        args = []
+        # what the install before had (read when the install started: the old service may be gone by now)
+        args = list(s.vars.get("kept") or [])
         if self.host.system == "darwin":
-            args += ["--audio", "none", "--media", "none"]
+            for k, v in (("--audio", "none"), ("--media", "none")):
+                if not any(a == k or a.startswith(k + "=") for a in args):
+                    args += [k, v]
         if s.vars["opts"].get("lan"):
             args.append("--lan")
         return args

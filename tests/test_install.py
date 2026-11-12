@@ -633,6 +633,23 @@ class TestStarcast(StarcastBase):
         self.assertFalse(r.installed()["migrate"])
         self.assertTrue(r.options("install")[1]["value"])  # remembers --lan for the next reinstall
 
+    def test_an_update_keeps_the_servers_options(self):
+        """Its own install.sh keeps --token, --port and the like from the unit before; so does Orbit's update. --lan
+        follows the installer's choice: off here, so it goes."""
+        r = self.recipe()
+        snap = wait(self.installer(r).start("ytm-starcast", "install", {"lan": True, "ytdlp": False}))
+        self.assertEqual(snap["state"], "done", snap["error"])
+        unit = self.home / ".config/systemd/user/ytm-starcast.service"
+        unit.write_text(unit.read_text().replace("--lan", "--lan --token sekrit --port=8778"))
+        r.forget()
+        snap = wait(self.installer(r).start("ytm-starcast", "install", {"lan": False, "ytdlp": False}))
+        self.assertEqual(snap["state"], "done", snap["error"])
+        exec_start = next(ln for ln in unit.read_text().splitlines() if ln.startswith("ExecStart="))
+        self.assertTrue(exec_start.endswith("venv/bin/ytm-starcast --token sekrit --port=8778"), exec_start)
+        log = "\n".join(snap["log"])
+        self.assertIn("Keeping its options: --token •••••• --port=8778", log)
+        self.assertNotIn("sekrit", log)
+
     def test_linux_blocks_without_pactl(self):
         info = self.recipe(which={"python3": self.py}).info("install")
         self.assertIn("needs a few things", info["blocked"])

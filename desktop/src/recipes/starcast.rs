@@ -50,6 +50,29 @@ pub const NEW: Names = Names { slug: "ytm-starcast", module: "starcast", dists: 
 pub const OLD: Names = Names { slug: "pocketfader", module: "pocketfader", dists: &["pocketfader"], win_dir: "Pocketfader",
                                task: "Pocketfader", label: "app.pocketfader.server", display: "Pocketfader" };
 
+/// Options of the server that an update keeps from the install before it (as YTM Starcast's own install.sh does);
+/// `--lan` isn't one of them: it follows the installer's "home Wi-Fi" choice.
+const KEPT: [&str; 7] = ["--token", "--port", "--bind", "--allow-host", "--audio", "--eq", "--media"];
+
+/// The kept options in a server command line (after the program itself).
+pub fn kept_options(words: &[String]) -> Vec<String> {
+    let mut out = vec![];
+    let mut i = 1;
+    while i < words.len() {
+        let w = &words[i];
+        if KEPT.contains(&w.as_str()) && i + 1 < words.len() {
+            out.extend([w.clone(), words[i + 1].clone()]);
+            i += 2;
+            continue;
+        }
+        if KEPT.iter().any(|k| w.starts_with(&format!("{k}="))) {
+            out.push(w.clone());
+        }
+        i += 1;
+    }
+    out
+}
+
 fn any() -> Vec<i32> {
     (0..256).collect()
 }
@@ -342,6 +365,12 @@ impl StarcastRecipe {
         s.detail(&format!("{} · {asset}", rel["tag"].as_str().unwrap_or("")));
         s.vars.insert("asset".into(), json!(asset));
         s.vars.insert("rel".into(), rel);
+        let kept = kept_options(&self.existing_command());
+        if !kept.is_empty() {
+            let shown: Vec<String> = kept.iter().enumerate().map(|(i, w)| if i > 0 && kept[i - 1] == "--token" { "••••••".into() } else if w.starts_with("--token=") { "--token=••••••".into() } else { w.clone() }).collect();
+            s.log(&format!("Keeping its options: {}", shown.join(" ")));
+        }
+        s.vars.insert("kept".into(), json!(kept));
         Ok(true)
     }
 
@@ -359,10 +388,42 @@ impl StarcastRecipe {
         Ok(true)
     }
 
+    /// The server's command line as the install here has it (the service, the login entry or the LaunchAgent;
+    /// YTM Starcast's first, else Pocketfader's), split into words.
+    fn existing_command(&self) -> Vec<String> {
+        let h = self.h();
+        let words = |line: &str| line.split_whitespace().map(String::from).collect::<Vec<_>>();
+        if h.system == "linux" {
+            for (path, key) in [(self.unit_path(NEW), "ExecStart="), (self.unit_path(OLD), "ExecStart="),
+                                (self.autostart_path(NEW), "Exec="), (self.autostart_path(OLD), "Exec=")] {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    if let Some(line) = text.lines().find_map(|l| l.strip_prefix(key)) {
+                        return words(line);
+                    }
+                }
+            }
+        } else if h.system == "darwin" {
+            for path in [self.plist_path(NEW), self.plist_path(OLD)] {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    let Some(arr) = text.split("<key>ProgramArguments</key>").nth(1).and_then(|t| t.split("</array>").next()) else { continue };
+                    let unesc = |x: &str| x.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+                    return arr.split("<string>").skip(1).filter_map(|x| x.split("</string>").next()).map(unesc).collect();
+                }
+            }
+        }
+        vec![]
+    }
+
     fn args(&self, s: &Session) -> Vec<String> {
-        let mut a = vec![];
+        // what the install before had (read when the install started: the old service may be gone by now)
+        let mut a: Vec<String> = s.vars.get("kept").and_then(|k| k.as_array()).map(|k| k.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .unwrap_or_default();
         if self.h().system == "darwin" {
-            a.extend(["--audio", "none", "--media", "none"].iter().map(|x| x.to_string()));
+            for (k, v) in [("--audio", "none"), ("--media", "none")] {
+                if !a.iter().any(|x| x == k || x.starts_with(&format!("{k}="))) {
+                    a.extend([k.to_string(), v.to_string()]);
+                }
+            }
         }
         if s.opt_bool("lan", false) {
             a.push("--lan".into());
@@ -1209,6 +1270,15 @@ mod tests {
         assert!(StarcastRecipe::is_server(b"python3\0-m\0pocketfader\0", &[OLD]));
         assert!(!StarcastRecipe::is_server(b"python3\0-m\0something\0", &[OLD]));
         assert!(!StarcastRecipe::is_server(b"/usr/bin/bash\0", &[NEW, OLD]));
+    }
+
+    #[test]
+    fn an_update_keeps_the_servers_options_but_not_lan() {
+        let w = |s: &str| s.split_whitespace().map(String::from).collect::<Vec<_>>();
+        assert_eq!(kept_options(&w("/x/ytm-starcast --lan --token abc --port=8778 --bind 0.0.0.0 --verbose --audio none")),
+                   w("--token abc --port=8778 --bind 0.0.0.0 --audio none"));
+        assert!(kept_options(&w("/x/ytm-starcast --lan")).is_empty());
+        assert!(kept_options(&w("/x/ytm-starcast --token")).is_empty()); // a flag without its value isn't kept
     }
 
     #[test]
