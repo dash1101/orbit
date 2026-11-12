@@ -43,6 +43,7 @@ class Starcast(App):
         super().__init__(ctx)
         self._found = None      # (until, unit name): which service runs it here (the hub forgets it after an install)
         self._beacon = None     # the last Discord status payload, so the buttons match what it is doing
+        self._extension = None  # YTM Starcast's word on its browser extension (0.2.0a2 and newer)
 
     @property
     def units(self):
@@ -140,11 +141,16 @@ class Starcast(App):
             facts.append(["playing" if playing else "paused", f"{title}" + (f" — {artist}" if artist else "")])
             s["line"] = ("▶ " if playing else "❚❚ ") + title + (f" — {artist}" if artist else "")
         b = self._beacon = self._discord()
+        ext = self._extension = st.get("extension") if isinstance(st.get("extension"), dict) else None
         if caps.get("ytm_bridge"):
-            if ytm.get("connected"):
+            seen = ((b or {}).get("extension") or {}).get("lastSeenAgoSec")
+            if ext and ext.get("outdated"):
+                facts.append(["browser extension", "an older version: reload it on your browser's extensions page", "warn"])
+            elif ytm.get("connected"):
                 facts.append(["browser extension", "connected"])
+            elif ext is not None and not ext.get("everConnected") and seen is None:
+                facts.append(["browser extension", "not added yet: “set up browser extension” shows how", "warn"])
             else:
-                seen = ((b or {}).get("extension") or {}).get("lastSeenAgoSec")
                 facts.append(["browser extension", "not connected" if seen is None else
                               "last seen " + discord._ago(seen), "muted"])
         self._discord_facts(facts, b, parts)
@@ -290,6 +296,8 @@ class Starcast(App):
             {"id": "gui", "label": "desktop window", "group": "open"},
             {"id": "releases", "label": "releases", "group": "open"},
         ]
+        if self._extension is not None:
+            acts.append({"id": "extension", "label": "set up browser extension", "group": "open"})
         b = self._beacon
         if b and b.get("reachable") is not False:
             old = b.get("beaconApp") or {}
@@ -324,6 +332,8 @@ class Starcast(App):
             raise BadRequest("YTM Starcast's window isn't installed")
         if action == "releases":
             return self.open_url(self.homepage + "/releases")
+        if action == "extension":
+            return self.open_url(self.base + "/#extension")      # YTM Starcast's own guide
         if action == "show" or (action.startswith("hide:") and action[5:] in {str(m) for m in HIDE_FOR}):
             body = {"action": "show"} if action == "show" else {"action": "hide", "minutes": int(action[5:])}
             if not self.ctx.dry_run:

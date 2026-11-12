@@ -28,6 +28,7 @@ pub struct Starcast {
     ctx: Arc<Ctx>,
     found: Mutex<Option<(Instant, String)>>, // which service runs it here (forgotten after an install)
     beacon: Mutex<Option<Value>>,            // the last Discord status payload, so the buttons match what it is doing
+    extension: Mutex<Value>,                 // YTM Starcast's word on its browser extension (0.2.0a2 and newer), or null
 }
 
 fn truthy(v: &Value) -> bool {
@@ -40,7 +41,7 @@ fn s_of(v: &Value) -> String {
 
 impl Starcast {
     pub fn new(ctx: Arc<Ctx>) -> Starcast {
-        Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None) }
+        Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null) }
     }
 
     fn base(&self) -> String {
@@ -303,12 +304,20 @@ impl App for Starcast {
         }
         let b = self.discord_payload();
         *self.beacon.lock().unwrap() = b.clone();
+        let ext = st["extension"].clone(); // YTM Starcast 0.2.0a2 and newer: what it knows about its extension
+        *self.extension.lock().unwrap() = ext.clone();
         if truthy(&caps["ytm_bridge"]) {
-            if truthy(&ytm["connected"]) {
+            if truthy(&ext["outdated"]) {
+                facts.push(json!(["browser extension", "an older version: reload it on your browser's extensions page", "warn"]));
+            } else if truthy(&ytm["connected"]) {
                 facts.push(json!(["browser extension", "connected"]));
             } else {
                 let seen = b.as_ref().and_then(|b| b["extension"]["lastSeenAgoSec"].as_f64());
+                if ext.is_object() && !truthy(&ext["everConnected"]) && seen.is_none() {
+                    facts.push(json!(["browser extension", "not added yet: “set up browser extension” shows how", "warn"]));
+                } else {
                 facts.push(json!(["browser extension", match seen { None => "not connected".to_string(), Some(x) => format!("last seen {}", discord::ago(Some(x))) }, "muted"]));
+                }
             }
         }
         Self::discord_facts(&mut facts, b.as_ref(), parts);
@@ -399,6 +408,9 @@ impl App for Starcast {
             json!({"id": "gui", "label": "desktop window", "group": "open"}),
             json!({"id": "releases", "label": "releases", "group": "open"}),
         ];
+        if self.extension.lock().unwrap().is_object() {
+            acts.push(json!({"id": "extension", "label": "set up browser extension", "group": "open"}));
+        }
         let b = self.beacon.lock().unwrap().clone();
         match b.filter(|b| b["reachable"] != json!(false)) {
             Some(b) => {
@@ -442,6 +454,7 @@ impl App for Starcast {
                 return Err(bad("YTM Starcast's window isn't installed"));
             }
             "releases" => return open_url(self, &format!("{}/releases", self.homepage())),
+            "extension" => return open_url(self, &format!("{}/#extension", self.base())), // YTM Starcast's own guide
             "migrate-beacon" => {
                 if self.ctx.dry_run() {
                     return Ok(json!({"ok": true, "message": "dry run: would move over from YTM Beacon"}));
