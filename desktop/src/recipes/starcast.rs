@@ -533,6 +533,8 @@ impl StarcastRecipe {
         }
         if h.system == "windows" {
             paths.extend([self.shortcut_path(NEW), self.shortcut_path(OLD)]);
+            // the browser extension's folder (on Linux and macOS it's inside the program's folder)
+            paths.push(h.local_app_data().join(NEW.slug).join("extension"));
         }
         if s.opt_bool("purge", false) {
             paths.extend([self.settings_dir(NEW), self.settings_dir(OLD)]);
@@ -1235,7 +1237,8 @@ impl Recipe for StarcastRecipe {
         let h = self.h();
         let moved = before["how"] == MOVED;
         let nxt = json!([{"id": "app", "label": "open in orbit", "kind": "app", "app": self.id(), "primary": true},
-                         {"id": "web", "label": "open ytm starcast", "kind": "url", "url": format!("http://127.0.0.1:{PORT}/")}]);
+                         {"id": "web", "label": "open ytm starcast", "kind": "url", "url": format!("http://127.0.0.1:{PORT}/")},
+                         {"id": "extension", "label": "set up the browser extension", "kind": "url", "url": format!("http://127.0.0.1:{PORT}/#extension")}]);
         let (mut head, mut body) = if h.system == "linux" && !h.has_systemd() {
             ("YTM Starcast is installed.".to_string(), "Start it with `ytm-starcast` in a terminal; it prints the address to open on your phone.".to_string())
         } else {

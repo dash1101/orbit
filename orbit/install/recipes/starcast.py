@@ -630,7 +630,8 @@ class StarcastRecipe(Recipe):
                 paths += [ln for ln in self.links(n) if _links_into(ln, self.app_dir(n))]
                 paths += [self.desktop_path(n), self.icon_path(n), self.autostart_path(n)]
         if h.system == "windows":
-            paths += [self.shortcut_path(NEW), self.shortcut_path(OLD)]
+            paths += [self.shortcut_path(NEW), self.shortcut_path(OLD),
+                      h.local_app_data / NEW.slug / "extension"]    # the browser extension's folder (elsewhere: inside the program's)
         if s.vars["opts"].get("purge"):
             paths += [self.settings_dir(NEW), self.settings_dir(OLD)]
             if not self.beacon_found():     # YTM Beacon itself is gone: what it left behind goes too
@@ -923,7 +924,9 @@ class StarcastRecipe(Recipe):
         h = self.host
         moved = before.get("how") == MOVED
         nxt = [{"id": "app", "label": "open in orbit", "kind": "app", "app": self.id, "primary": True},
-               {"id": "web", "label": "open ytm starcast", "kind": "url", "url": f"http://127.0.0.1:{PORT}/"}]
+               {"id": "web", "label": "open ytm starcast", "kind": "url", "url": f"http://127.0.0.1:{PORT}/"},
+               {"id": "extension", "label": "set up the browser extension", "kind": "url",
+                "url": f"http://127.0.0.1:{PORT}/#extension"}]
         if h.system == "linux" and h.has_systemd is False:
             body = "Start it with `ytm-starcast` in a terminal; it prints the address to open on your phone."
             head = "YTM Starcast is installed."
