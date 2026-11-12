@@ -4,7 +4,7 @@
 2. `python3 tools/sync-icons.py` pulls the apps' current icons from their repositories (a test fails if the desktop
    and Android copies differ, or if a file in Orbit's icon folders isn't one of the script's icons). Orbit's own icon
    is drawn by `python3 tools/make-icon.py` (`packaging/icon/`).
-3. Tag and push: `git tag -a v0.5.0 -m "Orbit v0.5.0" && git push origin v0.5.0`.
+3. Tag and push: `git tag -a v0.5.2 -m "Orbit v0.5.2" && git push origin v0.5.2`.
 4. After the release: run the *self-update-from-a-release* workflow, which updates the previous release to this one on Linux, Windows and macOS.
 
 **Orbit 0.4.0 and YTM Starcast.** 0.4.0 replaces Pocketfader and YTM Beacon with YTM Starcast
@@ -48,13 +48,11 @@ java -cp apksig-8.5.2.jar tools/sign-apk/Sign.java orbit-release.jks password.tx
 Then upload it to the release with its checksum (`gh release upload v0.4.0 orbit-android.apk`, and update
 `SHA256SUMS`).
 
-**File names.** Release files keep one name from release to release (`orbit-windows-x64.exe`, `orbit-linux-x86_64`,
-`orbit-macos-apple-silicon.dmg`, `orbit-macos-intel.dmg`, `orbit-android.apk`), so a program that updates itself keeps
-its name. Orbit 0.3.4 and older (desktop and Android) only find files named with the version, so through the 0.3 series
-and for 0.4.0 each file is also published under that name (`orbit-v0.4.0-windows-x64.exe`; the workflow does this for
-`v0.3.*` tags and `v0.4.0`; upload the signed APK as `orbit-v0.4.0-android.apk` too). 0.4.0 is included because it is
-the release that moves Pocketfader and YTM Beacon to YTM Starcast, which older Orbits can't install. From 0.4.1 on,
-only the plain names are published.
+**File names.** Release files keep one name from release to release, so a program that updates itself keeps its name:
+`orbit-windows-x64.exe`, `orbit-windows-arm64.exe`, `orbit-linux-x86_64`, `orbit-linux-arm64`, `orbit-linux-x86_64.deb`,
+`orbit-linux-arm64.deb`, `orbit-macos-apple-silicon.dmg`, `orbit-macos-intel.dmg` and `orbit-android.apk` (upload the
+signed APK under that name). Up to 0.5.1 each file was also published under a name with the version, for Orbit 0.3.4 and
+older; from 0.5.2 on only the plain names are.
 
 ## Signing in with GitHub
 

@@ -598,6 +598,9 @@ impl Hub {
             if !net::is_newer(&tag, crate::VERSION) {
                 return;
             }
+            if crate::recipes::orbit::running_program().map(|e| crate::recipes::orbit::deb_install(&e)).unwrap_or(false) {
+                return; // the Debian package: installing needs the password, so the top bar offers it instead
+            }
             let Some(r) = h.installer.get("orbit") else { return };
             if r.requirements("install").iter().any(|x| x["blocking"].as_bool().unwrap_or(false)) || h.installer.busy("orbit").is_some() {
                 return; // can't replace itself here (a folder it can't write to): the top bar offers the download page
