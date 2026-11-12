@@ -1,10 +1,10 @@
 # Releasing
 
-1. Bump `__version__` in `orbit/__init__.py`.
+1. Bump the version in `desktop/Cargo.toml`, `desktop/tauri.conf.json` and `orbit/__init__.py` (the Python Orbit).
 2. `python3 tools/sync-icons.py` pulls the apps' current icons from their repositories (a test fails if the desktop
    and Android copies differ, or if a file in Orbit's icon folders isn't one of the script's icons). Orbit's own icon
    is drawn by `python3 tools/make-icon.py` (`packaging/icon/`).
-3. Tag and push: `git tag -a v0.4.0 -m "Orbit v0.4.0" && git push origin v0.4.0`.
+3. Tag and push: `git tag -a v0.5.0 -m "Orbit v0.5.0" && git push origin v0.5.0`.
 4. After the release: run the *self-update-from-a-release* workflow, which updates the previous release to this one on Linux, Windows and macOS.
 
 **Orbit 0.4.0 and YTM Starcast.** 0.4.0 replaces Pocketfader and YTM Beacon with YTM Starcast
@@ -17,7 +17,7 @@ Pocketfader `v0.1.0-alpha.15` (from YTM Starcast's releases) and YTM Beacon `v0.
 which must stay public) to YTM Starcast. Orbit 0.3.5 and older can't install YTM Starcast, so the release notes tell
 people to update Orbit first.
 
-The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel), starts each one on its own system as a check, and publishes a pre-release with all of them, each as a single file: the `.exe`, the Linux program, a `.dmg` per Mac type, and the `.apk`. The programs bundle Python, so nothing needs installing to run them. The Android app is the one piece that depends on where the signing key is.
+The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel), starts each one on its own system as a check, and publishes a pre-release with all of them, each as a single file: the `.exe`, the Linux program, a `.dmg` per Mac type, and the `.apk`. The desktop programs are the Rust build in `desktop/` (see its README); each is a single file with nothing to install. The Android app is the one piece that depends on where the signing key is.
 
 ## The signing key
 
