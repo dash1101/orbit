@@ -7,22 +7,30 @@ settings, read its log and update it when a new release is out. It comes with su
 [YTM Starcast](https://github.com/dash1101/ytm-starcast) and [Nova](https://github.com/dash1101/Nova), and you can add
 any other app from Orbit's settings.
 
-Orbit is a small Python program (standard library only) with its own window. It runs on Linux, Windows and
-macOS, only listens on `127.0.0.1`, and only asks for the administrator password when an app has to be installed
-system-wide (Nova), through your system's own password window or Windows' permission prompt.
+Orbit is one small program with its own window, drawn by the web engine that comes with your system (WebView2 on
+Windows, WebKit on macOS, WebKitGTK on Linux): it doesn't need a browser. It runs on Linux, Windows and macOS, only
+listens on `127.0.0.1`, and only asks for the administrator password when an app has to be installed system-wide
+(Nova), through your system's own password window or Windows' permission prompt.
+
+If the web engine is missing (a few Windows 10 computers don't have WebView2; some Linux desktops don't have
+WebKitGTK), Orbit offers to install it: Microsoft's own WebView2 installer, run only after Orbit checks that Microsoft
+signed it, or your Linux's own WebKitGTK package, which asks for your password. Say no, and Orbit opens in your
+browser instead.
 
 ## Install
 
+Download the program for your system from the [releases page](../../releases) (see *The programs* below).
+
+The program is written in Rust (`desktop/`; see its README to build it). The page it shows is `orbit/static/index.html`.
+The Python version of Orbit is still here and works the same way, for running from the source folder:
+
 ```bash
-./install.sh            # adds Orbit to your apps menu and an `orbit` command
-orbit                   # opens the window
+./install.sh            # adds the Python Orbit to your apps menu and an `orbit` command
+python3 -m orbit        # or run it without installing (on Windows: py -m orbit)
 ```
 
-For the native window you need `python3-gi` and `gir1.2-webkit2-4.1` (Debian/Ubuntu). Without them Orbit opens in
-a browser window instead. Remove it with `./install.sh --uninstall`.
-
-Run from the source folder without installing: `python3 -m orbit` (on Windows: `py -m orbit`). On Windows and
-macOS, Orbit opens as an app window in Edge, Chrome or Brave, or as a tab in your default browser.
+Its native window needs `python3-gi` and `gir1.2-webkit2-4.1` (Debian/Ubuntu); without them it opens in a browser.
+Remove it with `./install.sh --uninstall`.
 
 | Option | |
 |---|---|
@@ -123,11 +131,12 @@ Build it with Gradle 8.9 and JDK 17 (`cd android && gradle :app:assembleRelease`
 an earlier copy, give the workflow a signing key as repository secrets: `ORBIT_KEYSTORE_B64`,
 `ORBIT_KEYSTORE_PASSWORD` and `ORBIT_KEY_ALIAS`. Without them a release leaves the Android app out.
 
-## The standalone programs
+## The programs
 
 Each download on the releases page is the program itself, with nothing to unpack and nothing else to install: the `.exe`
 on Windows, a `.dmg` on macOS (open it and drag Orbit onto Applications), and the program file on Linux (allow it to
-run once with `chmod +x`, since browsers don't keep that). On Linux and Windows, *orbit settings → Orbit in your apps
+run once with `chmod +x`, since browsers don't keep that). The programs start in a fraction of a second and are 4 to 10
+MB. On Linux and Windows, *orbit settings → Orbit in your apps
 menu* adds a launcher for the copy you downloaded.
 
 **Orbit updates itself** on Linux, Windows and macOS. When a new release is out, the top bar says *update orbit to …*
@@ -232,8 +241,9 @@ The tests use fakes and small stub servers, so they never touch real services. T
 downloads, checksum and signature checks against a stub GitHub, with fake `pkexec`, `apt-get`, `python3` and
 `systemctl` in a temporary home folder, and the Windows and macOS installs as dry runs.
 
-The tests run on Linux, Windows and macOS. Two more checks run on real machines in CI: `tools/ci-nova-windows.py`
-installs the newest Nova and YTM Starcast through the built `orbit.exe` on GitHub's Windows machines, checks each one
+The program's own tests: `cd desktop && cargo test`. The Python tests run on Linux in CI. Two more checks run against
+the built programs on real machines in CI: `tools/ci-nova-windows.py` installs the newest Nova and YTM Starcast through
+the built `orbit.exe` on GitHub's Windows machines, checks each one
 answers, and removes them again (and installs Nova over itself through Orbit's Python code, and moves a machine with
 Pocketfader and YTM Beacon over to YTM Starcast the way a person's PC would be moved); and `tools/ci-selfupdate.py`
 has a real standalone Orbit update itself to a newer build and restart on it, on Linux, Windows and both kinds of Mac.

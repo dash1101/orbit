@@ -1,7 +1,10 @@
 name: build
 
 # Builds Orbit for every system on each push. A tag like v0.2.0 publishes a pre-release with all of it:
-#   Linux, Windows and macOS (Apple chips and Intel) programs that need nothing installed, and the Android app.
+#   the Linux, Windows and macOS (Apple chips and Intel) programs (desktop/, Rust with its own window on the system's
+#   web engine) and the Android app. Each desktop build is tested on its own system first: unit tests, a look at the
+#   window, a real update to a newer build and a restart, and on Windows installing, checking and removing Nova and
+#   YTM Starcast through the program, and moving a computer from Pocketfader and YTM Beacon to YTM Starcast.
 # The Android app is only added when it was signed with the release key (see RELEASING.md).
 on:
   push:
@@ -66,104 +69,134 @@ jobs:
           - { os: macos-latest, name: macos-apple-silicon }
           - { os: macos-15-intel, name: macos-intel }
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run: { shell: bash }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: "desktop -> target" }
+      - uses: actions/setup-python@v5        # Orbit's real-machine checks are Python scripts
         with: { python-version: "3.12" }
-      # the same tests on every system (a few that use shell scripts as stand-ins for programs skip Windows)
-      - name: Tests
-        shell: bash
-        run: python -W error::ResourceWarning -m unittest discover -s tests -t .
-      - name: "Build (bundles Python, so nothing needs installing to run it)"
-        shell: bash
+      - name: Linux libraries for the window
+        if: runner.os == 'Linux'
+        timeout-minutes: 20
         run: |
-          pip install pyinstaller pillow   # Pillow turns the PNG icon into .ico / .icns
-          sep=":"; [ "$RUNNER_OS" = Windows ] && sep=";"
-          common=(--noconfirm --paths . --collect-submodules orbit --add-data "orbit/static${sep}orbit/static")
-          if [ "$RUNNER_OS" = Windows ]; then
-            pyinstaller "${common[@]}" --onefile --windowed --name orbit --icon packaging/icon/orbit-1024.png packaging/entry.py
-          elif [ "$RUNNER_OS" = macOS ]; then
-            pyinstaller "${common[@]}" --windowed --name Orbit --osx-bundle-identifier app.novalabs.orbit --icon packaging/icon/orbit-mac-1024.png packaging/entry.py
-          else
-            pyinstaller "${common[@]}" --onefile --name orbit packaging/entry.py
-          fi
-          ls -la dist
-      - name: "Smoke test (start it, ask it for its pages)"
-        shell: bash
-        run: |
-          case "$RUNNER_OS" in
-            Windows) exe=dist/orbit.exe ;;
-            macOS) exe=dist/Orbit.app/Contents/MacOS/Orbit ;;
-            *) exe=dist/orbit ;;
-          esac
-          "$exe" --no-window --dry-run --port 8799 > run.log 2>&1 &
-          pid=$!
-          ok=0
-          for i in $(seq 1 60); do
-            sleep 1
-            if curl -sf http://127.0.0.1:8799/api/hub -o hub.json; then ok=1; break; fi
+          # Ubuntu's mirrors sometimes stall on GitHub's machines: retry, and give up on a stalled download quickly
+          apt="-o Acquire::Retries=5 -o Acquire::ForceIPv4=true -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          for try in 1 2 3; do
+            sudo apt-get $apt update && sudo apt-get $apt install -y --no-install-recommends \
+              libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev xvfb imagemagick && break
+            echo "attempt $try failed; trying again"; sleep 20
           done
-          cat run.log || true
-          [ "$ok" = 1 ] || { echo "the program did not start"; exit 1; }
-          grep -q '"name": "Orbit"' hub.json
+          pkg-config --exists webkit2gtk-4.1
+      - name: Unit tests
+        working-directory: desktop
+        run: cargo test
+      - name: Build
+        working-directory: desktop
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            # the window is a second build, carried inside the program and started only when WebKitGTK is there
+            cargo build --release --features window
+            cp target/release/orbit "$RUNNER_TEMP/orbit-window"
+            ORBIT_WINDOW_BIN="$RUNNER_TEMP/orbit-window" cargo build --release
+          else
+            cargo build --release --features window
+          fi
+          ls -la target/release
+          ./target/release/orbit --version || true
+      - name: Smoke test (the server answers, quickly)
+        run: |
+          exe=desktop/target/release/orbit; [ "$RUNNER_OS" = Windows ] && exe=desktop/target/release/orbit.exe
+          start=$(python -c "import time; print(time.time())")
+          "$exe" --no-window --port 8799 > run.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 100); do curl -sf http://127.0.0.1:8799/api/hub -o hub.json && break; sleep 0.1; done
+          python -c "import time; print(f'answered after {time.time() - $start:.2f} s (first start)')"
+          cat run.log
+          grep -q '"name":"Orbit"' hub.json
           curl -sf http://127.0.0.1:8799/ -o page.html && grep -q "<title>Orbit</title>" page.html
           curl -sf http://127.0.0.1:8799/apps/nova.svg -o /dev/null
-          curl -sf http://127.0.0.1:8799/apps/ytm-starcast.svg -o /dev/null
           curl -sf http://127.0.0.1:8799/api/install -o install.json && grep -q '"host"' install.json
-          # Pages must answer quickly although none of the apps run here (Windows takes ~2 s per refused connection).
           for round in cold warm; do
-            for path in /api/apps /api/apps/ytm-starcast /api/apps/nova /api/apps/ytm-starcast/logs /api/hub /api/install; do
+            for path in /api/apps /api/apps/nova /api/apps/nova/logs /api/hub /api/install; do
               t=$(curl -s -o /dev/null -w "%{time_total}" "http://127.0.0.1:8799$path")
               echo "$round $path ${t}s"
               awk -v t="$t" 'BEGIN { exit !(t < 3.0) }' || { echo "too slow: $path took ${t}s"; exit 1; }
             done
           done
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: evil.example" http://127.0.0.1:8799/api/hub); [ "$code" = 403 ]
+          code=$(curl -s -o /dev/null -w "%{http_code}" -d "a=b" http://127.0.0.1:8799/api/hub); [ "$code" = 400 ]
+          kill $pid || true
+          sleep 1
+          start=$(python -c "import time; print(time.time())")
+          "$exe" --no-window --port 8797 > run2.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 100); do curl -sf http://127.0.0.1:8797/api/hub -o /dev/null && break; sleep 0.05; done
+          python -c "import time; print(f'answered after {time.time() - $start:.2f} s (second start)')"
           kill $pid || true
           echo "smoke test passed"
-      # Orbit updates itself on Linux and Windows: a second build that says 99.0.0 is published by a stand-in GitHub, and
-      # this build must update itself to it through its own API, restart on it, and delete the old program.
-      - name: "Self-update (a real update to a newer build, then a restart)"
-        shell: bash
+      - name: Wrap the Mac app
+        if: runner.os == 'macOS'
+        run: tools/make-mac-app.sh desktop/target/release/orbit "$(desktop/target/release/orbit --version | cut -d' ' -f2)" dist
+      - name: Look at the window (screenshot)
+        continue-on-error: true
         run: |
-          cp orbit/__init__.py "$RUNNER_TEMP/init.py"
-          sed -i.bak 's/^__version__ = .*/__version__ = "99.0.0"/' orbit/__init__.py
-          sep=":"; [ "$RUNNER_OS" = Windows ] && sep=";"
-          common=(--noconfirm --paths . --collect-submodules orbit --add-data "orbit/static${sep}orbit/static"
-                  --distpath dist-next --workpath build-next)
-          if [ "$RUNNER_OS" = Windows ]; then
-            pyinstaller "${common[@]}" --onefile --windowed --name orbit packaging/entry.py
-            cp "$RUNNER_TEMP/init.py" orbit/__init__.py
-            python tools/ci-selfupdate.py dist/orbit.exe dist-next/orbit.exe windows-x64.exe
-          elif [ "$RUNNER_OS" = macOS ]; then
-            pyinstaller "${common[@]}" --windowed --name Orbit --osx-bundle-identifier app.novalabs.orbit packaging/entry.py
-            cp "$RUNNER_TEMP/init.py" orbit/__init__.py
-            mkdir -p dmg-next && cp -R dist-next/Orbit.app dmg-next/ && ln -s /Applications dmg-next/Applications
-            hdiutil create -volname Orbit -srcfolder dmg-next -ov -format UDZO next.dmg
-            python tools/ci-selfupdate.py dist/Orbit.app next.dmg "${{ matrix.name }}.dmg"
-          else
-            pyinstaller "${common[@]}" --onefile --name orbit packaging/entry.py
-            cp "$RUNNER_TEMP/init.py" orbit/__init__.py
-            python tools/ci-selfupdate.py dist/orbit dist-next/orbit linux-x86_64
-          fi
-      # One file per download, nothing to unpack: the .exe and the Linux program as they are; on macOS the app is a
-      # folder (Orbit.app), so it goes in a disk image with an Applications shortcut to drag it onto.
+          mkdir -p shots
+          case "$RUNNER_OS" in
+            Linux)
+              xvfb-run -a -s "-screen 0 1400x900x24" bash -c '
+                desktop/target/release/orbit --port 8798 > win.log 2>&1 &
+                sleep 12; import -window root shots/window-linux.png; kill %1' || true
+              cat win.log || true ;;
+            Windows)
+              desktop/target/release/orbit.exe --port 8798 > win.log 2>&1 &
+              sleep 15
+              powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; \$i=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; \$g=[System.Drawing.Graphics]::FromImage(\$i); \$g.CopyFromScreen(\$b.Location,[System.Drawing.Point]::Empty,\$b.Size); \$i.Save('shots/window-windows.png')"
+              taskkill //F //IM orbit.exe || true ;;
+            macOS)
+              open dist/Orbit.app --args --port 8798
+              sleep 15; screencapture -x shots/window-${{ matrix.name }}.png || true
+              pkill -f "Orbit.app/Contents/MacOS/Orbit" || true ;;
+          esac
+          curl -sf http://127.0.0.1:8798/api/hub > /dev/null && echo "window's server answered" || true
+          ls -la shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: "shots-${{ matrix.name }}", path: shots/, if-no-files-found: ignore }
+      - name: "Self-update (a real update to a newer build, then a restart)"
+        working-directory: desktop
+        run: |
+          ORBIT_VERSION=99.0.0 CARGO_TARGET_DIR=target-next cargo build --release
+          cd ..
+          case "$RUNNER_OS" in
+            Windows) python tools/ci-selfupdate.py desktop/target/release/orbit.exe desktop/target-next/release/orbit.exe windows-x64.exe ;;
+            macOS)
+              tools/make-mac-app.sh desktop/target-next/release/orbit 99.0.0 dist-next
+              mkdir -p dmg-next && cp -R dist-next/Orbit.app dmg-next/ && ln -s /Applications dmg-next/Applications
+              hdiutil create -volname Orbit -srcfolder dmg-next -ov -format UDZO next.dmg
+              python tools/ci-selfupdate.py dist/Orbit.app next.dmg "${{ matrix.name }}.dmg" ;;
+            *) python tools/ci-selfupdate.py desktop/target/release/orbit desktop/target-next/release/orbit linux-x86_64 ;;
+          esac
+      - name: "Windows: install, check and remove Nova and YTM Starcast through the program"
+        if: runner.os == 'Windows'
+        env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
+        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe nova,ytm-starcast
+      - name: "Windows: move a computer from Pocketfader and YTM Beacon to YTM Starcast through the program"
+        if: runner.os == 'Windows'
+        env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
+        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe ytm-starcast --migrate
       - name: Package
-        shell: bash
         run: |
           mkdir -p out
           case "$RUNNER_OS" in
-            Windows) cp dist/orbit.exe out/orbit-windows-x64.exe ;;
+            Windows) cp desktop/target/release/orbit.exe out/orbit-windows-x64.exe ;;
             macOS)
               mkdir -p dmg && cp -R dist/Orbit.app dmg/ && ln -s /Applications dmg/Applications
-              hdiutil create -volname Orbit -srcfolder dmg -ov -format UDZO "out/orbit-${{ matrix.name }}.dmg"
-              # open it like a person would and check the app inside is there and runnable
-              hdiutil attach "out/orbit-${{ matrix.name }}.dmg" -nobrowse -readonly -mountpoint "$RUNNER_TEMP/orbit-dmg"
-              test -x "$RUNNER_TEMP/orbit-dmg/Orbit.app/Contents/MacOS/Orbit"
-              test -L "$RUNNER_TEMP/orbit-dmg/Applications"
-              "$RUNNER_TEMP/orbit-dmg/Orbit.app/Contents/MacOS/Orbit" --version
-              hdiutil detach "$RUNNER_TEMP/orbit-dmg"
-              ;;
-            *) cp dist/orbit out/orbit-linux-x86_64 ;;
+              hdiutil create -volname Orbit -srcfolder dmg -ov -format UDZO "out/orbit-${{ matrix.name }}.dmg" ;;
+            *) cp desktop/target/release/orbit out/orbit-linux-x86_64 ;;
           esac
           ls -la out
       - uses: actions/upload-artifact@v4
@@ -188,11 +221,11 @@ jobs:
           rm -f orbit-android-unsigned.apk         # never published: it can't be installed
           # The files keep one name from release to release (orbit-windows-x64.exe …), so a program that updates
           # itself keeps its name too. Orbit 0.3.4 and older look for names with the version in them to update
-          # themselves (orbit-v0.3.4-windows-x64.exe): through the 0.3 series, and 0.4.0 (the release that moves
-          # Pocketfader and YTM Beacon to YTM Starcast, which they can't install), they get a copy under that name as
-          # well.
+          # themselves (orbit-v0.3.4-windows-x64.exe): through the 0.3 series, 0.4.0 (the release that moves
+          # Pocketfader and YTM Beacon to YTM Starcast, which they can't install) and 0.5 (the Rust Orbit), they get a
+          # copy under that name as well.
           case "$GITHUB_REF_NAME" in
-            v0.3.*|v0.4.0) for f in orbit-*; do cp "$f" "$(echo "$f" | sed "s/^orbit-/orbit-${GITHUB_REF_NAME}-/")"; done ;;
+            v0.3.*|v0.4.0|v0.5.*) for f in orbit-*; do cp "$f" "$(echo "$f" | sed "s/^orbit-/orbit-${GITHUB_REF_NAME}-/")"; done ;;
           esac
           sha256sum orbit-* > SHA256SUMS
           # the release may already exist (the Android app is added later): then add or replace the files

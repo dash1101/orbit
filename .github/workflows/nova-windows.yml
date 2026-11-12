@@ -1,9 +1,8 @@
 name: apps-on-windows
 # On GitHub's Windows machines, Orbit installs the newest releases of its apps for real, checks that each answers and
 # that Orbit's page for it sees that, and removes them again (tools/ci-nova-windows.py): Nova through Orbit's Python
-# code (installed again over itself, too), and Nova and YTM Starcast through the built orbit.exe; and the move to
-# YTM Starcast: Pocketfader and YTM Beacon put in place as they were installed before, then moved over and removed by
-# orbit.exe.
+# code (installed again over itself, too). The program people download (desktop/, Rust) gets the same checks, and
+# the move to YTM Starcast, in the build workflow.
 on:
   push:
     branches: [main]
@@ -18,35 +17,15 @@ jobs:
       matrix:
         include:
           - { os: windows-2022, how: source }          # Orbit's Python code
-          - { os: windows-latest, how: program }       # the standalone orbit.exe people download
-          - { os: windows-latest, how: migrate }       # orbit.exe moving a PC from Pocketfader and YTM Beacon to YTM Starcast
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Build the standalone program
-        if: matrix.how != 'source'
-        shell: bash
-        run: |
-          pip install pyinstaller
-          pyinstaller --noconfirm --paths . --collect-submodules orbit --add-data "orbit/static;orbit/static" --onefile --windowed --name orbit packaging/entry.py
       - name: Install, check, update and remove Nova through Orbit
         if: matrix.how == 'source'
         run: python tools/ci-nova-windows.py
-        env:
-          PYTHONIOENCODING: utf-8
-          GITHUB_TOKEN: ${{ github.token }}
-      - name: Install, check and remove Nova and YTM Starcast through the standalone Orbit
-        if: matrix.how == 'program'
-        run: python tools/ci-nova-windows.py --exe dist/orbit.exe nova,ytm-starcast
-        env:
-          PYTHONIOENCODING: utf-8
-          GITHUB_TOKEN: ${{ github.token }}     # GitHub's machines share addresses: without it, release lookups get rate-limited
-      - name: Move Pocketfader and YTM Beacon to YTM Starcast through the standalone Orbit, then remove it all
-        if: matrix.how == 'migrate'
-        run: python tools/ci-nova-windows.py --exe dist/orbit.exe ytm-starcast --migrate
         env:
           PYTHONIOENCODING: utf-8
           GITHUB_TOKEN: ${{ github.token }}
