@@ -1,9 +1,14 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.6**
+
+- **YTM Starcast's new icon** in Orbit's list of apps.
+- **YTM Starcast's card:** *YouTube Music* and *settings* work with YTM Starcast 0.2.0-alpha.5 and its browser extension 2.3.0. *settings* shows while Refine is switched on (YTM Starcast's settings in YouTube Music are part of it), and if the browser still runs an older extension, Orbit says to reload it.
+
 **New in 0.5.5**
 
 - **Approving a browser for Nova is a click away:** *approve a browser* is on Nova's card, and its code box takes the code however it's written (`zag97v`, `ZAG 97V`), or the whole `sudo nova approve …` line pasted in. With a Nova that reports browsers waiting for approval, Nova's card says so and the button lights up.
-- **YTM Starcast's card opens YouTube Music:** with a YTM Starcast that supports it, *YouTube Music* brings your open YouTube Music tab to the front (or opens one), and *settings* opens YTM Starcast's settings inside it. The web app stays on YTM Starcast's own page in Orbit.
+- **YTM Starcast's card opens YouTube Music:** with YTM Starcast 0.2.0-alpha.5 and newer, *YouTube Music* brings your open YouTube Music tab to the front (or opens one), and *settings* opens YTM Starcast's settings inside it. The web app stays on YTM Starcast's own page in Orbit.
 - **Dialog titles aren't cut off any more** (*confirm*, *approve a browser* and the others).
 - **Orbit finds Nova on the computer itself first** (`https://127.0.0.1:8495`, which Nova 0.9.20 and newer answer on Linux), then on your home network, and over Tailscale last.
 

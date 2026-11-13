@@ -1,43 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#C9F5EC"/><stop offset=".5" stop-color="#E3D6FF"/><stop offset="1" stop-color="#FFB9AA"/>
-    </linearGradient>
-    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".55"/><stop offset=".45" stop-color="#FFFFFF" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2C323B"/><stop offset="1" stop-color="#15191F"/>
-    </linearGradient>
-    <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4ECF2"/>
-    </linearGradient>
-    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="16"/><feOffset dy="12" result="b"/>
-      <feFlood flood-color="#3A2A40" flood-opacity=".30"/><feComposite in2="b" operator="in"/>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#bg)"/><rect x="24" y="24" width="464" height="464" rx="120" fill="url(#gloss)"/>
-  <!-- a record (YouTube Music) whose ring is three faders' colours (the remote), and a star sending out light (Discord status) -->
-  <g filter="url(#sh)">
-    <circle cx="246" cy="280" r="150" fill="url(#card)"/>
-  </g>
-  <g fill="none" stroke-linecap="round">
-    <path d="M255.6,188.5 A92,92 0 0 1 330.0,317.4" stroke="#FF7A59" stroke-opacity=".28" stroke-width="34"/>
-    <path d="M320.4,334.1 A92,92 0 0 1 171.6,334.1" stroke="#FFC94D" stroke-opacity=".28" stroke-width="34"/>
-    <path d="M162.0,317.4 A92,92 0 0 1 236.4,188.5" stroke="#38D9C4" stroke-opacity=".28" stroke-width="34"/>
-    <path d="M255.6,188.5 A92,92 0 0 1 330.0,317.4" stroke="#FF7A59" stroke-width="16"/>
-    <path d="M320.4,334.1 A92,92 0 0 1 171.6,334.1" stroke="#FFC94D" stroke-width="16"/>
-    <path d="M162.0,317.4 A92,92 0 0 1 236.4,188.5" stroke="#38D9C4" stroke-width="16"/>
-  </g>
-  <path d="M227.3,233.1 L295.1,272.9 Q307.2,280.0 295.1,287.1 L227.3,326.9 Q215.2,334.0 215.2,320.0 L215.2,240.0 Q215.2,226.0 227.3,233.1 Z" fill="url(#play)"/>
-  <g filter="url(#sh)">
-    <circle cx="380" cy="148" r="62" fill="url(#card)" stroke="#FFFFFF" stroke-opacity=".9" stroke-width="12"/>
-  </g>
-  <circle cx="380" cy="148" r="34" fill="#7FF2E1" opacity=".14"/>
-  <path d="M380,116 C382.5,138 386,143.5 408,148 C386,152.5 382.5,158 380,180 C377.5,158 374,152.5 352,148 C374,143.5 377.5,138 380,116 Z" fill="#7FF2E1"/>
-  <g fill="none" stroke="#7FF2E1" stroke-width="7" stroke-linecap="round" opacity=".7">
-    <path d="M347,114 a48,48 0 0 0 0,68"/><path d="M413,114 a48,48 0 0 1 0,68"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="s-bg" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#1A2670"/><stop offset=".55" stop-color="#0B1238"/><stop offset="1" stop-color="#050820"/></linearGradient>
+<radialGradient id="s-n1" cx=".16" cy=".1" r=".75"><stop offset="0" stop-color="#5B4BFF" stop-opacity=".45"/><stop offset="1" stop-color="#5B4BFF" stop-opacity="0"/></radialGradient>
+<radialGradient id="s-n2" cx=".92" cy=".96" r=".6"><stop offset="0" stop-color="#1FB6FF" stop-opacity=".24"/><stop offset="1" stop-color="#1FB6FF" stop-opacity="0"/></radialGradient>
+<linearGradient id="s-ice" gradientUnits="userSpaceOnUse" x1="80" y1="240" x2="280" y2="440"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#D6E4FF"/><stop offset="1" stop-color="#93B5FF"/></linearGradient>
+<linearGradient id="s-cast" gradientUnits="userSpaceOnUse" x1="176" y1="60" x2="450" y2="340"><stop offset="0" stop-color="#8CF2FF"/><stop offset="1" stop-color="#7C8CFF"/></linearGradient>
+<radialGradient id="s-halo" cx="176" cy="336" r="150" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#B9D2FF" stop-opacity=".55"/><stop offset=".45" stop-color="#7FA2FF" stop-opacity=".18"/><stop offset="1" stop-color="#7FA2FF" stop-opacity="0"/></radialGradient>
+<filter id="s-glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><clipPath id="s-clip"><rect x="16" y="16" width="480" height="480" rx="112"/></clipPath></defs><rect x="16" y="16" width="480" height="480" rx="112" fill="url(#s-bg)"/><g clip-path="url(#s-clip)"><rect x="16" y="16" width="480" height="480" fill="url(#s-n1)"/><rect x="16" y="16" width="480" height="480" fill="url(#s-n2)"/><circle cx="75.34" cy="84.1" r="2.7" fill="#DCE7FF" opacity="0.33"/><circle cx="66.83" cy="138.85" r="1.6" fill="#DCE7FF" opacity="0.46"/><circle cx="106.59" cy="95.47" r="2.1" fill="#DCE7FF" opacity="0.61"/><circle cx="373.53" cy="80.38" r="2.1" fill="#DCE7FF" opacity="0.59"/><path d="M420,410C420.56,415.44 422.32,417.28 428,418C422.32,418.72 420.56,420.56 420,426C419.44,420.56 417.68,418.72 412,418C417.68,417.28 419.44,415.44 420,410Z" fill="#E8F0FF" opacity=".75"/></g><circle cx="176" cy="336" r="150" fill="url(#s-halo)"/><path d="M176,204 A132,132 0 0 1 308,336" fill="none" stroke="url(#s-cast)" stroke-width="28" stroke-linecap="round" opacity="1"/><path d="M176,136 A200,200 0 0 1 376,336" fill="none" stroke="url(#s-cast)" stroke-width="26" stroke-linecap="round" opacity="0.74"/><path d="M176,68 A268,268 0 0 1 444,336" fill="none" stroke="url(#s-cast)" stroke-width="24" stroke-linecap="round" opacity="0.46"/><circle cx="324.63" cy="202.17" r="31" fill="#0B1238"/><path d="M324.63,164.17C327.29,190.01 335.65,198.75 362.63,202.17C335.65,205.59 327.29,214.33 324.63,240.17C321.97,214.33 313.61,205.59 286.63,202.17C313.61,198.75 321.97,190.01 324.63,164.17Z" fill="#FFFFFF" filter="url(#s-glow)"/><path d="M176,236C183,304 205,327 276,336C205,345 183,368 176,436C169,368 147,345 76,336C147,327 169,304 176,236Z" fill="url(#s-ice)" filter="url(#s-glow)"/><rect x="17" y="17" width="478" height="478" rx="111" fill="none" stroke="#FFFFFF" stroke-opacity=".09" stroke-width="2"/></svg>
