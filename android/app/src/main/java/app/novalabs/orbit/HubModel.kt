@@ -201,8 +201,6 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     fun installedVersion(a: Listing): String? = phone.installedVersion(a)
     private fun installedPackage(a: Listing): String? = phone.installedPackage(a)
 
-    }
-
     /** Re-reads installed versions (cheap) and, at most every 10 minutes unless forced, the latest releases. */
     fun refresh(force: Boolean = false) {
         canInstall = Build.VERSION.SDK_INT < 26 || ctx.packageManager.canRequestPackageInstalls()
