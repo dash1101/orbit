@@ -143,34 +143,46 @@ jobs:
           texts() { "$adb" shell uiautomator dump /sdcard/ui.xml > /dev/null && "$adb" exec-out cat /sdcard/ui.xml \
                       | grep -o 'text="[^"]*"' | sed 's/text="//; s/"$//' | grep -v '^$' | tr '\n' '|'; echo; }
           echo "on screen: $(texts)"
-          # install Nova: Orbit downloads it from GitHub, checks its signature, then hands it to Android, which asks
-          # (the test stops at Android's question)
-          "$adb" exec-out cat /sdcard/ui.xml > ui.xml
-          xy=$(python3 -c '
-          import re
-          seen = False
+          # install Nova: Orbit's wizard downloads it from GitHub, checks its signature, then hands it to Android, which
+          # asks (the test stops at Android's question). Orbit's "install apps" permission is given here beforehand.
+          "$adb" shell appops set app.novalabs.orbit REQUEST_INSTALL_PACKAGES allow
+          tap() {  # tap the node with this text: "first" after the text $2 (or anywhere), or the "last" one on screen
+            "$adb" shell uiautomator dump /sdcard/ui.xml > /dev/null; "$adb" exec-out cat /sdcard/ui.xml > ui.xml
+            xy=$(WANT="$1" AFTER="$2" WHICH="$3" python3 -c '
+          import os, re
+          want, after, which = os.environ["WANT"], os.environ["AFTER"], os.environ["WHICH"]
+          seen, found = not after, []
           for n in re.findall(r"<node [^>]*>", open("ui.xml").read()):
               t, b = re.search(r" text=\"([^\"]*)\"", n), re.search(r"bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", n)
               if not (t and b):
                   continue
-              if t.group(1) == "Nova":
+              if t.group(1) == after:
                   seen = True
-              elif seen and t.group(1) == "install":
-                  x1, y1, x2, y2 = map(int, b.groups()); print((x1 + x2) // 2, (y1 + y2) // 2); break
+              elif seen and t.group(1) == want:
+                  x1, y1, x2, y2 = map(int, b.groups()); found.append(((x1 + x2) // 2, (y1 + y2) // 2))
+          if found:
+              x, y = found[0] if which == "first" else found[-1]; print(x, y)
           ')
-          if [ -n "$xy" ]; then
-            "$adb" shell input tap $xy
-            for i in $(seq 40); do
-              focus=$("$adb" shell dumpsys window | grep -m1 mCurrentFocus | tr -d '\r')
-              case "$focus" in *packageinstaller*|*PackageInstaller*|*settings*|*Settings*) break ;; esac
-              sleep 3
-            done
-            "$adb" exec-out screencap -p > shots/android-2-install-nova.png
-            echo "after install Nova ($focus): $(texts)"
-            case "$focus" in *packageinstaller*|*PackageInstaller*|*settings*|*Settings*) echo "Android asks about installing Nova: download and signature check passed" ;;
-              *) echo "::warning::Android's install question didn't come up" ;; esac
-            "$adb" shell input keyevent KEYCODE_BACK; sleep 2; "$adb" shell input keyevent KEYCODE_BACK; sleep 2
-          fi
+            [ -n "$xy" ] && "$adb" shell input tap $xy
+          }
+          tap install Nova first; sleep 8
+          "$adb" exec-out screencap -p > shots/android-2-install-nova.png
+          seen="$(texts)"; echo "Nova's install: $seen"
+          case "$seen" in
+            *"GitHub's limit"*|*"GitHub refused"*) echo "::warning::GitHub's limit for requests without a sign-in is used up on this shared machine: the download isn't tried" ;;
+            *)
+              tap install "" last
+              for i in $(seq 40); do
+                focus=$("$adb" shell dumpsys window | grep -m1 mCurrentFocus | tr -d '\r')
+                case "$focus" in *packageinstaller*|*PackageInstaller*) break ;; esac
+                sleep 3
+              done
+              "$adb" exec-out screencap -p > shots/android-3-android-asks.png
+              echo "then: $(texts)"
+              case "$focus" in *packageinstaller*|*PackageInstaller*) echo "Android asks to install Nova: Orbit downloaded it and its signature checked out" ;;
+                *) echo "::warning::Android's install question didn't come up ($focus)" ;; esac ;;
+          esac
+          "$adb" shell input keyevent KEYCODE_BACK; sleep 2; "$adb" shell input keyevent KEYCODE_BACK; sleep 2
           "$adb" logcat -d > logcat.txt
           pid=$("$adb" shell pidof app.novalabs.orbit | tr -d '\r')
           if grep -q "FATAL EXCEPTION" logcat.txt || [ -z "$pid" ]; then
