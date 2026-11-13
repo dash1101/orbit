@@ -30,6 +30,7 @@ pub struct Starcast {
     beacon: Mutex<Option<Value>>,            // the last Discord status payload, so the buttons match what it is doing
     extension: Mutex<Value>,                 // YTM Starcast's word on its browser extension (0.2.0a2 and newer), or null
     focus: Mutex<bool>,                      // it can bring YouTube Music (and its settings there) to the front
+    refine_off: Mutex<bool>,                 // Refine (where those settings are) is switched off in YTM Starcast
 }
 
 fn truthy(v: &Value) -> bool {
@@ -42,7 +43,8 @@ fn s_of(v: &Value) -> String {
 
 impl Starcast {
     pub fn new(ctx: Arc<Ctx>) -> Starcast {
-        Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null), focus: Mutex::new(false) }
+        Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null), focus: Mutex::new(false),
+                   refine_off: Mutex::new(false) }
     }
 
     fn base(&self) -> String {
@@ -286,6 +288,7 @@ impl App for Starcast {
         };
         let (vol, media, caps, parts) = (&st["volume"], &st["media"], &st["capabilities"], &st["parts"]);
         *self.focus.lock().unwrap() = truthy(&caps["ytm_focus"]);
+        *self.refine_off.lock().unwrap() = parts["refine"] == json!(false);
         let audio_off = parts["audio"] == json!(false);
         if audio_off {
             facts.push(json!(["computer audio", "switched off in YTM Starcast", "muted"]));
@@ -413,7 +416,9 @@ impl App for Starcast {
         let mut acts = vec![];
         if focus {
             acts.push(json!({"id": "ytm", "label": "YouTube Music", "group": "open", "primary": true, "ext": true}));
-            acts.push(json!({"id": "ytm-settings", "label": "settings", "group": "open", "ext": true}));
+            if !*self.refine_off.lock().unwrap() {
+                acts.push(json!({"id": "ytm-settings", "label": "settings", "group": "open", "ext": true}));
+            }
         }
         acts.extend([
             json!({"id": "open", "label": "open web app", "group": "open", "primary": !focus}),
@@ -457,17 +462,24 @@ impl App for Starcast {
             "ytm" | "ytm-settings" => {
                 // the browser extension brings its YouTube Music tab to the front (opening one if there is none)
                 let settings = action == "ytm-settings";
+                // an extension older than 2.3.0 doesn't know these commands: then reloading it is the fix
+                let couldnt = |why: String| if truthy(&self.extension.lock().unwrap()["outdated"]) {
+                    bad("YTM Starcast's browser extension is an older version that can't do this yet: reload it on your browser's extensions page")
+                } else {
+                    bad(format!("YTM Starcast couldn't show YouTube Music{why}"))
+                };
                 let r = self.post("/api/ytm", &json!({"type": if settings { "settings" } else { "focus" }}), 10.0)
-                    .map_err(|e| bad(format!("YTM Starcast couldn't show YouTube Music: {}", e.message)))?;
+                    .map_err(|e| couldnt(format!(": {}", e.message)))?;
                 if r.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-                    return Err(bad(format!("YTM Starcast couldn't show YouTube Music{}",
-                                           r["error"].as_str().map(|e| format!(": {e}")).unwrap_or_default())));
+                    return Err(couldnt(r["error"].as_str().map(|e| format!(": {e}")).unwrap_or_default()));
                 }
-                let opened = truthy(&r["opened"]);
-                return Ok(json!({"ok": true, "message": match (settings, opened) {
-                    (_, true) => "opened YouTube Music in the browser",
-                    (true, false) => "YTM Starcast's settings are open in YouTube Music",
-                    (false, false) => "YouTube Music is in front",
+                let (opened, refine) = (truthy(&r["opened"]), r.get("refine").map(truthy).unwrap_or(true));
+                return Ok(json!({"ok": true, "message": match (settings, opened, refine) {
+                    (_, true, _) => "opened YouTube Music in the browser",
+                    (true, false, false) => "YouTube Music is in front; its YTM Starcast settings are part of Refine, which is switched off \
+                                             (turn it on on YTM Starcast's page in Orbit)",
+                    (true, false, true) => "YTM Starcast's settings are open in YouTube Music",
+                    (false, ..) => "YouTube Music is in front",
                 }}));
             }
             "gui" => {

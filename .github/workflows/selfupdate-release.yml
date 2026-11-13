@@ -3,7 +3,8 @@ name: self-update-from-a-release
 # updates itself from GitHub to the newest release and restarts on it, on Linux, Windows and macOS
 # (tools/ci-selfupdate.py). On a Mac, Orbit updates itself from 0.3.4 on. Macs and ARM computers only get a build at
 # milestones (and when a release says so): for them, "newest" and "the one before" are among the releases with their
-# file, and a system with only one such release has nothing to check yet.
+# file, a system with only one such release has nothing to check yet, and neither has one the newest release has no
+# build for.
 on:
   workflow_dispatch:
     inputs:
@@ -41,6 +42,10 @@ jobs:
             | select(any(.assets[].name; . == "orbit-${{ matrix.file }}" or . == "orbit-\($t)-${{ matrix.file }}"))
             | $t' | sort -r -V)
           newest=$(echo "$tags" | sed -n 1p)
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" --jq '.[] | select(.draft | not) | .tag_name' | sort -r -V | sed -n 1p)
+          if [ -z "$FROM" ] && [ "$newest" != "$latest" ]; then
+            echo "$latest has no orbit-${{ matrix.file }} (Macs and ARM get builds at milestones): nothing new to check here"; exit 0
+          fi
           from="${FROM:-$(echo "$tags" | sed -n 2p)}"
           if [ -z "$from" ] || [ "$from" = "$newest" ]; then
             echo "only one release has orbit-${{ matrix.file }} ($newest): nothing to update from yet"; exit 0
