@@ -1,19 +1,15 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.9**
+
+- **When GitHub's limit for requests is used up, Orbit says so**, with how many minutes until it resets, and that signing in with GitHub (in Orbit's settings) lifts it. Without a sign-in GitHub answers 60 requests an hour per network; Orbit used to call this GitHub refusing the request. On the desktop and in the Android app.
+
 **New in 0.5.8**
 
 - **Install Orbit on Windows without an administrator:** *install orbit* at the top moves the program out of your Downloads into `%LOCALAPPDATA%\Programs\Orbit`, adds it to the Start menu and to Windows' list of installed apps, and Orbit starts again from there. It keeps updating itself there; uninstall it from *Settings → Apps*, or with *remove* in Orbit's settings (your settings stay).
 - **`orbit --uninstall`** removes Orbit installed for you, on Linux too.
 
-**New in 0.5.7**
-
-- **A desktop notification when Nova waits for your approval** (Linux, while Orbit is open): when a browser asks Nova to be let in, or asks for something that needs your OK. Approve it on Nova's card with the code the browser shows. Needs Nova 0.9.20 or newer; turn it off in Orbit's settings. Nova's card also puts what's waiting first.
-- **Orbit's window keeps its side bar at any size it can have.** A small window switched to the layout meant for phones, with a tall strip of icons and their status dots out of place; that layout is now for narrow browser windows only, and fixed there too.
-- **Long buttons wrap** instead of running out of their box (Nova's *pair a phone that's away from home* and others), and a version in a page title no longer breaks in two.
-- **The paper theme is easier to read:** its quiet text, green and amber are darker (in the Android app too).
-- **Installing Orbit for you works from another drive** (a Downloads folder on another disk): Orbit then starts again from its new place. It waits while Orbit's own update is being downloaded.
-
-**Earlier in 0.5:** Nova's card approves a browser, and its code box takes a pasted `sudo nova approve …` line (0.5.5); YTM Starcast's card brings up YouTube Music and YTM Starcast's settings in it (0.5.5, with YTM Starcast 0.2.0-alpha.5); Orbit installs on Linux without a password, and its window shows Orbit's icon (0.5.4); the keys at the bottom are buttons too (0.5.4); Macs and ARM computers get builds at milestones, and Orbit there updates itself to the newest release with a build for it (0.5.3); a `.deb` for Debian and Ubuntu, and builds for ARM (0.5.2); Orbit updates itself in the background (0.5.1); Orbit is one small, fast program with its own window, and offers to install the web engine it needs (0.5.0).
+**Earlier in 0.5:** a desktop notification when Nova waits for your approval (Linux), the window keeps its side bar at any size, and the paper theme is easier to read (0.5.7); Nova's card approves a browser, and its code box takes a pasted `sudo nova approve …` line (0.5.5); YTM Starcast's card brings up YouTube Music and YTM Starcast's settings in it (0.5.5, with YTM Starcast 0.2.0-alpha.5); Orbit installs on Linux without a password, and its window shows Orbit's icon (0.5.4); the keys at the bottom are buttons too (0.5.4); Macs and ARM computers get builds at milestones, and Orbit there updates itself to the newest release with a build for it (0.5.3); a `.deb` for Debian and Ubuntu, and builds for ARM (0.5.2); Orbit updates itself in the background (0.5.1); Orbit is one small, fast program with its own window, and offers to install the web engine it needs (0.5.0).
 
 **New in 0.4.0:** Pocketfader and YTM Beacon are now one app, YTM Starcast, and moving over takes one click: Orbit puts YTM Starcast in place, stops Pocketfader, removes YTM Beacon with its own uninstaller (your choice), and your settings and paired phones carry over. Remove the YTM Beacon extension from your browser yourself, and add YTM Starcast's extension (`ytm-starcast-extension.zip` in YTM Starcast's release). On Android, the Pocketfader app updates to YTM Starcast in place.
 
