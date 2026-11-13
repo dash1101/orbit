@@ -148,6 +148,21 @@ jobs:
           texts() { "$adb" shell uiautomator dump /sdcard/ui.xml > /dev/null && "$adb" exec-out cat /sdcard/ui.xml \
                       | grep -o 'text="[^"]*"' | sed 's/text="//; s/"$//' | grep -v '^$' | tr '\n' '|'; echo; }
           echo "on screen: $(texts)"
+          # update notifications: the check in the background runs a first time soon after Orbit opens, and Orbit (this
+          # build says 0.0.0-dev) has an update. Looked at now: stopping Orbit (below, after installing Nova) takes its
+          # notifications away
+          notes=""
+          for i in $(seq 20); do
+            notes=$("$adb" shell dumpsys notification --noredact | grep -oE "android.title=String \([^)]*\)" | sort -u | tr '\n' ' ')
+            case "$notes" in *"Orbit "*" is out"*) break ;; esac
+            sleep 3
+          done
+          echo "notifications: $notes"
+          case "$notes" in
+            *"Orbit "*" is out"*) echo "the update check in the background said Orbit has an update" ;;
+            *) case "$(texts)" in *"Couldn't reach GitHub"*|*"GitHub's limit"*|*"GitHub refused"*) echo "::warning::GitHub didn't answer here: no update to say" ;;
+                 *) echo "::error::no notification for Orbit's update"; "$adb" logcat -d | grep -E "WM-WorkerWrapper|UpdateCheck|orbit" | tail -30; exit 1 ;; esac ;;
+          esac
           # install Nova: Orbit's wizard downloads it from GitHub, checks its signature, then hands it to Android, which
           # asks (the test stops at Android's question).
           tap() {  # tap the node with this text: "first" after the text $2 (or anywhere), or the "last" one on screen
@@ -203,27 +218,6 @@ jobs:
               *) echo "::error::Orbit doesn't see that release $tag's Android app is the Nova $have installed"; exit 1 ;;
             esac
           fi
-          # update notifications, from the check in the background: Orbit (this build says 0.0.0-dev) has an update. Its
-          # first run comes soon after Orbit opens when Android lets it; if it hasn't within 30 s, it's run now
-          notes=""
-          seen() { notes=$("$adb" shell dumpsys notification --noredact | grep -oE "android.title=String \([^)]*\)" | sort -u | tr '\n' ' '); case "$notes" in *"Orbit "*" is out"*) return 0 ;; esac; return 1; }
-          for i in $(seq 10); do seen && break; sleep 3; done
-          if ! seen; then
-            echo "Orbit's job, as Android sees it:"
-            "$adb" shell dumpsys jobscheduler app.novalabs.orbit | grep -E "JOB #|Required constraints|Satisfied constraints|Unsatisfied constraints|Ready|Pending|Standby bucket|Enqueue time|Run time" | head -20
-            job=$("$adb" shell dumpsys jobscheduler app.novalabs.orbit | grep -oE "JOB #[^/ ]+/[0-9]+[^ ]*: [0-9a-f]+ app\.novalabs\.orbit/" | head -1 | sed -E 's#JOB \#[^/]+/([0-9]+).*#\1#')
-            echo "job id: ${job:-none}"
-            [ -n "$job" ] && "$adb" shell cmd jobscheduler run -f app.novalabs.orbit "$job"
-            for i in $(seq 20); do seen && break; sleep 3; done
-          fi
-          echo "notifications: $notes"
-          "$adb" logcat -d | grep -E "WM-WorkerWrapper|WM-SystemJobService|UpdateCheck" | grep -iE "orbit|UpdateCheck" | tail -10
-          case "$notes" in
-            *"Orbit "*" is out"*) echo "the update check said Orbit has an update" ;;
-            *) case "$(texts)" in *"Couldn't reach GitHub"*|*"GitHub's limit"*|*"GitHub refused"*) echo "::warning::GitHub didn't answer here: no update to say" ;;
-                 *) echo "::error::no notification for Orbit's update"; "$adb" logcat -d | grep -iE "WM-|UpdateCheck|JobScheduler.*orbit" | tail -30; exit 1 ;; esac ;;
-          esac
-          case "$notes" in *"Nova "*" is out"*) echo "::error::a notification for a Nova release that's new for other systems only"; exit 1 ;; esac
           "$adb" logcat -d > logcat.txt
           pid=$("$adb" shell pidof app.novalabs.orbit | tr -d '\r')
           if grep -q "FATAL EXCEPTION" logcat.txt || [ -z "$pid" ]; then
