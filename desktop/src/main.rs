@@ -18,6 +18,7 @@ mod term;
 mod util;
 mod webengine;
 mod window;
+mod wintask;
 
 use std::time::{Duration, Instant};
 
@@ -29,6 +30,7 @@ pub const VERSION: &str = match option_env!("ORBIT_VERSION") {
 
 struct Args {
     port: u16,
+    port_given: bool, // --port on the command line (it wins over the setting)
     no_window: bool,
     dry_run: bool,
     write_version: Option<String>,
@@ -39,14 +41,14 @@ struct Args {
 
 const USAGE: &str = "usage: orbit [--port N] [--no-window] [--dry-run] [--version]\n\n\
 One place for all your apps.\n\n\
-  --port N      local port (default 8790; 0 = any free port)\n\
+  --port N      local port (default: the one in Orbit's settings, else 8790; 0 = any free port)\n\
   --no-window   only run the server; open the printed address yourself\n\
   --dry-run     read everything, change nothing: actions and the apps' settings are recorded instead of applied\n\
   --uninstall   remove Orbit installed for you (\"install orbit\"); its settings stay\n\
   --version     show the version";
 
 fn parse() -> Result<Args, String> {
-    let mut a = Args { port: 8790, no_window: false, dry_run: false, write_version: None, window_of: None, size: (1180.0, 760.0), uninstall: false };
+    let mut a = Args { port: DEFAULT_PORT, port_given: false, no_window: false, dry_run: false, write_version: None, window_of: None, size: (1180.0, 760.0), uninstall: false };
     let mut it = std::env::args().skip(1);
     while let Some(x) = it.next() {
         let (k, inline) = match x.split_once('=') {
@@ -55,7 +57,10 @@ fn parse() -> Result<Args, String> {
         };
         let mut val = |name: &str| inline.clone().or_else(|| it.next()).ok_or(format!("{name} needs a value"));
         match k.as_str() {
-            "--port" => a.port = val("--port")?.parse().map_err(|_| "--port is a number".to_string())?,
+            "--port" => {
+                a.port = val("--port")?.parse().map_err(|_| "--port is a number".to_string())?;
+                a.port_given = true;
+            }
             "--no-window" => a.no_window = true,
             "--dry-run" => a.dry_run = true,
             "--version" => {
@@ -86,7 +91,7 @@ fn main() {
 }
 
 fn run() -> i32 {
-    let a = match parse() {
+    let mut a = match parse() {
         Ok(a) => a,
         Err(e) => {
             eprintln!("orbit: {e}");
@@ -136,6 +141,12 @@ fn run() -> i32 {
             }
         });
     }
+    if !a.port_given {
+        // the port chosen in Orbit's settings
+        if let Some(p) = config::Config::new(None).get("port").as_u64().and_then(|p| u16::try_from(p).ok()).filter(|p| *p >= 1024) {
+            a.port = p;
+        }
+    }
     if !restarted && switch_to_waiting_update(a.port) {
         return 0;
     }
@@ -150,7 +161,16 @@ fn run() -> i32 {
     });
     let hub = server::Hub::new(a.dry_run);
     let wait = if restarted { Duration::from_secs(60) } else { Duration::ZERO };
-    let port = match listen(&hub, a.port, wait) {
+    let first = listen(&hub, a.port, wait);
+    // a port from the settings that another program has taken: the usual one, else any free one (Orbit always opens)
+    let first = match first {
+        Err(_) if !a.port_given && a.port != DEFAULT_PORT && !port_is_orbit(a.port) => {
+            eprintln!("orbit: port {} is taken by another program; using another", a.port);
+            listen(&hub, DEFAULT_PORT, Duration::ZERO).or_else(|_| listen(&hub, 0, Duration::ZERO))
+        }
+        r => r,
+    };
+    let port = match first {
         Ok(p) => p,
         Err(e) => {
             if a.port != 0 && !a.no_window {
@@ -180,6 +200,14 @@ fn run() -> i32 {
         return window::wait_for_page(&hub, Duration::from_secs(300));
     }
     window::show(&url, &hub)
+}
+
+const DEFAULT_PORT: u16 = 8790;
+
+/// Does an Orbit already answer on this port (another window onto it is then what's wanted)?
+fn port_is_orbit(port: u16) -> bool {
+    net::get_json(&format!("http://127.0.0.1:{port}/api/hub"), &net::Req { timeout: 1.0, ..Default::default() })
+        .map(|v| v["name"] == "Orbit").unwrap_or(false)
 }
 
 /// Listen on the port; after a restart, wait (up to `wait`) for the Orbit before to let go of it.

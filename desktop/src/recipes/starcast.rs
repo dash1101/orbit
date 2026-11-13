@@ -12,6 +12,7 @@
 //! stopped (both use the same port and both would set the Discord status), YTM Beacon is removed with its own
 //! uninstaller (which keeps its settings), YTM Starcast is started, and only once it answers are Pocketfader's old
 //! files removed. Settings are never copied or deleted here: YTM Starcast takes them over itself when it first starts.
+use crate::apps::with;
 use crate::engine::{Session, Sources};
 use crate::host::Host;
 use crate::recipe::{need, option, step, Recipe, RecipeBase, StepDef};
@@ -55,6 +56,13 @@ pub const OLD: Names = Names { slug: "pocketfader", module: "pocketfader", dists
 const KEPT: [&str; 7] = ["--token", "--port", "--bind", "--allow-host", "--audio", "--eq", "--media"];
 
 /// The kept options in a server command line (after the program itself).
+/// The --port in a command's words (--port N or --port=N).
+pub fn port_of(words: &[String]) -> Option<u16> {
+    words.iter().enumerate().find_map(|(i, w)| {
+        if w == "--port" { words.get(i + 1).and_then(|p| p.parse().ok()) } else { w.strip_prefix("--port=").and_then(|p| p.parse().ok()) }
+    })
+}
+
 pub fn kept_options(words: &[String]) -> Vec<String> {
     let mut out = vec![];
     let mut i = 1;
@@ -271,6 +279,16 @@ impl StarcastRecipe {
         String::new()
     }
 
+    /// The port the installed YTM Starcast answers on (8777 unless it was started with --port).
+    fn existing_port(&self) -> u16 {
+        port_of(&self.existing_command()).unwrap_or(PORT)
+    }
+
+    /// The port this install sets (the option, else the one it had).
+    fn chosen_port(&self, s: &Session) -> u16 {
+        s.opt_u64("port").and_then(|p| u16::try_from(p).ok()).unwrap_or(self.port)
+    }
+
     fn existing_lan(&self) -> bool {
         let h = self.h();
         if h.system == "windows" {
@@ -402,6 +420,19 @@ impl StarcastRecipe {
                     }
                 }
             }
+        } else if h.system == "windows" {
+            // the scheduled task's program and arguments
+            for n in [NEW, OLD] {
+                let (rc, out) = h.probe(&[h.tool("schtasks"), "/Query".into(), "/TN".into(), n.task.into(), "/XML".into()]);
+                let xml = out.replace('\0', "");
+                if rc == 0 {
+                    let args = xml.split("<Arguments>").nth(1).and_then(|t| t.split("</Arguments>").next()).unwrap_or("");
+                    let unesc = |x: &str| x.replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+                    let mut w = vec![format!("{}.exe", n.slug)];
+                    w.extend(words(&unesc(args)));
+                    return w;
+                }
+            }
         } else if h.system == "darwin" {
             for path in [self.plist_path(NEW), self.plist_path(OLD)] {
                 if let Ok(text) = std::fs::read_to_string(&path) {
@@ -428,11 +459,21 @@ impl StarcastRecipe {
         if s.opt_bool("lan", false) {
             a.push("--lan".into());
         }
+        // the port chosen for this install (written only when it isn't the usual one)
+        if let Some(p) = s.opt_u64("port") {
+            let mut i = 0;
+            while i < a.len() {
+                if a[i] == "--port" { a.drain(i..(i + 2).min(a.len())); } else if a[i].starts_with("--port=") { a.remove(i); } else { i += 1; }
+            }
+            if p != PORT as u64 {
+                a.extend(["--port".into(), p.to_string()]);
+            }
+        }
         a
     }
 
     fn wait(&self, s: &mut Session) -> Res<bool> {
-        if !s.wait_http(&format!("http://127.0.0.1:{}/api/info", self.port), self.wait_seconds, false)? {
+        if !s.wait_http(&format!("http://127.0.0.1:{}/api/info", self.chosen_port(s)), self.wait_seconds, false)? {
             s.vars.insert("slow".into(), json!(true));
             s.log("YTM Starcast hasn't answered yet; it may still be starting. Its log is in Orbit.");
         }
@@ -846,6 +887,13 @@ impl StarcastRecipe {
             // -Lan is always given: without it the script keeps the --lan its task had before
             let lan = if s.opt_bool("lan", false) { "-Lan" } else { "-Lan:$false" };
             self.ps(s, &format!("& {} {lan}; exit 0", ps_str(&sv(&script))), Some("Couldn't set YTM Starcast to start at logon."))?;
+            // its port, which the script doesn't set: in the task's arguments (8777 needs none)
+            let port = self.chosen_port(s);
+            let add = if port == PORT { String::new() } else { format!(" --port {port}") };
+            self.ps(s, &format!("$t = Get-ScheduledTask -TaskName {}; $a = $t.Actions[0]; \
+                                 $a.Arguments = (($a.Arguments -replace '\\s*--port(=|\\s+)\\d+', '') + '{add}').Trim(); \
+                                 Set-ScheduledTask -TaskName {} -Action $a | Out-Null", ps_str(NEW.task), ps_str(NEW.task)),
+                    Some("Couldn't set YTM Starcast's port."))?;
         } else {
             // only the scheduled task: install-exe.ps1 -Uninstall removes the whole program as well
             s.run(&[self.h().tool("schtasks"), "/Delete".into(), "/TN".into(), NEW.task.into(), "/F".into()], &any(), true, None, "")?;
@@ -854,15 +902,18 @@ impl StarcastRecipe {
     }
 
     fn win_start(&self, s: &mut Session) -> Res<bool> {
-        if s.opt_bool("autostart", true) {
-            self.ps(s, &format!("Start-ScheduledTask -TaskName {}", ps_str(NEW.task)), Some("Couldn't start YTM Starcast."))?;
-        } else {
-            let a = self.args(s).join(" ");
-            let args = if a.is_empty() { format!("--port {PORT}") } else { a };
-            self.ps(s, &format!("Start-Process -WindowStyle Hidden -FilePath {} -ArgumentList {} -WorkingDirectory {}",
-                                ps_str(&sv(&self.app_dir(NEW).join(format!("{}.exe", NEW.slug)))), ps_str(&args), ps_str(&sv(&self.app_dir(NEW)))),
-                    Some("Couldn't start YTM Starcast."))?;
-        }
+        // Started here with no window, also when its scheduled task starts it at logon: the task runs the program in
+        // the user's session, where a console program shows a console window (closing it would end YTM Starcast).
+        // YTM Starcast's installer starts its task too: that copy ends here, and the task's own command starts hidden.
+        let a = self.args(s).join(" ");
+        let args = if a.is_empty() { format!("--port {PORT}") } else { a };
+        let (task, exe, dir) = (ps_str(NEW.task), ps_str(&sv(&self.app_dir(NEW).join(format!("{}.exe", NEW.slug)))), ps_str(&sv(&self.app_dir(NEW))));
+        self.ps(s, &format!("$t = Get-ScheduledTask -TaskName {task} -ErrorAction SilentlyContinue; \
+                             if ($t) {{ Stop-ScheduledTask -TaskName {task} -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 800; \
+                               $a = $t.Actions[0]; $p = @{{ WindowStyle = 'Hidden'; FilePath = $a.Execute.Trim('\"'); WorkingDirectory = $a.WorkingDirectory }}; \
+                               if ($a.Arguments) {{ $p.ArgumentList = $a.Arguments }}; Start-Process @p }} \
+                             else {{ Start-Process -WindowStyle Hidden -FilePath {exe} -ArgumentList {} -WorkingDirectory {dir} }}", ps_str(&args)),
+                Some("Couldn't start YTM Starcast."))?;
         self.wait(s)
     }
 
@@ -1019,6 +1070,9 @@ impl Recipe for StarcastRecipe {
         if h.system != "linux" || h.has_systemd() {
             opts.push(option("autostart", "Start when I log in", "bool", json!(true), "Keeps the remote and your Discord status going without opening anything."));
         }
+        opts.push(with(option("port", "Port", "int", json!(self.existing_port()),
+                              "Where YTM Starcast answers on this computer (usually 8777). Phones and the browser extension use it too: \
+                               change it only when another program needs this one."), json!({"min": 1024, "max": 65535})));
         opts.push(option("lan", "Also reach it on my home Wi-Fi", "bool", json!(self.existing_lan()),
                          "Lets phones on the same network connect. It then asks for an access token, which YTM Starcast shows you. Not needed with Tailscale."));
         if h.system != "windows" {
@@ -1236,9 +1290,10 @@ impl Recipe for StarcastRecipe {
         }
         let h = self.h();
         let moved = before["how"] == MOVED;
+        let port = opts.get("port").and_then(|p| p.as_u64()).unwrap_or(PORT as u64);
         let nxt = json!([{"id": "app", "label": "open in orbit", "kind": "app", "app": self.id(), "primary": true},
-                         {"id": "web", "label": "open ytm starcast", "kind": "url", "url": format!("http://127.0.0.1:{PORT}/")},
-                         {"id": "extension", "label": "set up the browser extension", "kind": "url", "url": format!("http://127.0.0.1:{PORT}/#extension")}]);
+                         {"id": "web", "label": "open ytm starcast", "kind": "url", "url": format!("http://127.0.0.1:{port}/")},
+                         {"id": "extension", "label": "set up the browser extension", "kind": "url", "url": format!("http://127.0.0.1:{port}/#extension")}]);
         let (mut head, mut body) = if h.system == "linux" && !h.has_systemd() {
             ("YTM Starcast is installed.".to_string(), "Start it with `ytm-starcast` in a terminal; it prints the address to open on your phone.".to_string())
         } else {
@@ -1278,6 +1333,9 @@ mod tests {
     #[test]
     fn an_update_keeps_the_servers_options_but_not_lan() {
         let w = |s: &str| s.split_whitespace().map(String::from).collect::<Vec<_>>();
+        assert_eq!(port_of(&w("/x/ytm-starcast --lan --port 8778")), Some(8778));
+        assert_eq!(port_of(&w("ytm-starcast.exe --audio windows --port=9000")), Some(9000));
+        assert_eq!(port_of(&w("/x/ytm-starcast --lan")), None);
         assert_eq!(kept_options(&w("/x/ytm-starcast --lan --token abc --port=8778 --bind 0.0.0.0 --verbose --audio none")),
                    w("--token abc --port=8778 --bind 0.0.0.0 --audio none"));
         assert!(kept_options(&w("/x/ytm-starcast --lan")).is_empty());

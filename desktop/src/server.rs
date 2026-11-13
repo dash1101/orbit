@@ -228,6 +228,7 @@ impl Hub {
             let mut d = a.describe();
             d["enabled"] = json!(self.enabled(&id));
             d["install"] = self.install_brief(&id);
+            let brief = d["install"].clone();
             if let Some(rx) = waits.get(&id) {
                 let s = rx.recv_timeout(Duration::from_secs(8)).unwrap_or_else(|_| json!({"state": "unknown", "headline": "took too long to answer"}));
                 d["state"] = s["state"].clone();
@@ -235,6 +236,12 @@ impl Hub {
                 d["version"] = json!(s["version"].as_str().unwrap_or(""));
                 d["update"] = json!(s["update"]["available"].as_bool().unwrap_or(false));
                 d["line"] = json!(s["line"].as_str().unwrap_or(""));
+                let mut st = json!({"state": d["state"].clone(), "headline": d["headline"].clone()});
+                if self.not_here(&brief, &mut st) {
+                    d["state"] = st["state"].clone();
+                    d["headline"] = st["headline"].clone();
+                    d["line"] = json!("");
+                }
                 let na = self.unavailable(&id);
                 if !na.is_empty() {
                     d["state"] = json!("off");
@@ -270,11 +277,29 @@ impl Hub {
             d["status"]["unavailable"] = json!(true);
             d["status"]["detail"] = note;
         }
-        d["actions"] = json!(a.actions());
+        d["install"] = self.install_brief(id);
+        let mut actions = a.actions();
+        let install = d["install"].clone();
+        if self.not_here(&install, &mut d["status"]) {
+            actions.retain(|x| x["id"] == "releases"); // nothing to open or control: only where to get it
+        }
+        d["actions"] = json!(actions);
         d["settings"] = json!(a.settings());
         d["enabled"] = json!(self.enabled(id));
-        d["install"] = self.install_brief(id);
         Ok(d)
+    }
+
+    /// An app Orbit can install that isn't installed on this computer and doesn't answer (from elsewhere): its
+    /// status says so, rather than that it can't be reached. True then.
+    fn not_here(&self, install: &Value, status: &mut Value) -> bool {
+        let answering = matches!(status["state"].as_str(), Some("ok") | Some("warn"));
+        if install.is_null() || install["installed"].as_bool().unwrap_or(true) || answering {
+            return false;
+        }
+        status["state"] = json!("off");
+        status["headline"] = json!("Not installed on this computer");
+        status["detail"] = json!("Install it from Orbit (the install page), or set where it runs in its settings (connection).");
+        true
     }
 
     // ---- installer -----------------------------------------------------------------------------
@@ -428,7 +453,8 @@ impl Hub {
         json!({"name": "Orbit", "version": crate::VERSION, "dryRun": self.dry_run(), "github": self.github.state(), "system": self.host.system,
                "orbitUpdate": self.orbit_update(), "menu": desktop_entry::state(), "themes": themes, "themeTokens": THEME_COLORS,
                "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
-                            "notifyApprovals": c["notifyApprovals"]},
+                            "notifyApprovals": c["notifyApprovals"], "port": c["port"].as_u64().unwrap_or(8790),
+                            "portNow": self.port.load(Ordering::Relaxed)},
                "apps": self.apps().iter().map(|a| { let mut d = a.describe(); d["enabled"] = json!(self.enabled(&a.id())); d }).collect::<Vec<_>>()})
     }
 
@@ -472,6 +498,14 @@ impl Hub {
         if let Some(v) = b.get("autoUpdate") {
             patch.insert("autoUpdate".into(), json!(v.as_bool().ok_or_else(|| bad("autoUpdate is true or false"))?));
         }
+        if let Some(v) = b.get("port") {
+            let p = v.as_u64().filter(|p| (1024..=65535).contains(p)).ok_or_else(|| bad("the port is a number from 1024 to 65535"))? as u16;
+            // free now, or Orbit's own: a port another program has would only make Orbit use another one at its next start
+            if p != self.port.load(Ordering::Relaxed) && std::net::TcpListener::bind(("127.0.0.1", p)).is_err() {
+                return Err(bad(format!("port {p} is in use by another program on this computer: pick another")));
+            }
+            patch.insert("port".into(), json!(p));
+        }
         if let Some(v) = b.get("notifyApprovals") {
             patch.insert("notifyApprovals".into(), json!(v.as_bool().ok_or_else(|| bad("notifyApprovals is true or false"))?));
         }
@@ -500,7 +534,7 @@ impl Hub {
                 self.ctx.config.update_app(k, p);
             }
         }
-        if b.keys().any(|k| !["theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "notifyApprovals", "order", "enabled"].contains(&k.as_str())) {
+        if b.keys().any(|k| !["theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "notifyApprovals", "port", "order", "enabled"].contains(&k.as_str())) {
             return Err(bad("unknown hub setting"));
         }
         let reorder = patch.contains_key("order");

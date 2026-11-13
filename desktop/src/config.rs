@@ -11,6 +11,7 @@ pub fn defaults() -> Map<String, Value> {
         "checkUpdates": true,   // ask GitHub (at most every 12 hours) whether a newer release exists
         "autoUpdate": true,     // a newer Orbit is downloaded and checked by itself, and takes over at the next start
         "notifyApprovals": true, // a desktop notification when Nova has something waiting for approval (Linux)
+        "port": 8790,           // where Orbit answers on this computer (127.0.0.1); --port overrides it
         "apps": {},             // per-app hub settings: {"<id>": {"enabled": true, ...}}
         "custom": [],           // apps added from the hub
         "order": [],            // app ids in the order they appear in the side bar

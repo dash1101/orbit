@@ -367,6 +367,10 @@ impl Session {
         self.vars.get(key).and_then(|v| v.as_str()).unwrap_or("").to_string()
     }
 
+    pub fn opt_u64(&self, key: &str) -> Option<u64> {
+        self.vars.get("opts").and_then(|o| o.get(key)).and_then(|v| v.as_u64())
+    }
+
     pub fn opt_bool(&self, key: &str, default: bool) -> bool {
         self.vars.get("opts").and_then(|o| o.get(key)).and_then(|v| v.as_bool()).unwrap_or(default)
     }
