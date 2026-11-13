@@ -201,6 +201,20 @@ jobs:
               *) echo "::error::Orbit doesn't see that release $tag's Android app is the Nova $have installed"; exit 1 ;;
             esac
           fi
+          # update notifications, from the check in the background (run now): Orbit (this build says 0.0.0-dev) has an
+          # update; Nova, installed from its newest release, has none, whatever that release's number
+          "$adb" shell pm grant app.novalabs.orbit android.permission.POST_NOTIFICATIONS
+          job=$("$adb" shell dumpsys jobscheduler | grep -oE "JOB #u[0-9a-z]+/[0-9]+: [0-9a-f]+ app.novalabs.orbit/androidx.work" | head -1 | sed -E 's#.*/([0-9]+):.*#\1#')
+          if [ -z "$job" ]; then echo "::error::Orbit's update check isn't scheduled"; exit 1; fi
+          "$adb" shell cmd jobscheduler run -f app.novalabs.orbit "$job" > /dev/null; sleep 25
+          notes=$("$adb" shell dumpsys notification --noredact | grep -oE "android.title=String \([^)]*\)" | sort -u | tr '\n' ' ')
+          echo "notifications: $notes"
+          case "$notes" in
+            *"Orbit "*" is out"*) echo "the update check said Orbit has an update" ;;
+            *) case "$(texts)" in *GitHub*) echo "::warning::GitHub didn't answer here: no update to say" ;;
+                 *) echo "::error::no notification for Orbit's update"; exit 1 ;; esac ;;
+          esac
+          case "$notes" in *"Nova "*" is out"*) [ "${tag#v}" != "$have" ] && { echo "::error::a notification for a Nova release that's new for other systems only"; exit 1; } ;; esac
           "$adb" logcat -d > logcat.txt
           pid=$("$adb" shell pidof app.novalabs.orbit | tr -d '\r')
           if grep -q "FATAL EXCEPTION" logcat.txt || [ -z "$pid" ]; then

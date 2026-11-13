@@ -1,5 +1,9 @@
 package app.novalabs.orbit
 
+import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -68,6 +72,26 @@ val THEMES: List<Triple<String, String, Tokens>> = listOf(
 )
 
 fun tokensFor(id: String) = (THEMES.firstOrNull { it.first == id } ?: THEMES[0]).third
+
+/** The theme in the phone's own colours (Material You). */
+const val DEVICE_THEME = "device"
+
+/**
+ * The "tui" look in the colours Android makes from the wallpaper (Material You, Android 12 and newer), light or dark as
+ * the phone is set; null on a phone without them. Green and amber have no place in that palette, so they stay Orbit's
+ * own, in shades that read well on it.
+ */
+@Composable
+fun deviceTokens(): Tokens? {
+    if (Build.VERSION.SDK_INT < 31) return null
+    val ctx = LocalContext.current
+    val dark = isSystemInDarkTheme()
+    val s = if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+    return Tokens(bg = s.surface, raise = s.surfaceContainer, line = s.outlineVariant, lineHi = s.outline, text = s.onSurface,
+        muted = s.onSurfaceVariant, legend = s.secondary, accent = s.primary, accentInk = s.onPrimary,
+        ok = if (dark) c(0x7bd88f) else c(0x16733d), warn = if (dark) c(0xf2c66d) else c(0x8f5b12), down = s.error,
+        off = s.outline, sel = s.onSurface)
+}
 
 val LocalTokens = staticCompositionLocalOf { THEMES[0].third }
 val LocalImages = staticCompositionLocalOf<ImageLoader?> { null }

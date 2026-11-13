@@ -5,12 +5,19 @@
     <!-- Installing and removing the apps Orbit lists. Android still asks you to confirm each one. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- A notification when an app you have gets an update (Android 13 and newer ask first). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Android 11+ only shows an app another app's packages it names here. -->
     <queries>
         <package android:name="app.pocketfader.client" />
         <package android:name="app.novalabs.pocketfader" />
         <package android:name="app.novalabs.nova" />
+        <!-- and any app with an icon on the home screen: apps the catalog adds later -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
