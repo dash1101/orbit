@@ -109,6 +109,9 @@ jobs:
         run: |
           sdk="$ANDROID_HOME/cmdline-tools/latest/bin"; adb="$ANDROID_HOME/platform-tools/adb"
           img="system-images;android-34;google_apis;x86_64"
+          # avdmanager and the emulator look for devices in different places by default: one place for both
+          export ANDROID_AVD_HOME="$HOME/.android/avd"; mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           say() { echo "$(date +%T) $*"; }
           say "kvm: $(ls -l /dev/kvm)"
           say "installing the system image"
