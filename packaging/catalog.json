@@ -1,0 +1,65 @@
+{
+ "version": 1,
+ "apps": [
+  {
+   "id": "ytm-starcast",
+   "name": "YTM Starcast",
+   "blurb": "YouTube Music companion: a remote for your phone, your Discord status and a better YouTube Music",
+   "repo": "dash1101/ytm-starcast",
+   "color": "#38d9c4",
+   "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"s-bg\" x1=\"0\" y1=\"0\" x2=\"0.35\" y2=\"1\"><stop offset=\"0\" stop-color=\"#1A2670\"/><stop offset=\".55\" stop-color=\"#0B1238\"/><stop offset=\"1\" stop-color=\"#050820\"/></linearGradient>\n<radialGradient id=\"s-n1\" cx=\".16\" cy=\".1\" r=\".75\"><stop offset=\"0\" stop-color=\"#5B4BFF\" stop-opacity=\".45\"/><stop offset=\"1\" stop-color=\"#5B4BFF\" stop-opacity=\"0\"/></radialGradient>\n<radialGradient id=\"s-n2\" cx=\".92\" cy=\".96\" r=\".6\"><stop offset=\"0\" stop-color=\"#1FB6FF\" stop-opacity=\".24\"/><stop offset=\"1\" stop-color=\"#1FB6FF\" stop-opacity=\"0\"/></radialGradient>\n<linearGradient id=\"s-ice\" gradientUnits=\"userSpaceOnUse\" x1=\"80\" y1=\"240\" x2=\"280\" y2=\"440\"><stop offset=\"0\" stop-color=\"#FFFFFF\"/><stop offset=\".55\" stop-color=\"#D6E4FF\"/><stop offset=\"1\" stop-color=\"#93B5FF\"/></linearGradient>\n<linearGradient id=\"s-cast\" gradientUnits=\"userSpaceOnUse\" x1=\"176\" y1=\"60\" x2=\"450\" y2=\"340\"><stop offset=\"0\" stop-color=\"#8CF2FF\"/><stop offset=\"1\" stop-color=\"#7C8CFF\"/></linearGradient>\n<radialGradient id=\"s-halo\" cx=\"176\" cy=\"336\" r=\"150\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#B9D2FF\" stop-opacity=\".55\"/><stop offset=\".45\" stop-color=\"#7FA2FF\" stop-opacity=\".18\"/><stop offset=\"1\" stop-color=\"#7FA2FF\" stop-opacity=\"0\"/></radialGradient>\n<filter id=\"s-glow\" x=\"-60%\" y=\"-60%\" width=\"220%\" height=\"220%\"><feGaussianBlur stdDeviation=\"8\" result=\"b\"/><feMerge><feMergeNode in=\"b\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter><clipPath id=\"s-clip\"><rect x=\"16\" y=\"16\" width=\"480\" height=\"480\" rx=\"112\"/></clipPath></defs><rect x=\"16\" y=\"16\" width=\"480\" height=\"480\" rx=\"112\" fill=\"url(#s-bg)\"/><g clip-path=\"url(#s-clip)\"><rect x=\"16\" y=\"16\" width=\"480\" height=\"480\" fill=\"url(#s-n1)\"/><rect x=\"16\" y=\"16\" width=\"480\" height=\"480\" fill=\"url(#s-n2)\"/><circle cx=\"75.34\" cy=\"84.1\" r=\"2.7\" fill=\"#DCE7FF\" opacity=\"0.33\"/><circle cx=\"66.83\" cy=\"138.85\" r=\"1.6\" fill=\"#DCE7FF\" opacity=\"0.46\"/><circle cx=\"106.59\" cy=\"95.47\" r=\"2.1\" fill=\"#DCE7FF\" opacity=\"0.61\"/><circle cx=\"373.53\" cy=\"80.38\" r=\"2.1\" fill=\"#DCE7FF\" opacity=\"0.59\"/><path d=\"M420,410C420.56,415.44 422.32,417.28 428,418C422.32,418.72 420.56,420.56 420,426C419.44,420.56 417.68,418.72 412,418C417.68,417.28 419.44,415.44 420,410Z\" fill=\"#E8F0FF\" opacity=\".75\"/></g><circle cx=\"176\" cy=\"336\" r=\"150\" fill=\"url(#s-halo)\"/><path d=\"M176,204 A132,132 0 0 1 308,336\" fill=\"none\" stroke=\"url(#s-cast)\" stroke-width=\"28\" stroke-linecap=\"round\" opacity=\"1\"/><path d=\"M176,136 A200,200 0 0 1 376,336\" fill=\"none\" stroke=\"url(#s-cast)\" stroke-width=\"26\" stroke-linecap=\"round\" opacity=\"0.74\"/><path d=\"M176,68 A268,268 0 0 1 444,336\" fill=\"none\" stroke=\"url(#s-cast)\" stroke-width=\"24\" stroke-linecap=\"round\" opacity=\"0.46\"/><circle cx=\"324.63\" cy=\"202.17\" r=\"31\" fill=\"#0B1238\"/><path d=\"M324.63,164.17C327.29,190.01 335.65,198.75 362.63,202.17C335.65,205.59 327.29,214.33 324.63,240.17C321.97,214.33 313.61,205.59 286.63,202.17C313.61,198.75 321.97,190.01 324.63,164.17Z\" fill=\"#FFFFFF\" filter=\"url(#s-glow)\"/><path d=\"M176,236C183,304 205,327 276,336C205,345 183,368 176,436C169,368 147,345 76,336C147,327 169,304 176,236Z\" fill=\"url(#s-ice)\" filter=\"url(#s-glow)\"/><rect x=\"17\" y=\"17\" width=\"478\" height=\"478\" rx=\"111\" fill=\"none\" stroke=\"#FFFFFF\" stroke-opacity=\".09\" stroke-width=\"2\"/></svg>",
+   "android": {
+    "pkgs": [
+     "app.novalabs.pocketfader",
+     "app.pocketfader.client"
+    ],
+    "apk": [
+     "ytm-starcast-android.apk",
+     "re:ytm-starcast-android-v[^/]*\\.apk"
+    ],
+    "sums": "SHA256SUMS.txt",
+    "note": "The phone app talks to YTM Starcast on your computer: install that with Orbit for desktop.",
+    "extra": "Includes your Discord status (formerly YTM Beacon): its controls are in YTM Starcast's app."
+   }
+  },
+  {
+   "id": "nova",
+   "name": "Nova",
+   "blurb": "Secure remote for your home server",
+   "repo": "dash1101/Nova",
+   "color": "#5ec4b6",
+   "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"18 18 72 72\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#EADDFF\"/><stop offset=\"1\" stop-color=\"#CBB6F7\"/></linearGradient><radialGradient id=\"h\" cx=\"0.28\" cy=\"0.22\" r=\"0.65\"><stop offset=\"0\" stop-color=\"#fff\" stop-opacity=\".45\"/><stop offset=\"1\" stop-color=\"#fff\" stop-opacity=\"0\"/></radialGradient></defs><rect x=\"18\" y=\"18\" width=\"72\" height=\"72\" rx=\"20\" fill=\"url(#g)\"/><rect x=\"18\" y=\"18\" width=\"72\" height=\"72\" rx=\"20\" fill=\"url(#h)\"/><g transform=\"translate(54 54) scale(0.93) translate(-51 -57)\"><path fill=\"#1D1B20\" fill-opacity=\"1.00\" d=\"M40,36H62A10,10 0 0 1 72,46V68A10,10 0 0 1 62,78H40A10,10 0 0 1 30,68V46A10,10 0 0 1 40,36Z\"/><path fill=\"#2B2930\" fill-opacity=\"1.00\" d=\"M38.4,41H63.6A3.4,3.4 0 0 1 67,44.4V46.300000000000004A3.4,3.4 0 0 1 63.6,49.7H38.4A3.4,3.4 0 0 1 35,46.300000000000004V44.4A3.4,3.4 0 0 1 38.4,41ZM38.4,52.65H63.6A3.4,3.4 0 0 1 67,56.05V57.949999999999996A3.4,3.4 0 0 1 63.6,61.349999999999994H38.4A3.4,3.4 0 0 1 35,57.949999999999996V56.05A3.4,3.4 0 0 1 38.4,52.65ZM38.4,64.3H63.6A3.4,3.4 0 0 1 67,67.7V69.6A3.4,3.4 0 0 1 63.6,73.0H38.4A3.4,3.4 0 0 1 35,69.6V67.7A3.4,3.4 0 0 1 38.4,64.3Z\"/><path fill=\"#49454F\" fill-opacity=\"1.00\" d=\"M40.4,43.95H45.6A1.4,1.4 0 0 1 47,45.35V45.35A1.4,1.4 0 0 1 45.6,46.75H40.4A1.4,1.4 0 0 1 39,45.35V45.35A1.4,1.4 0 0 1 40.4,43.95ZM40.4,55.6H45.6A1.4,1.4 0 0 1 47,57.0V57.0A1.4,1.4 0 0 1 45.6,58.4H40.4A1.4,1.4 0 0 1 39,57.0V57.0A1.4,1.4 0 0 1 40.4,55.6ZM40.4,67.25H45.6A1.4,1.4 0 0 1 47,68.65V68.64999999999999A1.4,1.4 0 0 1 45.6,70.05H40.4A1.4,1.4 0 0 1 39,68.64999999999999V68.65A1.4,1.4 0 0 1 40.4,67.25Z\"/><path fill=\"#D0BCFF\" fill-opacity=\"1.00\" d=\"M50.65,45.35a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0ZM50.65,57a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0ZM50.65,68.65a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0Z\"/><path fill=\"#D0BCFF\" fill-opacity=\"0.60\" d=\"M55.15,45.35a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0ZM55.15,57a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0ZM55.15,68.65a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0Z\"/><path fill=\"#D0BCFF\" fill-opacity=\"0.30\" d=\"M59.65,57a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0ZM59.65,68.65a1.35,1.35 0 1 0 2.7,0a1.35,1.35 0 1 0 -2.7,0Z\"/><path fill=\"#1D1B20\" fill-opacity=\"1.00\" d=\"M58.8,38a11.2,11.2 0 1 0 22.4,0a11.2,11.2 0 1 0 -22.4,0Z\"/><path fill=\"#381E72\" fill-opacity=\"1.00\" d=\"M60.8,38a9.2,9.2 0 1 0 18.4,0a9.2,9.2 0 1 0 -18.4,0Z\"/><path fill=\"#EADDFF\" fill-opacity=\"1.00\" d=\"M68.6,31.2C69,35 70.2,36.3 74,36.8C70.2,37.3 69,38.6 68.6,42.4C68.2,38.6 67,37.3 63.2,36.8C67,36.3 68.2,35 68.6,31.2Z\"/><path fill=\"#EADDFF\" fill-opacity=\"0.85\" d=\"M73.4,38.6C73.6,40.2 74.1,40.7 75.7,40.9C74.1,41.1 73.6,41.6 73.4,43.2C73.2,41.6 72.7,41.1 71.1,40.9C72.7,40.7 73.2,40.2 73.4,38.6Z\"/></g></svg>",
+   "android": {
+    "pkgs": [
+     "app.novalabs.nova"
+    ],
+    "apk": [
+     "nova-universal.apk",
+     "re:.*-universal\\.apk"
+    ],
+    "sums": "SHA256SUMS",
+    "note": "The Nova app pairs with a Nova server on Linux or Windows: Nova Server on that computer (or sudo nova add) shows the code.",
+    "extra": "Comes with five home-screen widgets: status, live stats, quick actions, inbox and storage. In Nova: Menu → Home-screen widgets."
+   }
+  },
+  {
+   "id": "orbit",
+   "name": "Orbit",
+   "blurb": "This app",
+   "repo": "dash1101/orbit",
+   "color": "#f0668e",
+   "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"18 18 72 72\"><defs>\n  <linearGradient id=\"tile\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#FFE3EB\"/><stop offset=\"1\" stop-color=\"#F5A6BF\"/></linearGradient>\n  <radialGradient id=\"light\" cx=\"0.28\" cy=\"0.22\" r=\"0.65\"><stop offset=\"0\" stop-color=\"#fff\" stop-opacity=\".45\"/><stop offset=\"1\" stop-color=\"#fff\" stop-opacity=\"0\"/></radialGradient>\n  <radialGradient id=\"core\" cx=\".38\" cy=\".34\" r=\".7\"><stop offset=\"0\" stop-color=\"#FFF1F5\"/><stop offset=\".55\" stop-color=\"#FF9AB6\"/><stop offset=\"1\" stop-color=\"#F0668E\"/></radialGradient>\n</defs><rect x=\"18\" y=\"18\" width=\"72\" height=\"72\" rx=\"20\" fill=\"url(#tile)\"/><rect x=\"18\" y=\"18\" width=\"72\" height=\"72\" rx=\"20\" fill=\"url(#light)\"/><g transform=\"translate(54 54) scale(0.93) translate(-51 -57)\"><path fill=\"#1D1B20\" d=\"M40,36H62A10,10 0 0 1 72,46V68A10,10 0 0 1 62,78H40A10,10 0 0 1 30,68V46A10,10 0 0 1 40,36Z\"/><ellipse cx=\"51\" cy=\"57\" rx=\"15.6\" ry=\"6.3\" transform=\"rotate(-20 51 57)\" fill=\"none\" stroke=\"#F0668E\" stroke-opacity=\".18\" stroke-width=\"3.4\"/><ellipse cx=\"51\" cy=\"57\" rx=\"15.6\" ry=\"6.3\" transform=\"rotate(-20 51 57)\" fill=\"none\" stroke=\"#49454F\" stroke-width=\"1.45\"/><circle cx=\"36.80\" cy=\"59.33\" r=\"3.95\" fill=\"#D0BCFF\" opacity=\".28\"/><circle cx=\"36.80\" cy=\"59.33\" r=\"2.35\" fill=\"#D0BCFF\"/><rect x=\"35.70\" y=\"57.73\" width=\"2.2\" height=\"0.8\" rx=\"0.4\" fill=\"#FFFFFF\" opacity=\".55\"/><circle cx=\"62.62\" cy=\"49.42\" r=\"3.95\" fill=\"#FFC94D\" opacity=\".28\"/><circle cx=\"62.62\" cy=\"49.42\" r=\"2.35\" fill=\"#FFC94D\"/><rect x=\"61.52\" y=\"47.82\" width=\"2.2\" height=\"0.8\" rx=\"0.4\" fill=\"#FFFFFF\" opacity=\".55\"/><circle cx=\"51\" cy=\"57\" r=\"8.6\" fill=\"#FF7A9E\" opacity=\".22\"/><circle cx=\"51\" cy=\"57\" r=\"5.5\" fill=\"url(#core)\"/><path d=\"M65.66,51.66 A15.6,6.3 -20 0 1 36.34,62.34\" fill=\"none\" stroke=\"#49454F\" stroke-width=\"1.45\" stroke-linecap=\"round\"/><circle cx=\"50.58\" cy=\"63.76\" r=\"4.30\" fill=\"#38D9C4\" opacity=\".28\"/><circle cx=\"50.58\" cy=\"63.76\" r=\"2.70\" fill=\"#38D9C4\"/><rect x=\"49.48\" y=\"61.81\" width=\"2.2\" height=\"0.8\" rx=\"0.4\" fill=\"#FFFFFF\" opacity=\".55\"/><circle cx=\"70\" cy=\"38\" r=\"11.2\" fill=\"#1D1B20\"/><circle cx=\"70\" cy=\"38\" r=\"9.2\" fill=\"#5E1133\"/><g fill=\"none\" stroke=\"#FFD9E2\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M70,32.9V40.3\"/><path d=\"M66.8,37.3L70,40.5L73.2,37.3\"/><path d=\"M66.4,43.4H73.6\"/></g></g></svg>",
+   "android": {
+    "pkgs": [
+     "app.novalabs.orbit"
+    ],
+    "apk": [
+     "orbit-android.apk",
+     "re:orbit-v[^/]*-android\\.apk"
+    ],
+    "sums": "SHA256SUMS",
+    "note": "Orbit updates itself from its GitHub releases."
+   }
+  }
+ ]
+}

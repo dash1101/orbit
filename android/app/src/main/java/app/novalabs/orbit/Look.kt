@@ -148,7 +148,7 @@ fun Spinner(color: Color = LocalTokens.current.accent) {
 @Composable
 fun AppIcon(app: Listing, size: Dp, modifier: Modifier = Modifier, dim: Boolean = false) {
     val loader = LocalImages.current ?: rememberImages()
-    AsyncImage(model = "file:///android_asset/icons/${app.icon}", contentDescription = null, imageLoader = loader,
+    AsyncImage(model = app.iconFile?.let { java.io.File(it) } ?: "file:///android_asset/icons/${app.icon}", contentDescription = null, imageLoader = loader,
         modifier = modifier.size(size).alpha(if (dim) .45f else 1f))
 }
 

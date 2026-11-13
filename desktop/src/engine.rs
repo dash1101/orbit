@@ -64,6 +64,13 @@ impl Sources {
         }
     }
 
+    /// A file from a repository's default branch, through the API (Orbit's catalog).
+    pub fn raw_file(&self, repo: &str, path: &str) -> Res<String> {
+        net::request_text("GET", &format!("{}/repos/{repo}/contents/{path}", self.api), None,
+                          &net::Req { timeout: self.timeout, headers: self.api_headers("application/vnd.github.raw"), insecure: false })
+            .map_err(|e| failed(format!("Couldn't read {path} from {repo}: {}", e.message), ""))
+    }
+
     fn api_headers(&self, accept: &str) -> Vec<(&'static str, String)> {
         let mut h = vec![("Accept", accept.to_string()), ("X-GitHub-Api-Version", "2022-11-28".to_string())];
         let tok = self.token();

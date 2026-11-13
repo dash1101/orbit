@@ -509,6 +509,13 @@ def through_the_program(exe, apps, migrate=False):
         say(f"\nAll of {', '.join(apps)}: installed, answered and removed through the standalone Orbit.")
         polling["on"] = False
         seen = windows()
+        if migrate:
+            # YTM Beacon's own uninstaller (an archived app, run once when moving over from it) deletes itself with
+            # "ping -n 3 …" in a console window of its own: Orbit runs it hidden, but can't hide what it starts
+            beacon = {w: lines for w, lines in seen.items() if any("ping  -n 3 127.0.0.1" in ln for ln in lines)}
+            for lines in beacon.values():
+                say("::warning::YTM Beacon's own uninstaller opened a console window to delete itself: " + " / ".join(lines))
+            seen = {w: lines for w, lines in seen.items() if w not in beacon}
         if seen:
             fail("console windows opened while Orbit installed, polled and removed apps (nothing should show one):\n  "
                  + "\n  ".join(" / ".join(lines) for lines in seen.values()))

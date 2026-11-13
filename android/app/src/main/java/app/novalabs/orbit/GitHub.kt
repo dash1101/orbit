@@ -9,8 +9,9 @@ import java.net.URL
 import java.security.MessageDigest
 
 data class Asset(val name: String, val url: String, val api: String, val size: Long)
+/** A release. [newer]: a newer release that has no file for this app (its tag), when the newest one doesn't. */
 data class Release(val tag: String, val published: String, val prerelease: Boolean, val page: String,
-                   val assets: Map<String, Asset>) {
+                   val assets: Map<String, Asset>, val newer: String = "") {
     val version get() = Versions.clean(tag)
 }
 
@@ -39,7 +40,8 @@ object GitHub {
             "GitHub in Orbit's settings." else "Your sign-in or token may have expired: sign in again in Orbit's settings.")
     }
 
-    fun latest(repo: String, token: String?): Release {
+    /** The newest release [wants] (one with the app's Android file); a newer one without it is in [Release.newer]. */
+    fun latest(repo: String, token: String?, wants: (Collection<String>) -> Boolean = { true }): Release {
         val c = open("$API/repos/$repo/releases?per_page=10", token, "application/vnd.github+json")
         val body = try {
             when (c.responseCode) {
@@ -63,15 +65,40 @@ object GitHub {
             Versions.compare(Versions.parse(a.optString("tag_name")) ?: emptyList(),
                 Versions.parse(b.optString("tag_name")) ?: emptyList())
         }
-        val best = rels.maxWithOrNull(byVersion.thenBy { it.optString("published_at") })
-            ?: throw Problem("$repo has no releases yet.")
-        val assets = best.optJSONArray("assets") ?: JSONArray()
-        val map = (0 until assets.length()).map { assets.getJSONObject(it) }.associate {
+        val sorted = rels.sortedWith(byVersion.thenBy { it.optString("published_at") }).reversed()
+        val newest = sorted.firstOrNull() ?: throw Problem("$repo has no releases yet.")
+        val files = { r: org.json.JSONObject -> r.optJSONArray("assets") ?: JSONArray() }
+        val names = { r: org.json.JSONObject -> (0 until files(r).length()).map { files(r).getJSONObject(it).getString("name") } }
+        // the newest release with this app's file (a release can come out for other systems first)
+        val best = sorted.firstOrNull { wants(names(it)) } ?: newest
+        val map = (0 until files(best).length()).map { files(best).getJSONObject(it) }.associate {
             it.getString("name") to Asset(it.getString("name"), it.optString("browser_download_url"),
                 it.optString("url"), it.optLong("size"))
         }
         return Release(best.optString("tag_name"), best.optString("published_at"), best.optBoolean("prerelease"),
-            best.optString("html_url"), map)
+            best.optString("html_url"), map, newer = if (best !== newest) newest.optString("tag_name") else "")
+    }
+
+    /** A file from [repo]'s default branch, through api.github.com (Orbit's catalog), up to 512 KB. */
+    fun raw(repo: String, path: String, token: String?): String {
+        val c = open("$API/repos/$repo/contents/$path", token, "application/vnd.github.raw")
+        try {
+            if (c.responseCode != 200) throw Problem("GitHub answered ${c.responseCode} for $path.")
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(8192)
+            c.inputStream.use { ins ->   // (readNBytes is only on Android 13 and newer)
+                while (out.size() < 512 * 1024) {
+                    val n = ins.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                }
+            }
+            return String(out.toByteArray(), Charsets.UTF_8)
+        } catch (e: IOException) {
+            throw Problem("Couldn't reach GitHub.")
+        } finally {
+            c.disconnect()
+        }
     }
 
     /** What [token] can see of [repo]: "public", "private", "no access" or "offline". */
