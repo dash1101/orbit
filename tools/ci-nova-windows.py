@@ -347,20 +347,23 @@ def watch_windows(folder):
     if not ready.exists():
         fail("the window watcher didn't start")
     # it sees a console window on this desktop: open one on purpose (or "none seen" would prove nothing)
-    subprocess.Popen(["cmd", "/c", "title orbit-watch-check & ping -n 4 127.0.0.1 >nul"], creationflags=0x00000010)  # CREATE_NEW_CONSOLE
+    # (a console window is titled with its program's path from the start: ping.exe's is easy to tell apart)
+    subprocess.Popen(["ping", "-n", "8", "127.0.0.1"], creationflags=0x00000010, stdout=subprocess.DEVNULL)  # CREATE_NEW_CONSOLE
+    check = lambda: log.exists() and "ping.exe" in log.read_text(errors="replace").lower()
     end = time.time() + 20
-    while time.time() < end and not (log.exists() and "orbit-watch-check" in log.read_text(errors="replace")):
+    while time.time() < end and not check():
         time.sleep(0.3)
-    if not (log.exists() and "orbit-watch-check" in log.read_text(errors="replace")):
+    if not check():
         other = Path(str(log) + ".all")
-        say("what the watcher saw:\n" + (other.read_text(errors="replace")[-3000:] if other.exists() else "(nothing at all)"))
+        say("console windows seen:\n" + (log.read_text(errors="replace") if log.exists() else "(none)"))
+        say("other windows seen:\n" + (other.read_text(errors="replace")[-3000:] if other.exists() else "(nothing at all)"))
         fail("the window watcher doesn't see console windows on this machine")
     say("window watcher: it sees console windows here (the check window was seen)")
 
     def done():
         stop.write_text("stop")
         time.sleep(1)
-        return [ln for ln in log.read_text(errors="replace").splitlines() if ln.strip() and "orbit-watch-check" not in ln] if log.exists() else []
+        return [ln for ln in log.read_text(errors="replace").splitlines() if ln.strip() and "ping.exe" not in ln.lower()] if log.exists() else []
     return done
 
 
