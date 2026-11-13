@@ -424,7 +424,11 @@ impl App for Starcast {
             }
         }
         let device = if !audio_off && truthy(&vol["available"]) { s_of(&vol["device"]) } else { String::new() };
-        if unit["state"] == "missing" {
+        if cfg!(windows) {
+            // its scheduled task (YTM Starcast's installer makes it)
+            facts.push(if unit["state"] == "missing" { json!(["starts at logon", "no (no scheduled task)", "muted"]) }
+                       else { json!(["starts at logon", if unit["enabled"] == "enabled" { "yes" } else { "no (switched off)" }]) });
+        } else if unit["state"] == "missing" {
             facts.push(json!(["service", "not installed as a user service", "muted"]));
         } else if unit["unit"] == LEGACY_UNIT {
             facts.push(json!(["service", "still Pocketfader's: update to move it over to YTM Starcast", "muted"]));

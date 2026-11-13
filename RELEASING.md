@@ -60,7 +60,14 @@ Then upload it to the release with its checksum (`gh release upload v0.4.0 orbit
 `orbit-windows-x64.exe`, `orbit-windows-arm64.exe`, `orbit-linux-x86_64`, `orbit-linux-arm64`, `orbit-linux-x86_64.deb`,
 `orbit-linux-arm64.deb`, `orbit-macos-apple-silicon.dmg`, `orbit-macos-intel.dmg` and `orbit-android.apk` (upload the
 signed APK under that name). Up to 0.5.1 each file was also published under a name with the version, for Orbit 0.3.4 and
-older; from 0.5.2 on only the plain names are.
+older; from 0.5.2 on only the plain names are, except the Android app: from 0.6.0 on the signed APK is uploaded under
+both `orbit-android.apk` and `orbit-v<version>-android.apk` (with a SHA256SUMS line for each), because Orbit 0.3.4 and
+older on Android only look for the name with the version and would otherwise never update.
+
+**The catalog.** `packaging/catalog.json` (written by `tools/make-catalog.py` from its list and the icons) is what every
+Orbit from 0.6.0 on reads from this repository's default branch: the apps' names, descriptions, colours and icons, and on
+Android their package ids and release files. A rename, a new icon or an app coming to Android reaches the Orbit people
+already have within 12 hours of being pushed, without a release. Signing keys stay built in.
 
 ## Signing in with GitHub
 

@@ -246,8 +246,12 @@ list, marked "not available on … yet".
 - Orbit's server listens on `127.0.0.1` only. Requests must use a loopback host name, come from Orbit's own page (or no
   page at all) and send JSON, so websites you visit can't use it.
 - It talks to your apps on this computer only. The exceptions are the release check (at most every 12 hours, one
-  request per app to `api.github.com`), which you can turn off, and installing or updating an app, which downloads
-  that app's release from GitHub.
+  request per app to `api.github.com`, and one for Orbit's app catalog), which you can turn off, and installing or
+  updating an app, which downloads that app's release from GitHub.
+- **The app catalog** (`packaging/catalog.json` in this repository) gives each app's name, description, colour and icon,
+  and on Android which release file is the app, so a renamed app or a new icon reaches the Orbit people already have
+  without an update. Orbit keeps the last copy for when GitHub can't be reached, and uses the names built into it until
+  it has one. The catalog can't change how a download is checked: signing keys are built into Orbit.
 - Settings are kept in `~/.config/orbit/config.json` (`%APPDATA%\Orbit\config.json` on Windows), readable by you only.
 
 ## Tests

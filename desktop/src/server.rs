@@ -97,6 +97,8 @@ pub struct Hub {
     pub port: AtomicU16,
     /// Installed for the user, to start again from there (program, a copy left behind): Orbit asks first.
     restart_to: Mutex<Option<(String, String)>>,
+    /// Orbit's catalog: the apps' names, descriptions, colours and icons as its repository says now.
+    pub catalog: crate::catalog::Catalog,
 }
 
 impl Hub {
@@ -121,7 +123,8 @@ impl Hub {
             let installer = Installer::new(host.clone(), sources.clone(), crate::recipes::load(&host, &sources), runner.dry_run, spawn, Some(on_change));
             let apps = apps::load(&ctx);
             Hub { ctx, apps: RwLock::new(apps), cache: Mutex::new(HashMap::new()), github, terminals: Terminals::default(),
-                  last_seen: Mutex::new(Instant::now()), asked: Mutex::new(HashMap::new()), host, installer, port: AtomicU16::new(0), restart_to: Mutex::new(None) }
+                  last_seen: Mutex::new(Instant::now()), asked: Mutex::new(HashMap::new()), host, installer, port: AtomicU16::new(0), restart_to: Mutex::new(None),
+                  catalog: crate::catalog::Catalog::load() }
         })
     }
 
@@ -228,6 +231,7 @@ impl Hub {
         for a in &apps {
             let id = a.id();
             let mut d = a.describe();
+            self.catalog.apply(&mut d);
             d["enabled"] = json!(self.enabled(&id));
             d["install"] = self.install_brief(&id);
             let brief = d["install"].clone();
@@ -270,6 +274,7 @@ impl Hub {
         let a = self.app(id)?;
         self.cache.lock().unwrap().remove(id);
         let mut d = a.describe();
+        self.catalog.apply(&mut d);
         d["status"] = self.status_of(&a);
         let na = self.unavailable(id);
         if !na.is_empty() {
@@ -351,8 +356,11 @@ impl Hub {
         let mut out = vec![];
         for r in &self.installer.recipes {
             let mut d = recipe::describe(r.as_ref());
+            self.catalog.apply(&mut d);
             if let Ok(a) = self.app(r.id()) {
-                d["icon"] = a.describe()["icon"].clone();
+                if !d["icon"].as_str().unwrap_or("").starts_with("data:") {
+                    d["icon"] = a.describe()["icon"].clone();
+                }
             } else if r.self_app() {
                 d["icon"] = json!("/icon.svg");
                 d["self"] = json!(true);
@@ -457,7 +465,7 @@ impl Hub {
                "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
                             "notifyApprovals": c["notifyApprovals"], "port": c["port"].as_u64().unwrap_or(8790),
                             "portNow": self.port.load(Ordering::Relaxed)},
-               "apps": self.apps().iter().map(|a| { let mut d = a.describe(); d["enabled"] = json!(self.enabled(&a.id())); d }).collect::<Vec<_>>()})
+               "apps": self.apps().iter().map(|a| { let mut d = a.describe(); self.catalog.apply(&mut d); d["enabled"] = json!(self.enabled(&a.id())); d }).collect::<Vec<_>>()})
     }
 
     pub fn set_hub(self: &Arc<Hub>, body: &Value) -> Res<Value> {
@@ -737,6 +745,17 @@ impl Hub {
                 }
                 seen = now;
                 std::thread::sleep(Duration::from_secs(15)); // Nova updates what's waiting about every 15 s
+            }
+        });
+    }
+
+    /// Orbit's catalog from GitHub, a few seconds after Orbit starts (with release checks on; kept 12 hours).
+    pub fn catalog_later(self: &Arc<Hub>) {
+        let h = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(3));
+            if h.ctx.config.get("checkUpdates").as_bool().unwrap_or(true) && h.catalog.refresh(&h.installer.sources) {
+                h.cache.lock().unwrap().clear();
             }
         });
     }

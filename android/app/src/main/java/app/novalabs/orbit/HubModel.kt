@@ -99,7 +99,30 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     var pendingConfirm by mutableStateOf<Intent?>(null)
         private set
 
-    init { refresh() }
+    // Orbit's catalog (names, icons, which release file is each app): the copy kept from last time, then GitHub's
+    private val catalogFile get() = File(ctx.filesDir, "catalog.json")
+    private val catalogIcons get() = File(ctx.filesDir, "catalog-icons")
+
+    init {
+        runCatching { if (catalogFile.exists()) Catalog.apply(catalogFile.readText(), catalogIcons) }
+        refresh()
+    }
+
+    /** At most every 12 hours (or when asked): the catalog from Orbit's repository, kept for when GitHub can't be reached. */
+    private fun refreshCatalog(force: Boolean) {
+        val last = prefs.getLong("catalogFetched", 0L)
+        if (!force && System.currentTimeMillis() - last < 12 * 3_600_000L) return
+        viewModelScope.launch {
+            val text = runCatching { withContext(Dispatchers.IO) { GitHub.raw("dash1101/orbit", "packaging/catalog.json", token) } }.getOrNull()
+                ?: return@launch
+            val ok = runCatching { withContext(Dispatchers.IO) { Catalog.apply(text, catalogIcons) } }.getOrDefault(false)
+            if (ok) {
+                withContext(Dispatchers.IO) { runCatching { catalogFile.writeText(text) } }
+                prefs.edit().putLong("catalogFetched", System.currentTimeMillis()).apply()
+                refresh(force = false) // apps the catalog added get their cards
+            }
+        }
+    }
 
     fun chooseTheme(id: String) { theme = id; prefs.edit().putString("theme", id).apply() }
     fun saveManualToken(t: String) {
@@ -190,6 +213,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     /** Re-reads installed versions (cheap) and, at most every 10 minutes unless forced, the latest releases. */
     fun refresh(force: Boolean = false) {
         canInstall = Build.VERSION.SDK_INT < 26 || ctx.packageManager.canRequestPackageInstalls()
+        refreshCatalog(force)
         for (a in Catalog.apps) {
             val old = cards[a.id] ?: Card()
             cards[a.id] = old.copy(installed = installedVersion(a))
@@ -198,7 +222,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             if (fresh && !force && old.release != null) continue
             cards[a.id] = cards[a.id]!!.copy(loading = true)
             viewModelScope.launch {
-                val r = runCatching { withContext(Dispatchers.IO) { GitHub.latest(a.repo, token) } }
+                val r = runCatching { withContext(Dispatchers.IO) { GitHub.latest(a.repo, token) { a.apk(it) != null } } }
                 val c = cards[a.id] ?: Card()
                 cards[a.id] = r.fold(
                     { fetched[a.id] = System.currentTimeMillis(); c.copy(release = it, error = "", hint = "", loading = false) },
@@ -277,7 +301,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             // 2 · release
             s = step("find")
             s.detail = "asking GitHub"
-            val rel = withContext(Dispatchers.IO) { GitHub.latest(a.repo, token) }
+            val rel = withContext(Dispatchers.IO) { GitHub.latest(a.repo, token) { a.apk(it) != null } }
             val apkName = a.apk(rel.assets.keys) ?: throw Problem("The ${rel.tag} release has no Android app.")
             val apk = rel.assets[apkName]!!
             val sumsAsset = rel.assets[a.sums] ?: throw Problem("The ${rel.tag} release has no checksum list, so Orbit won't install it.")
