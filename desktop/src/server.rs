@@ -545,14 +545,13 @@ impl Hub {
         }
         let mut argv = vec![exe.to_string_lossy().into_owned()];
         argv.extend(std::env::args().skip(1));
-        crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1")])
+        // a program that moved (a name with its version in it → the plain name): the new Orbit has Orbit's own menu
+        // entry follow it once it runs (on Windows that starts PowerShell, which must not hold up the switch)
+        let moved_from = if exe != before { before.to_string_lossy().into_owned() } else { String::new() };
+        crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1"), ("ORBIT_MOVED_FROM", &moved_from)])
             .map_err(|e| bad(format!("couldn't start Orbit again: {e}; close it and open it yourself")))?;
-        let moved = (exe != before).then(|| (before, exe.clone()));
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(800));
-            if let Some((old, new)) = moved {
-                crate::desktop_entry::follow(&old, &new); // after answering: on Windows this starts PowerShell
-            }
             crate::window::close();
             std::process::exit(0);
         });

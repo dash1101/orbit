@@ -106,6 +106,16 @@ fn run() -> i32 {
     }
     let restarted = std::env::var("ORBIT_RESTARTED").map(|v| v == "1").unwrap_or(false);
     std::env::remove_var("ORBIT_RESTARTED");
+    let moved_from = std::env::var("ORBIT_MOVED_FROM").unwrap_or_default();
+    std::env::remove_var("ORBIT_MOVED_FROM");
+    if restarted && !moved_from.is_empty() {
+        // the Orbit before was named with its version: Orbit's own menu entry follows this one
+        std::thread::spawn(move || {
+            if let Some(me) = recipes::orbit::running_program() {
+                desktop_entry::follow(std::path::Path::new(&moved_from), &me);
+            }
+        });
+    }
     if !restarted && switch_to_waiting_update(a.port) {
         return 0;
     }
@@ -119,7 +129,7 @@ fn run() -> i32 {
         }
     });
     let hub = server::Hub::new(a.dry_run);
-    let wait = if restarted { Duration::from_secs(15) } else { Duration::ZERO };
+    let wait = if restarted { Duration::from_secs(60) } else { Duration::ZERO };
     let port = match listen(&hub, a.port, wait) {
         Ok(p) => p,
         Err(e) => {
