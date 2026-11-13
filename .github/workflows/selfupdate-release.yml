@@ -1,7 +1,9 @@
 name: self-update-from-a-release
 # Run by hand after a release: the standalone Orbit from an earlier release (by default the one before the newest)
 # updates itself from GitHub to the newest release and restarts on it, on Linux, Windows and macOS
-# (tools/ci-selfupdate.py). On a Mac, Orbit updates itself from 0.3.4 on.
+# (tools/ci-selfupdate.py). On a Mac, Orbit updates itself from 0.3.4 on. Macs and ARM computers only get a build at
+# milestones (and when a release says so): for them, "newest" and "the one before" are among the releases with their
+# file, and a system with only one such release has nothing to check yet.
 on:
   workflow_dispatch:
     inputs:
@@ -17,6 +19,9 @@ jobs:
           - { os: windows-latest, file: windows-x64.exe }
           - { os: ubuntu-22.04, file: linux-x86_64 }
           - { os: macos-latest, file: macos-apple-silicon.dmg }
+          - { os: macos-15-intel, file: macos-intel.dmg }
+          - { os: windows-11-arm, file: windows-arm64.exe }
+          - { os: ubuntu-22.04-arm, file: linux-arm64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -31,9 +36,15 @@ jobs:
           PYTHONIOENCODING: utf-8
           FROM: ${{ inputs.from }}
         run: |
-          tags=$(gh release list -R "$GITHUB_REPOSITORY" -L 2 --json tagName -q '.[].tagName')
+          # the releases with a file for this system, newest first (named with the version before 0.3.5)
+          tags=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" --jq '.[] | select(.draft | not) | .tag_name as $t
+            | select(any(.assets[].name; . == "orbit-${{ matrix.file }}" or . == "orbit-\($t)-${{ matrix.file }}"))
+            | $t' | sort -r -V)
           newest=$(echo "$tags" | sed -n 1p)
           from="${FROM:-$(echo "$tags" | sed -n 2p)}"
+          if [ -z "$from" ] || [ "$from" = "$newest" ]; then
+            echo "only one release has orbit-${{ matrix.file }} ($newest): nothing to update from yet"; exit 0
+          fi
           echo "from $from to $newest"
           # releases from 0.3.5 on name the files without the version; before, with it
           name="orbit-${{ matrix.file }}"

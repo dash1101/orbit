@@ -4,8 +4,16 @@
 2. `python3 tools/sync-icons.py` pulls the apps' current icons from their repositories (a test fails if the desktop
    and Android copies differ, or if a file in Orbit's icon folders isn't one of the script's icons). Orbit's own icon
    is drawn by `python3 tools/make-icon.py` (`packaging/icon/`).
-3. Tag and push: `git tag -a v0.5.2 -m "Orbit v0.5.2" && git push origin v0.5.2`.
-4. After the release: run the *self-update-from-a-release* workflow, which updates the previous release to this one on Linux, Windows and macOS.
+3. Tag and push: `git tag -a v0.5.4 -m "Orbit v0.5.4" && git push origin v0.5.4`.
+4. After the release: run the *self-update-from-a-release* workflow, which updates the previous release to this one on
+   every system that has a build in both (see below).
+
+**Which systems a release builds.** Every push and every release builds Windows and Linux on x86-64 (the program and
+the `.deb`) and Android. **Milestones** (tags `vX.Y.0`) also build Windows and Linux on ARM and both kinds of Mac, and
+so does a tag whose message says "all systems" (`git tag -a v0.5.3 -m "Orbit v0.5.3, all systems"`) or a manual run
+of the *build* workflow with *everything* ticked. The release notes then list only the downloads the release has
+(`tools/release-notes.py`), and Orbit on a Mac or an ARM computer updates itself to the newest release with its file,
+passing over the others.
 
 **Orbit 0.4.0 and YTM Starcast.** 0.4.0 replaces Pocketfader and YTM Beacon with YTM Starcast
 (`dash1101/ytm-starcast`, the renamed `dash1101/pocketfader`). Release it right after YTM Starcast's first release,
@@ -17,7 +25,7 @@ Pocketfader `v0.1.0-alpha.15` (from YTM Starcast's releases) and YTM Beacon `v0.
 which must stay public) to YTM Starcast. Orbit 0.3.5 and older can't install YTM Starcast, so the release notes tell
 people to update Orbit first.
 
-The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel), starts each one on its own system as a check, and publishes a pre-release with all of them, each as a single file: the `.exe`, the Linux program, a `.dmg` per Mac type, and the `.apk`. The desktop programs are the Rust build in `desktop/` (see its README); each is a single file with nothing to install. The Android app is the one piece that depends on where the signing key is.
+The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel; see *Which systems a release builds*), starts each one on its own system as a check, and publishes a pre-release with all of them, each as a single file: the `.exe`, the Linux program, a `.dmg` per Mac type, and the `.apk`. The desktop programs are the Rust build in `desktop/` (see its README); each is a single file with nothing to install. The Android app is the one piece that depends on where the signing key is.
 
 ## The signing key
 

@@ -189,7 +189,7 @@ impl OrbitRecipe {
     }
 
     fn find(&self, s: &mut Session) -> Res<bool> {
-        let rel = s.release(REPO)?;
+        let rel = s.release_with(REPO, &|r| self.wants(r))?;
         let name = self.pick(&rel);
         s.asset(&rel, &name, REPO)?;
         s.asset(&rel, "SHA256SUMS", REPO)?;
@@ -319,6 +319,10 @@ impl Recipe for OrbitRecipe {
     }
     fn self_app(&self) -> bool {
         true
+    }
+    /// A release with a file for this computer (Orbit builds ARM and Mac programs only at milestones, x.y.0).
+    fn wants(&self, rel: &Value) -> bool {
+        self.asset("").is_some() && rel["assets"].get(self.pick(rel)).is_some()
     }
     fn platform(&self, system: &str) -> (String, String) {
         match system {

@@ -76,6 +76,12 @@ class GitHub(BaseHTTPRequestHandler):
                       for n, b in ((NAME, DATA), ("SHA256SUMS", SUMS))]
             rel = [{"tag_name": TAG, "draft": False, "prerelease": True, "published_at": "2026-11-11T00:00:00Z",
                     "html_url": "", "assets": assets}]
+            # a newer release with no file for this computer (ARM and Mac programs are only built at milestones):
+            # Orbit has to skip it and update to the newest one it can use
+            other = [{"name": n, "size": 1, "url": f"{base}/api-assets/{n}", "browser_download_url": f"{base}/files/{n}"}
+                     for n in ("orbit-some-other-system", "SHA256SUMS")]
+            rel.insert(0, {"tag_name": "v100.0.0", "draft": False, "prerelease": True, "published_at": "2026-11-12T00:00:00Z",
+                           "html_url": "", "assets": other})
             return self.send(200, json.dumps(rel).encode(), "application/json")
         if path == f"/files/{NAME}":
             return self.send(200, DATA)

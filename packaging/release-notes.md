@@ -1,5 +1,10 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.3**
+
+- **Builds for Macs and ARM computers come with milestone releases** (0.6.0, 0.7.0 and so on, and now and then one in between). The releases in between are for Windows and Linux on x86-64, and Android, so they come out sooner. This release still has every build.
+- **Orbit on a Mac or an ARM computer updates itself to the newest release that has a build for it**, and passes over the releases without one. Its update offer and its card on the install page say the same.
+
 **New in 0.5.2**
 
 - **A package for Debian and Ubuntu:** `orbit-linux-x86_64.deb` (and `orbit-linux-arm64.deb`). Open it with your software installer (or `sudo apt install ./orbit-linux-x86_64.deb`): Orbit goes in your apps menu with its icon, and the window's web engine comes with it. Orbit installed this way updates itself through apt: *update orbit to …* in the top bar, and the system asks for your password once.
@@ -28,9 +33,11 @@
 | **Windows** (10 and 11, 64-bit) | `orbit-windows-x64.exe` | run it |
 | **Windows on ARM** | `orbit-windows-arm64.exe` | run it |
 | **macOS, Apple chips** (M1 and newer) | `orbit-macos-apple-silicon.dmg` | open it, drag **Orbit** onto **Applications** |
-| **macOS, Intel** | `orbit-macos-intel.dmg` | the same |
-| **Debian, Ubuntu, Mint, Pop!_OS…** | `orbit-linux-x86_64.deb` (ARM: `orbit-linux-arm64.deb`) | open it with your software installer, or `sudo apt install ./orbit-linux-x86_64.deb`; then Orbit is in your apps menu |
-| **Other Linux** (x86-64; ARM: `orbit-linux-arm64`) | `orbit-linux-x86_64` | allow it to run once (`chmod +x orbit-linux-x86_64`, or Properties → *Allow executing as program*), then run it |
+| **macOS, Intel** | `orbit-macos-intel.dmg` | open it, drag **Orbit** onto **Applications** |
+| **Debian, Ubuntu, Mint, Pop!_OS…** | `orbit-linux-x86_64.deb` | open it with your software installer, or `sudo apt install ./orbit-linux-x86_64.deb`; then Orbit is in your apps menu |
+| **Debian, Ubuntu… on ARM** (64-bit) | `orbit-linux-arm64.deb` | the same, with this file |
+| **Other Linux** (x86-64) | `orbit-linux-x86_64` | allow it to run once (`chmod +x orbit-linux-x86_64`, or Properties → *Allow executing as program*), then run it |
+| **Other Linux on ARM** (64-bit) | `orbit-linux-arm64` | the same, with this file |
 | **Android** 5.0 and newer | `orbit-android.apk` | install it, then install YTM Starcast and Nova from it |
 
 **First launch on Windows and macOS.** These programs aren't code-signed (that needs a paid certificate), so Windows may show "Windows protected your PC" (choose *More info*, then *Run anyway*) and macOS may say the app can't be opened (right-click **Orbit** in Applications, choose *Open*, then *Open*).
