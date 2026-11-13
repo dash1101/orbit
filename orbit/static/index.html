@@ -317,6 +317,9 @@ pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--
 .iopt.on .box2 b { transform: scale(1.25); }
 .iopt .lab { font-weight: 700; }
 .iopt .help { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+.iopt.numopt { cursor: default; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.iopt.numopt .help { grid-column: 2 / -1; }
+.iopt.numopt .inp { width: 8ch; }
 
 .pbar { position: relative; height: 18px; border: 1px solid var(--line-hi); padding: 2px; }
 .pbar i { position: relative; display: block; height: 100%; width: 0; background: var(--accent); overflow: hidden;
@@ -1184,6 +1187,18 @@ function stageChoose(dir) {
   const body = h("div", { class: "stage" },
     h("p", { class: "lead t-muted" }, W.op === "uninstall" ? "Before removing:" : "A few choices. The defaults suit most people."),
     W.info.options.map((f, k) => {
+      if (f.type === "int") {   // a number (a port): typed in, kept within its range
+        const input = h("input", { class: "inp num", type: "number", min: f.min, max: f.max, "aria-label": f.label,
+          onchange: e => {
+            const v = Math.round(+e.currentTarget.value);
+            const ok = e.currentTarget.value.trim() !== "" && !isNaN(v) && (f.min == null || v >= f.min) && (f.max == null || v <= f.max);
+            if (ok) W.opts[f.key] = v; else e.currentTarget.value = W.opts[f.key];
+          } });
+        input.value = W.opts[f.key];
+        return h("div", { class: "iopt numopt", style: `animation-delay:${k * 70}ms` },
+          h("span", { class: "box2" }, "#"), h("span", { class: "lab" }, f.label), input,
+          f.help ? h("span", { class: "help" }, f.help) : null);
+      }
       const row = h("button", { class: "iopt" + (W.opts[f.key] ? " on" : ""), style: `animation-delay:${k * 70}ms`, role: "switch",
         "aria-checked": String(!!W.opts[f.key]),
         onclick: () => {
@@ -1788,6 +1803,16 @@ function renderHub() {
         hub.settings.notifyApprovals !== false ? "on" : "off"); return c; })(),
       h("div", { class: "help" }, "While Orbit is open, a desktop notification when a browser asks Nova to be let in (or asks for something " +
         "that needs your OK). Approve it on Nova's card with the code the browser shows. Needs Nova 0.9.20 or newer.")) : null,
+    hub.settings.port !== undefined ? h("div", { class: "row" }, h("span", {}, "Orbit's port"),
+      (() => { const i = h("input", { class: "inp num", type: "number", min: 1024, max: 65535, "aria-label": "Orbit's port",
+        onchange: async e => {
+          const v = Math.round(+e.currentTarget.value);
+          try { await setHub({ port: v }, `port ${v}` + (v !== hub.settings.portNow ? " · from Orbit's next start" : "")); }
+          catch (err) { e.currentTarget.value = hub.settings.port; }
+          renderHub();
+        } }); i.value = hub.settings.port; return i; })(),
+      h("div", { class: "help" }, `Orbit answers only on this computer (127.0.0.1), now on port ${hub.settings.portNow}. A new port takes ` +
+        "effect the next time Orbit starts (or restart it); if another program has taken it by then, Orbit uses another one.")) : null,
     h("div", { class: "row" }, h("span", {}, "Check for releases now"),
       h("button", { class: "btn small", onclick: async () => { try { say((await api("/api/hub/check-updates", {})).message); setTimeout(async () => { await loadHub(); poll(); }, 2500); } catch (e) { say(e.message, "err"); } } }, "check")),
     hub.menu && hub.menu.deb ? h("div", { class: "row" }, h("span", {}, "Installed with the Debian package"),

@@ -590,7 +590,11 @@ impl App for Nova {
     }
 
     fn actions(&self) -> Vec<Value> {
-        if Self::windows() { self.win_actions() } else { self.linux_actions() }
+        let mut acts = if Self::windows() { self.win_actions() } else { self.linux_actions() };
+        if self.found.lock().unwrap().is_none() && self.hub().get("url").and_then(|u| u.as_str()).unwrap_or("").is_empty() {
+            acts.retain(|a| a["id"] != "open"); // Nova web isn't answering: nothing to open
+        }
+        acts
     }
 
     fn term_command(&self, action: &str, args: &Map<String, Value>) -> Res<Option<Value>> {

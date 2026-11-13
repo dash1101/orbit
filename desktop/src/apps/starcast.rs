@@ -31,6 +31,8 @@ pub struct Starcast {
     extension: Mutex<Value>,                 // YTM Starcast's word on its browser extension (0.2.0a2 and newer), or null
     focus: Mutex<bool>,                      // it can bring YouTube Music (and its settings there) to the front
     refine_off: Mutex<bool>,                 // Refine (where those settings are) is switched off in YTM Starcast
+    answering: Mutex<bool>,                  // it answered when last looked at
+    port: Mutex<Option<(Instant, u16)>>,     // the port its service or task starts it with (looked at now and then)
 }
 
 fn truthy(v: &Value) -> bool {
@@ -44,11 +46,39 @@ fn s_of(v: &Value) -> String {
 impl Starcast {
     pub fn new(ctx: Arc<Ctx>) -> Starcast {
         Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null), focus: Mutex::new(false),
-                   refine_off: Mutex::new(false) }
+                   refine_off: Mutex::new(false), answering: Mutex::new(false),
+                   port: Mutex::new(None) }
+    }
+
+    /// The port the installed YTM Starcast is started with: its systemd service (Linux) or scheduled task (Windows),
+    /// 8777 when it doesn't say.
+    fn installed_port(&self) -> u16 {
+        if let Some((at, p)) = *self.port.lock().unwrap() {
+            if at.elapsed() < Duration::from_secs(30) {
+                return p;
+            }
+        }
+        let words: Vec<String> = if cfg!(windows) {
+            let (rc, out) = self.ctx.runner.read(&["schtasks".into(), "/query".into(), "/tn".into(), "YTM Starcast".into(), "/xml".into()],
+                                                  Duration::from_secs(10));
+            let xml = out.replace('\0', "");
+            let args = xml.split("<Arguments>").nth(1).and_then(|t| t.split("</Arguments>").next()).filter(|_| rc == 0).unwrap_or("");
+            args.split_whitespace().map(String::from).collect()
+        } else {
+            let base = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()).map(std::path::PathBuf::from)
+                .unwrap_or_else(|| crate::config::home().join(".config"));
+            std::fs::read_to_string(base.join("systemd").join("user").join(UNIT)).ok()
+                .and_then(|t| t.lines().find_map(|l| l.strip_prefix("ExecStart=")).map(|l| l.split_whitespace().map(String::from).collect()))
+                .unwrap_or_default()
+        };
+        let p = crate::recipes::starcast::port_of(&words).unwrap_or(crate::recipes::starcast::PORT);
+        *self.port.lock().unwrap() = Some((Instant::now(), p));
+        p
     }
 
     fn base(&self) -> String {
-        let url = self.hub().get("url").and_then(|u| u.as_str()).filter(|u| !u.is_empty()).unwrap_or(DEFAULT_URL).trim_end_matches('/').to_string();
+        let here = format!("http://127.0.0.1:{}", self.installed_port());
+        let url = self.hub().get("url").and_then(|u| u.as_str()).filter(|u| !u.is_empty()).map(String::from).unwrap_or(here).trim_end_matches('/').to_string();
         match url::Url::parse(&url) {
             Ok(u) if u.scheme() == "http" || u.scheme() == "https" => url,
             _ => DEFAULT_URL.into(),
@@ -211,6 +241,12 @@ impl App for Starcast {
     fn open_label(&self) -> String {
         if *self.focus.lock().unwrap() { String::new() } else { "open web app".into() }
     }
+    fn windows_task(&self) -> Option<(String, String)> {
+        Some(("YTM Starcast".into(), "ytm-starcast.exe".into())) // as YTM Starcast's Windows installer sets it up
+    }
+    fn answering(&self) -> bool {
+        *self.answering.lock().unwrap()
+    }
     /// YouTube Music itself, and YTM Starcast's settings in it, instead of the web app (when YTM Starcast can).
     fn card_actions(&self) -> Vec<Value> {
         self.actions().into_iter().filter(|a| a["id"] == "ytm" || a["id"] == "ytm-settings").collect()
@@ -239,7 +275,7 @@ impl App for Starcast {
     fn hub_fields(&self) -> Vec<Value> {
         let h = self.hub();
         let g = |k: &str| h.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let url = if g("url").is_empty() { DEFAULT_URL.to_string() } else { g("url") };
+        let url = if g("url").is_empty() { format!("http://127.0.0.1:{}", self.installed_port()) } else { g("url") };
         vec![
             with(field("url", "Address", "text", json!(url), "hub"), json!({"help": "Where YTM Starcast answers on this computer."})),
             with(field("token", "Access token", "secret", json!(g("token")), "hub"),
@@ -254,8 +290,12 @@ impl App for Starcast {
         let mut s = Map::new();
         s.insert("units".into(), json!(units));
         let info = match self.get("/api/info", 1.5) {
-            Ok(i) if truthy(&i) => i,
+            Ok(i) if truthy(&i) => {
+                *self.answering.lock().unwrap() = true;
+                i
+            }
             other => {
+                *self.answering.lock().unwrap() = false;
                 *self.beacon.lock().unwrap() = None;
                 let err = other.err().map(|e| e.message).unwrap_or_default();
                 let st = unit["state"].as_str().unwrap_or("");
@@ -414,18 +454,21 @@ impl App for Starcast {
     fn actions(&self) -> Vec<Value> {
         let focus = *self.focus.lock().unwrap();
         let mut acts = vec![];
-        if focus {
+        let up = *self.answering.lock().unwrap(); // not running: no web app or YouTube Music to open (start it below)
+        if focus && up {
             acts.push(json!({"id": "ytm", "label": "YouTube Music", "group": "open", "primary": true, "ext": true}));
             if !*self.refine_off.lock().unwrap() {
                 acts.push(json!({"id": "ytm-settings", "label": "settings", "group": "open", "ext": true}));
             }
         }
+        if up {
+            acts.push(json!({"id": "open", "label": "open web app", "group": "open", "primary": !focus}));
+        }
         acts.extend([
-            json!({"id": "open", "label": "open web app", "group": "open", "primary": !focus}),
             json!({"id": "gui", "label": "desktop window", "group": "open"}),
             json!({"id": "releases", "label": "releases", "group": "open"}),
         ]);
-        if self.extension.lock().unwrap().is_object() {
+        if up && self.extension.lock().unwrap().is_object() {
             acts.push(json!({"id": "extension", "label": "set up browser extension", "group": "open"}));
         }
         let b = self.beacon.lock().unwrap().clone();

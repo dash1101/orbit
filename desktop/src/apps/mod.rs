@@ -125,6 +125,15 @@ pub trait App: Send + Sync {
     fn card_actions(&self) -> Vec<Value> {
         vec![]
     }
+    /// Windows: the scheduled task it runs from at logon, and its program's name (YTM Starcast: "YTM Starcast",
+    /// ytm-starcast.exe). Orbit starts, stops and switches it there, as it does with the systemd service on Linux.
+    fn windows_task(&self) -> Option<(String, String)> {
+        None
+    }
+    /// Whether it answered when last looked at (for the start/restart button where the task can't say so).
+    fn answering(&self) -> bool {
+        false
+    }
     /// (browsers, browser actions) waiting for the owner's approval (Nova), for a desktop notification.
     fn approvals_waiting(&self) -> (u64, u64) {
         (0, 0)
@@ -224,12 +233,30 @@ pub fn ask_value(app: &dyn App, action: &str, args: &Map<String, Value>) -> Res<
 }
 
 pub fn unit_states(app: &dyn App) -> Vec<Value> {
+    if let Some((task, _)) = app.windows_task().filter(|_| cfg!(windows)) {
+        return vec![crate::wintask::show(&app.ctx().runner, &task)];
+    }
     app.units().iter().map(|(u, user)| systemd::show(&app.ctx().runner, u, *user)).collect()
 }
 
 /// Start/stop/restart/autostart buttons for the main *user* unit.
 pub fn unit_actions(app: &dyn App) -> Vec<Value> {
     let mut out = vec![];
+    if let Some((task, _)) = app.windows_task().filter(|_| cfg!(windows)) {
+        let st = crate::wintask::show(&app.ctx().runner, &task);
+        if st["state"] == "missing" {
+            return out;
+        }
+        let running = app.answering();
+        out.push(json!({"id": if running { "svc:restart" } else { "svc:start" }, "label": if running { "restart" } else { "start" }, "group": "service"}));
+        if running {
+            out.push(json!({"id": "svc:stop", "label": "stop", "group": "service", "confirm": format!("Stop {}?", app.name())}));
+        }
+        let on = st["enabled"] == "enabled";
+        out.push(json!({"id": if on { "svc:disable" } else { "svc:enable" }, "group": "service",
+                        "label": if on { "start at login: on" } else { "start at login: off" }, "toggle": on}));
+        return out;
+    }
     if let Some((unit, user)) = app.units().first() {
         if !*user {
             return out;
@@ -252,6 +279,13 @@ pub fn unit_actions(app: &dyn App) -> Vec<Value> {
 
 pub fn run_unit_action(app: &dyn App, action: &str) -> Res<Value> {
     let verb = action.split_once(':').map(|x| x.1).unwrap_or("");
+    if let Some((task, program)) = app.windows_task().filter(|_| cfg!(windows)) {
+        let (ok, msg) = crate::wintask::act(&app.ctx().runner, &task, &program, verb);
+        if !ok {
+            return Err(bad(msg));
+        }
+        return Ok(json!({"ok": true, "message": format!("{msg}{}", if app.ctx().dry_run() { " (dry run)" } else { "" })}));
+    }
     let (unit, user) = app.units().first().cloned().ok_or_else(|| bad("unknown action"))?;
     let (ok, msg) = systemd::act(&app.ctx().runner, &unit, verb, user);
     if !ok {

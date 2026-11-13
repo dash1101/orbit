@@ -297,6 +297,66 @@ def check_family_gone():
         fail("something still answers on port 8777")
 
 
+WATCH = r"""
+Add-Type @'
+using System; using System.Text; using System.Runtime.InteropServices;
+public static class W {
+  public delegate bool F(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(F f, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+}
+'@
+$log = $args[0]; $ready = $args[1]; $stop = $args[2]   # (inside the callback, $args is its own)
+$seen = @{}
+Set-Content -LiteralPath $ready -Value "ready"
+while (-not (Test-Path -LiteralPath $stop)) {
+  [W]::EnumWindows({ param($h, $l)
+    if ([W]::IsWindowVisible($h) -and -not $seen.ContainsKey($h)) {
+      $c = New-Object Text.StringBuilder 256; [void][W]::GetClassName($h, $c, 256)
+      if ($c.ToString() -in @('ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS', 'PseudoConsoleWindow')) {
+        $t = New-Object Text.StringBuilder 512; [void][W]::GetWindowText($h, $t, 512)
+        $seen[$h] = 1; Add-Content -LiteralPath $log -Value ("{0:HH:mm:ss.fff}|{1}|{2}" -f (Get-Date), $c, $t)
+      } else { $seen[$h] = 1 }
+    }
+    $true }, [IntPtr]::Zero) | Out-Null
+  Start-Sleep -Milliseconds 80
+}
+"""
+
+
+def watch_windows(folder):
+    """Windows: start recording every console window that opens on the desktop (what a person would see flash up),
+    from now until the returned function is called; it returns them, as (time, class, title) lines."""
+    import subprocess
+    if os.name != "nt":
+        return lambda: []
+    script, log, ready, stop = (folder / n for n in ("watch.ps1", "windows.txt", "ready.txt", "stop.txt"))
+    script.write_text(WATCH)
+    subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), str(log), str(ready), str(stop)],
+                     creationflags=0x08000000)   # CREATE_NO_WINDOW: the watcher itself shows nothing
+    end = time.time() + 90
+    while not ready.exists() and time.time() < end:
+        time.sleep(0.3)
+    if not ready.exists():
+        fail("the window watcher didn't start")
+    # it sees a console window on this desktop: open one on purpose (or "none seen" would prove nothing)
+    subprocess.Popen(["cmd", "/c", "title orbit-watch-check & ping -n 4 127.0.0.1 >nul"], creationflags=0x00000010)  # CREATE_NEW_CONSOLE
+    end = time.time() + 20
+    while time.time() < end and not (log.exists() and "orbit-watch-check" in log.read_text(errors="replace")):
+        time.sleep(0.3)
+    if not (log.exists() and "orbit-watch-check" in log.read_text(errors="replace")):
+        fail("the window watcher doesn't see console windows on this machine")
+    say("window watcher: it sees console windows here (the check window was seen)")
+
+    def done():
+        stop.write_text("stop")
+        time.sleep(1)
+        return [ln for ln in log.read_text(errors="replace").splitlines() if ln.strip() and "orbit-watch-check" not in ln] if log.exists() else []
+    return done
+
+
 def through_the_program(exe, apps, migrate=False):
     """Install each app through the standalone program's own API (what its install window calls), check that it
     answers and that Orbit's page for it sees that, then remove it and check it's gone. With `migrate` (YTM Starcast
@@ -367,8 +427,21 @@ def through_the_program(exe, apps, migrate=False):
     # folder, where Pocketfader, YTM Beacon and YTM Starcast keep theirs, so that removing them with their settings
     # is checked
     env = dict(os.environ) if migrate else dict(os.environ, APPDATA=str(home))
+    windows = watch_windows(home)
     p = subprocess.Popen([exe, "--no-window", "--port", str(port)], env=env, stdin=subprocess.DEVNULL,
                          stdout=open(home / "orbit.log", "w"), stderr=subprocess.STDOUT)
+    # the overview, every 3 s, as Orbit's window asks for it (each app's status checks run then)
+    polling = {"on": True}
+
+    def poll():
+        while polling["on"]:
+            try:
+                call("/api/apps")
+            except (OSError, urllib.error.URLError, ValueError):
+                pass
+            time.sleep(3)
+    import threading
+    threading.Thread(target=poll, daemon=True).start()
     try:
         hub = until("Orbit to start", lambda: call("/api/hub"), 90)
         say(f"Orbit {hub['version']} on port {port}")
@@ -410,7 +483,17 @@ def through_the_program(exe, apps, migrate=False):
                     "through the standalone Orbit.")
             say(f"{app}: installed, answered and removed through the standalone Orbit.")
         say(f"\nAll of {', '.join(apps)}: installed, answered and removed through the standalone Orbit.")
+        polling["on"] = False
+        seen = windows()
+        theirs = [w for w in seen if "ytm-starcast" in w.lower()]
+        ours = [w for w in seen if w not in theirs]
+        for w in theirs:
+            say(f"::warning::a console window of YTM Starcast's own: {w}")
+        if ours:
+            fail("console windows opened during the run (Orbit should run everything without one):\n  " + "\n  ".join(ours))
+        say(f"No console window from Orbit during the run ({len(theirs)} of YTM Starcast's own)." if os.name == "nt" else "")
     finally:
+        polling["on"] = False
         p.kill()
         try:
             say("--- Orbit's output:\n" + (home / "orbit.log").read_text(errors="replace")[-2000:])
