@@ -95,6 +95,8 @@ pub struct Hub {
     pub host: Host,
     pub installer: Installer,
     pub port: AtomicU16,
+    /// Installed for the user, to start again from there (program, a copy left behind): Orbit asks first.
+    restart_to: Mutex<Option<(String, String)>>,
 }
 
 impl Hub {
@@ -119,7 +121,7 @@ impl Hub {
             let installer = Installer::new(host.clone(), sources.clone(), crate::recipes::load(&host, &sources), runner.dry_run, spawn, Some(on_change));
             let apps = apps::load(&ctx);
             Hub { ctx, apps: RwLock::new(apps), cache: Mutex::new(HashMap::new()), github, terminals: Terminals::default(),
-                  last_seen: Mutex::new(Instant::now()), asked: Mutex::new(HashMap::new()), host, installer, port: AtomicU16::new(0) }
+                  last_seen: Mutex::new(Instant::now()), asked: Mutex::new(HashMap::new()), host, installer, port: AtomicU16::new(0), restart_to: Mutex::new(None) }
         })
     }
 
@@ -451,7 +453,7 @@ impl Hub {
             themes.push(t);
         }
         json!({"name": "Orbit", "version": crate::VERSION, "dryRun": self.dry_run(), "github": self.github.state(), "system": self.host.system,
-               "orbitUpdate": self.orbit_update(), "menu": desktop_entry::state(), "themes": themes, "themeTokens": THEME_COLORS,
+               "orbitUpdate": self.orbit_update(), "menu": self.menu_state(), "themes": themes, "themeTokens": THEME_COLORS,
                "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
                             "notifyApprovals": c["notifyApprovals"], "port": c["port"].as_u64().unwrap_or(8790),
                             "portNow": self.port.load(Ordering::Relaxed)},
@@ -593,6 +595,42 @@ impl Hub {
         let moved_from = if exe != before { before.to_string_lossy().into_owned() } else { String::new() };
         start_again(&exe, &moved_from, "")?;
         Ok(json!({"ok": true, "message": "restarting Orbit…"}))
+    }
+
+    /// One step of "install orbit" (desktop_entry::install_step), as the window shows them ticking off. After "move",
+    /// starting again from the new place waits for "restart" (the window asks first); until then the top bar offers it.
+    /// desktop_entry::state, and whether Orbit is installed and waits to start again from its new place.
+    fn menu_state(&self) -> Value {
+        let mut m = desktop_entry::state();
+        if self.restart_to.lock().unwrap().is_some() {
+            m["installed"] = json!(true); // (this Orbit still runs from where it was: it says so until it restarts)
+            m["restart"] = json!(true);
+        }
+        m
+    }
+
+    pub fn install_step(&self, step: &str) -> Res<Value> {
+        if step == "restart" {
+            let Some((program, old)) = self.restart_to.lock().unwrap().clone() else {
+                return Err(bad("nothing to restart for"));
+            };
+            if self.dry_run() {
+                return Ok(json!({"ok": true, "message": "dry run: Orbit would start again from its new place"}));
+            }
+            start_again(std::path::Path::new(&program), "", &old)?;
+            return Ok(json!({"ok": true, "message": "Orbit starts again from its new place…"}));
+        }
+        if step == "move" && !self.dry_run() && self.installer.busy("orbit").is_some() {
+            return Err(bad("Orbit's update is still being downloaded: install Orbit when it's ready"));
+        }
+        let r = desktop_entry::install_step(&self.ctx.runner, step);
+        if r["ok"] == false {
+            return Err(bad(r["message"].as_str().unwrap_or("couldn't install Orbit")));
+        }
+        if step == "move" && r["restart"] == json!(true) {
+            *self.restart_to.lock().unwrap() = Some((r["program"].as_str().unwrap_or("").into(), r["old"].as_str().unwrap_or("").into()));
+        }
+        Ok(r)
     }
 
     /// Install Orbit for this user (Linux, desktop_entry::install), not while its own update is being downloaded
@@ -824,6 +862,10 @@ fn post(hub: &Arc<Hub>, url: &str, body: &Value) -> Res<Reply> {
                 h.ctx.releases.latest(ORBIT_REPO, true);
             });
             return ok(hub.check_updates());
+        }
+        "/api/hub/install-orbit" => {
+            let step = body.get("step").and_then(|v| v.as_str()).unwrap_or("");
+            return ok(hub.install_step(step)?);
         }
         "/api/hub/menu" => {
             // {} adds a launcher for this copy; on Linux, {"install": true} installs Orbit for this user, {"remove": true} removes that

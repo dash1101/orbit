@@ -224,6 +224,17 @@ pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--
 #dlg .box { background: var(--bg); width: min(560px, 100%); max-height: 80vh; display: flex; flex-direction: column; }
 #dlgb { overflow: auto; min-height: 0; padding: 4px; margin: -4px; }   /* room for the buttons' focus ring */
 #dlg .body { margin: 2px 0 14px; white-space: pre-wrap; }
+.phone { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.phone .qr { width: 132px; height: 132px; background: #fff; padding: 4px; border-radius: var(--radius); image-rendering: pixelated; }
+.phone .lnk { color: var(--text); text-align: left; }
+/* "install orbit": its steps, ticking off */
+.isteps { display: grid; gap: 6px; margin: 4px 0 14px; }
+.isteps .st { display: grid; grid-template-columns: 2ch minmax(0, 1fr); gap: 0 8px; }
+.isteps .st .mk { color: var(--muted); }
+.isteps .st.ok .mk { color: var(--ok); } .isteps .st.bad .mk { color: var(--down); }
+.isteps .st .nt { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+.isteps .st.bad .nt { color: var(--down); }
+.isteps p { margin: 6px 0 0; }
 #dlg pre { margin: 0 0 12px; max-height: 50vh; overflow: auto; font-size: 12.5px; color: var(--muted); white-space: pre-wrap; }
 .empty { color: var(--muted); padding: 30px 0; text-align: center; }
 .blink::after { content: "▌"; animation: bl 1s steps(1) infinite; color: var(--accent); }
@@ -484,6 +495,7 @@ input[type=range] { accent-color: var(--accent); }
     <span class="sum" id="sum">connecting…</span>
     <span class="sp"></span>
     <button class="tag upd-tag" id="orbitinst" hidden>install orbit</button>
+    <button class="tag upd-tag" id="orbitrest" hidden title="Orbit is installed: start it again from its new place">restart orbit</button>
     <button class="tag upd-tag" id="orbitupd" hidden title="A newer Orbit is out: open its download page"></button>
     <span class="tag" id="dry" hidden title="Orbit was started with --dry-run: nothing is changed">dry run</span>
   </div>
@@ -770,6 +782,20 @@ function placeholder(id) {
       h("div", { class: "t-muted" }, spin(), " reading " + a.name + "…")),
     box("actions", h("div", { class: "t-muted" }, spin()))));
 }
+// YTM Starcast on a phone: its addresses (/api/connect), and a QR code of the best one. The QR comes as an image
+// (an SVG from another program never runs anything in this page).
+function phoneBox(c) {
+  if (!c || !(c.addresses || []).length) return null;
+  const phones = c.addresses.filter(a => a.phone);
+  const copy = url => navigator.clipboard.writeText(url).then(() => say("copied · " + url, "ok"), () => say(url));
+  const qr = c.qr ? h("img", { class: "qr", alt: "QR code for " + c.best, src: "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(c.qr))) }) : null;
+  return box("on your phone", h("div", { class: "phone" }, qr, h("div", {},
+    h("div", { class: "t-muted", style: "font-size:12.5px;margin-bottom:6px" }, phones.length
+      ? "Scan the code with your phone's camera, or open one of these there, then add it to the home screen."
+      : "No address a phone can reach yet: switch on Tailscale, or “Also reach it on my home Wi-Fi” (install YTM Starcast again to change it)."),
+    h("div", { class: "kv" }, c.addresses.flatMap(a => [h("span", { class: "k" }, a.label),
+      h("span", { class: "v" }, h("button", { class: "lnk", title: "copy " + a.url, onclick: () => copy(a.url) }, a.url))])))));
+}
 function renderDetail(full) {
   const d = S.detail, s = d.status, main = $("#main");
   const statusBox = box("status",
@@ -813,8 +839,8 @@ function renderDetail(full) {
 
   const moreBox = s.more && s.more.length ? box("details", h("div", { class: "kv" },
     s.more.flatMap(([k, v]) => [h("span", { class: "k" }, k), h("span", { class: "v", title: v }, v)]))) : null;
-  const lower = [unitBox, moreBox].filter(Boolean);
-  const lowerKids = lower.length === 2 ? [h("div", { class: "grid g2" }, lower)] : lower;
+  const lower = [phoneBox(s.connect), unitBox, moreBox].filter(Boolean);
+  const lowerKids = lower.length >= 2 ? [h("div", { class: "grid g2" }, lower)] : lower;
   if (!full && main.querySelector("[data-part=top]")) {
     // live refresh: replace status/actions/services/details, keep the settings form and log as they are
     main.querySelector("[data-part=top]").replaceChildren(statusBox, actBox);
@@ -934,7 +960,7 @@ function showDlg(title, body, buttons) {
     $("#dlgb").replaceChildren(typeof body === "string" ? h("div", { class: "body" }, body) : body, btns);
     $("#dlg").classList.add("open");
     document.addEventListener("keydown", key, true);
-    btns.lastChild.focus();
+    if (btns.lastChild) btns.lastChild.focus();   // (a dialog that's still working has no buttons yet)
   });
 }
 const confirmDlg = (text, danger) => showDlg("confirm", text, [["cancel", false], ["yes", true, danger ? "danger" : "primary"]]);
@@ -1653,6 +1679,9 @@ async function loadHub() {
   $("#dry").hidden = !S.hub.dryRun;
   const m = S.hub.menu || {}, ib = $("#orbitinst");
   ib.hidden = !(m.install && !m.installed);
+  const rb = $("#orbitrest");
+  rb.hidden = !m.restart;
+  rb.onclick = finishInstall;
   ib.title = `Install Orbit for you: it moves to ${m.home} and goes in ${installWords(m).goes}. ${installWords(m).no}.`;
   ib.onclick = installOrbit;
   const u = S.hub.orbitUpdate, ub = $("#orbitupd");
@@ -1897,10 +1926,41 @@ function installWords(m) {
 async function installOrbit() {
   const m = S.hub.menu || {}, w = installWords(m);
   if (!m.installed && !await confirmDlg(`Install Orbit for you? This program moves to ${m.home}, out of the folder you downloaded it to, ` +
-      `and Orbit goes in ${w.goes}. ${w.no}; it keeps updating itself there.${w.then}` +
+      `and Orbit goes in ${w.goes}. ${w.no}; it keeps updating itself there.` +
       (m.elsewhere ? " It replaces the Orbit already installed there." : ""))) return;
-  try { const r = await api("/api/hub/menu", { install: true }); say(r.message, r.ok ? "ok" : "err"); } catch (e) { say(e.message, "err"); }
+  // each step on its own, ticking off as it's done
+  const steps = m.steps || [];
+  const rows = steps.map(x => h("div", { class: "st" }, h("span", { class: "mk" }, "·"), h("span", {}, x.label), h("span", { class: "nt" })));
+  const body = h("div", { class: "isteps" }, rows);
+  showDlg("install orbit", body, []);
+  let restart = false;
+  for (let k = 0; k < steps.length; k++) {
+    const row = rows[k];
+    row.querySelector(".mk").replaceChildren(spin());
+    try {
+      const r = await api("/api/hub/install-orbit", { step: steps[k].id });
+      if (r.restart) restart = true;
+      row.classList.add("ok"); row.querySelector(".mk").textContent = "✓";
+      if (r.note === "skipped") row.querySelector(".nt").textContent = r.message;
+    } catch (e) {
+      row.classList.add("bad"); row.querySelector(".mk").textContent = "✗"; row.querySelector(".nt").textContent = e.message;
+      if (k === 0) { await showDlg("install orbit", body, [["close", true]]); await loadHub(); if (S.view === "hub") renderHub(); return; }
+    }
+  }
   await loadHub(); if (S.view === "hub") renderHub();
+  if (restart) return finishInstall(body);
+  body.append(h("p", {}, `Orbit is installed in ${m.home}.`));
+  await showDlg("install orbit", body, [["done", true, "primary"]]);
+}
+// Installed, still running from where it was downloaded: it starts again from its new place, when the person says so.
+async function finishInstall(body) {
+  const m = S.hub.menu || {};
+  const b = body instanceof Node ? body : h("div", { class: "isteps" });
+  b.append(h("p", {}, `Orbit is installed in ${m.home}. To finish, it starts again from there: this window closes and opens again ` +
+    "in a moment. Nothing else is interrupted."));
+  const now = await showDlg("install orbit", b, [["later", false], ["restart now", true, "primary"]]);
+  if (!now) return say("Orbit starts from its new place when you choose “restart orbit” at the top, or the next time you open it.", "ok");
+  try { say((await api("/api/hub/install-orbit", { step: "restart" })).message, "ok"); } catch (e) { say(e.message, "err"); }
 }
 async function removeOrbit() {
   const m = S.hub.menu || {}, w = installWords(m);
