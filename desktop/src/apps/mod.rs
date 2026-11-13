@@ -125,6 +125,10 @@ pub trait App: Send + Sync {
     fn card_actions(&self) -> Vec<Value> {
         vec![]
     }
+    /// (browsers, browser actions) waiting for the owner's approval (Nova), for a desktop notification.
+    fn approvals_waiting(&self) -> (u64, u64) {
+        (0, 0)
+    }
     fn custom(&self) -> bool {
         false
     }

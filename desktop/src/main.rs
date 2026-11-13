@@ -147,6 +147,7 @@ fn run() -> i32 {
         }
     };
     hub.update_itself_later();
+    hub.watch_approvals();
     let url = format!("http://127.0.0.1:{port}/");
     println!("Orbit {VERSION} on {url}{}", if a.dry_run { "  (dry run: nothing will be changed)" } else { "" });
     if a.no_window {

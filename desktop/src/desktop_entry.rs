@@ -109,12 +109,14 @@ fn refresh_menu(entry: &Path) {
 }
 
 /// Move a file, across file systems too (then copied and the original removed, keeping its permissions).
-fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
+/// Ok(true) when it was renamed, Ok(false) when copied.
+fn move_file(from: &Path, to: &Path) -> std::io::Result<bool> {
     if std::fs::rename(from, to).is_ok() {
-        return Ok(());
+        return Ok(true);
     }
     std::fs::copy(from, to)?;
-    std::fs::remove_file(from)
+    std::fs::remove_file(from)?;
+    Ok(false)
 }
 
 /// Install Orbit for this user (Linux): the program moves to ~/.local/share/orbit (an update already waiting next
@@ -137,13 +139,14 @@ pub fn install(runner: &Runner) -> Value {
         return json!({"ok": true, "message": format!("dry run: would install Orbit for you in {}", shown(&home))});
     }
     use crate::recipes::orbit::beside;
+    let mut copied = false; // to another drive: this Orbit runs on from the old file, so it starts again from the new one
     let r = (|| -> std::io::Result<()> {
         std::fs::create_dir_all(&home)?;
         if !same_file(&exe, &target) {
             for suffix in ["", ".new", ".new.ok", ".old"] {
                 let _ = std::fs::remove_file(beside(&target, suffix)); // an earlier install's, replaced by this one
             }
-            move_file(&exe, &target)?;
+            copied = !move_file(&exe, &target)?;
             for suffix in [".new", ".new.ok"] {
                 let waiting = beside(&exe, suffix);
                 if waiting.exists() {
@@ -167,7 +170,8 @@ pub fn install(runner: &Runner) -> Value {
     if menu["ok"] == false {
         return menu;
     }
-    json!({"ok": true, "message": format!("Orbit is installed for you, in {} and your apps menu", shown(&home))})
+    json!({"ok": true, "message": format!("Orbit is installed for you, in {} and your apps menu", shown(&home)),
+           "copied": copied, "program": target.to_string_lossy()})
 }
 
 /// Remove Orbit installed for this user (Linux): the program, its command, menu entry and icon. Its settings stay.

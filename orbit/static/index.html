@@ -30,8 +30,8 @@
 }
 [data-theme="paper"] {
   --bg: #f3f0e8; --panel: #f3f0e8; --raise: #e9e5da; --line: #c4bdae; --line-hi: #8f877a;
-  --text: #2a2826; --muted: #77716a; --legend: #6a645c; --accent: #c2366b; --accent-ink: #fff;
-  --ok: #1d8a4a; --warn: #b7791f; --down: #c53030; --off: #a39d92; --sel: #2a2826;
+  --text: #2a2826; --muted: #6b655e; --legend: #6a645c; --accent: #c2366b; --accent-ink: #fff;
+  --ok: #16733d; --warn: #8f5b12; --down: #c53030; --off: #a39d92; --sel: #2a2826;   /* text colours ≥ 4.5:1 on bg and raise */
 }
 [data-theme="frost"] {
   --bg: #1b2028; --panel: #1b2028; --raise: #232a35; --line: #36404f; --line-hi: #4f5d72;
@@ -92,7 +92,7 @@ a { color: var(--accent); }
 .tag { border: 1px solid var(--warn); color: var(--warn); padding: 0 6px; font-size: 12px; white-space: nowrap; }
 #nav { grid-area: nav; display: flex; flex-direction: column; min-height: 0; padding: 14px 0 8px; }
 #nav .list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 2px 0; }
-#main { grid-area: main; overflow-y: auto; overflow-x: hidden; padding: 0 4px 6px 2px; min-height: 0; }
+#main { grid-area: main; overflow-y: auto; overflow-x: hidden; padding: .3em 4px 6px 2px; min-height: 0; }   /* room for the first boxes' titles */
 #foot { grid-area: foot; }
 #foot .box { display: flex; gap: 14px; align-items: center; padding: 8px 12px 6px; }
 #msg { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -157,6 +157,7 @@ a { color: var(--accent); }
 .grp { margin-bottom: 9px; }
 .grp .gt { color: var(--muted); font-size: 12.5px; margin-bottom: 4px; }
 .btns { display: flex; flex-wrap: wrap; gap: 7px; }
+.btns > .btn { max-width: 100%; white-space: normal; text-align: left; }   /* a long label wraps instead of running out of its box */
 .btn { background: transparent; border: 1px solid var(--line-hi); padding: 4px 10px; cursor: pointer; border-radius: var(--radius);
        white-space: nowrap; }
 .btn:hover { background: var(--raise); border-color: var(--text); }
@@ -446,13 +447,14 @@ input[type=range] { accent-color: var(--accent); }
 }
 
 /* phones and narrow windows: the rail becomes a strip along the top */
-@media (max-width: 760px) {
+/* phones and narrow browser windows (Orbit's own window is never narrower than 720 px, so it keeps the side bar) */
+@media (max-width: 700px) {
   #wiz { padding: 12px 0 0; }
   #wiz .wpanel { width: 100%; height: 100%; max-height: none; border-width: 1px 0 0; padding: 18px 16px 12px; }
   .whead .r { display: none; }
   .stepper .s { font-size: 11px; }
   body { overflow: auto; }
-  #shell { height: auto; min-height: 100vh; grid-template-columns: minmax(0, 1fr);
+  #shell { height: auto; min-height: 100vh; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto;
            grid-template-areas: "top" "nav" "main" "foot"; padding: 6px 16px 10px; }
   #nav { padding: 14px 0 4px; }
   #nav.box { padding-top: 12px; }
@@ -769,7 +771,7 @@ function renderDetail(full) {
   const d = S.detail, s = d.status, main = $("#main");
   const statusBox = box("status",
     h("div", { class: "hero" }, mark(d),
-      h("div", {}, h("div", { class: "name" }, d.name, " ", h("span", { class: "sub" }, pv(s.version))), h("div", { class: "sub" }, d.blurb))),
+      h("div", {}, h("div", { class: "name" }, d.name, " ", h("span", { class: "sub", style: "white-space:nowrap" }, pv(s.version))), h("div", { class: "sub" }, d.blurb))),
     h("div", { class: "headline" }, h("span", { class: "dot s-" + s.state }), h("span", { class: "t-" + s.state }, s.headline || STATE_WORD[s.state])),
     s.detail ? h("div", { class: "t-muted", style: "margin:-4px 0 8px;font-size:12.5px" }, rt(s.detail)) : null,
     h("div", { class: "kv" }, (s.facts || []).flatMap(([k, v, tone]) => [h("span", { class: "k" }, k), h("span", { class: "v " + (tone || ""), title: v }, v)]),
@@ -1779,6 +1781,13 @@ function renderHub() {
         hub.settings.autoUpdate !== false ? "on" : "off"); return c; })(),
       h("div", { class: "help" }, "When Orbit starts and a newer version is out, it downloads it, checks it and keeps it ready; it takes " +
         "Orbit's place the next time you open Orbit (or now, with “restart for orbit …” at the top). Needs release checks on.")),
+    hub.settings.notifyApprovals !== undefined && (hub.system || "linux") === "linux" ? h("div", { class: "row" }, h("span", {}, "Tell me when Nova waits for an approval"),
+      (() => { const c = h("button", { class: "chk" + (hub.settings.notifyApprovals !== false ? " on" : ""), role: "switch",
+        "aria-checked": String(hub.settings.notifyApprovals !== false), onclick: async () => {
+        const v = hub.settings.notifyApprovals === false; await setHub({ notifyApprovals: v }, "approval notifications · " + (v ? "on" : "off")); renderHub(); } },
+        hub.settings.notifyApprovals !== false ? "on" : "off"); return c; })(),
+      h("div", { class: "help" }, "While Orbit is open, a desktop notification when a browser asks Nova to be let in (or asks for something " +
+        "that needs your OK). Approve it on Nova's card with the code the browser shows. Needs Nova 0.9.20 or newer.")) : null,
     h("div", { class: "row" }, h("span", {}, "Check for releases now"),
       h("button", { class: "btn small", onclick: async () => { try { say((await api("/api/hub/check-updates", {})).message); setTimeout(async () => { await loadHub(); poll(); }, 2500); } catch (e) { say(e.message, "err"); } } }, "check")),
     hub.menu && hub.menu.deb ? h("div", { class: "row" }, h("span", {}, "Installed with the Debian package"),
