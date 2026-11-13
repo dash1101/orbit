@@ -5,6 +5,7 @@
 - **No console windows on Windows.** Orbit runs everything in the background without a window, and starts YTM Starcast hidden (also right after installing it), so no window can end it when closed. Checked on a real Windows desktop with every build.
 - **Start, stop and restart YTM Starcast on Windows**, and switch *start at login*, from its page in Orbit, as on Linux.
 - **YTM Starcast's page shows where to open it on your phone:** its addresses, and a QR code to scan (with YTM Starcast 0.2.0-alpha.10 and newer). YTM Starcast's own window is left out when Orbit installs it (a choice in the install brings it back), and on Windows its log is on its page.
+- **Nova's page shows where Nova answers** (this computer, your home network, your tailnet), says when it still needs setting up (with *set up nova* on its card), and lists what its check-up found, with Nova 0.9.23 and newer. Orbit follows Nova to another port, and on Windows shows its health too.
 - **An app that isn't installed says so**, with its install button and nothing to open. An installed app that isn't running offers *start*.
 - **Choose the ports:** Orbit's own in its settings (from its next start), and YTM Starcast's when you install or update it.
 - **Installing Orbit for you shows each step** as it's done, and asks before Orbit starts again from its new place.

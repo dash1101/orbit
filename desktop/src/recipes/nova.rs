@@ -178,8 +178,12 @@ impl NovaRecipe {
     }
 
     fn win_install(&self, s: &mut Session) -> Res<bool> {
-        let args: Vec<String> = if s.opt_bool("firewall", true) { vec![] } else { vec!["-NoFirewall".into()] };
+        let mut args: Vec<String> = if s.opt_bool("firewall", true) { vec![] } else { vec!["-NoFirewall".into()] };
         let script = PathBuf::from(s.var_str("script"));
+        // Nova 0.9.23 and newer: never open Nova Server by itself (Orbit's finish button opens it)
+        if !s.dry_run && std::fs::read_to_string(&script).map(|t| t.contains("NoWindow")).unwrap_or(false) {
+            args.push("-NoWindow".into());
+        }
         s.admin_windows(&script, &args, "install Nova",
                         "The log below shows what Nova's installer said. Its own logs are in C:\\ProgramData\\Nova\\log.")?;
         self.forget();
