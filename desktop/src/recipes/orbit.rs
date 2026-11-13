@@ -134,8 +134,7 @@ pub fn switch(exe: Option<&Path>) -> std::io::Result<Option<PathBuf>> {
     }
     let _ = std::fs::remove_file(beside(&u, ".new.ok"));
     if target != u {
-        crate::desktop_entry::follow(&u, &target);
-        return Ok(Some(target));
+        return Ok(Some(target)); // the caller has Orbit's own menu entry follow it (desktop_entry::follow)
     }
     Ok(Some(exe))
 }

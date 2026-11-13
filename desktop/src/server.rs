@@ -535,6 +535,7 @@ impl Hub {
                                    busy.join(" and "), if busy.len() == 1 { "is" } else { "are" })));
         }
         let mut exe = running_program().ok_or_else(|| bad("Orbit can't find its own program; close it and open it yourself"))?;
+        let before = exe.clone();
         if !waiting(Some(&exe)).is_empty() {
             match switch(Some(&exe)) {
                 Ok(Some(p)) => exe = p, // the same file, or its new name (a download named with a version)
@@ -546,8 +547,12 @@ impl Hub {
         argv.extend(std::env::args().skip(1));
         crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1")])
             .map_err(|e| bad(format!("couldn't start Orbit again: {e}; close it and open it yourself")))?;
-        std::thread::spawn(|| {
+        let moved = (exe != before).then(|| (before, exe.clone()));
+        std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(800));
+            if let Some((old, new)) = moved {
+                crate::desktop_entry::follow(&old, &new); // after answering: on Windows this starts PowerShell
+            }
             crate::window::close();
             std::process::exit(0);
         });
