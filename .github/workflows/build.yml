@@ -105,19 +105,30 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
       - name: Start Android 14
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           sdk="$ANDROID_HOME/cmdline-tools/latest/bin"; adb="$ANDROID_HOME/platform-tools/adb"
           img="system-images;android-34;google_apis;x86_64"
-          "$sdk/sdkmanager" --install "$img" emulator platform-tools < /dev/null > sdk.log 2>&1 || { tail -20 sdk.log; exit 1; }
-          echo no | "$sdk/avdmanager" create avd -n orbit -k "$img" -d pixel_6 --force
-          nohup "$ANDROID_HOME/emulator/emulator" -avd orbit -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect \
-            -camera-back none -camera-front none > emulator.log 2>&1 &
-          "$adb" wait-for-device
-          for i in $(seq 200); do [ "$("$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break; sleep 3; done
-          [ "$("$adb" shell getprop sys.boot_completed | tr -d '\r')" = 1 ] || { tail -40 emulator.log; exit 1; }
+          say() { echo "$(date +%T) $*"; }
+          say "kvm: $(ls -l /dev/kvm)"
+          say "installing the system image"
+          timeout 600 "$sdk/sdkmanager" --install "$img" emulator platform-tools < /dev/null > sdk.log 2>&1 || { tail -30 sdk.log; exit 1; }
+          tail -2 sdk.log
+          say "creating the device"
+          echo no | timeout 120 "$sdk/avdmanager" create avd -n orbit -k "$img" -d pixel_6 --force
+          say "starting the emulator"
+          nohup "$ANDROID_HOME/emulator/emulator" -avd orbit -no-window -no-audio -no-boot-anim -no-snapshot -accel on \
+            -gpu swiftshader_indirect -camera-back none -camera-front none > emulator.log 2>&1 &
+          emu=$!
+          for i in $(seq 300); do
+            kill -0 $emu 2>/dev/null || { say "the emulator ended:"; tail -60 emulator.log; exit 1; }
+            [ "$(timeout 10 "$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
+            [ $((i % 20)) = 0 ] && say "still starting… $(tail -1 emulator.log)"
+            sleep 3
+          done
+          [ "$(timeout 10 "$adb" shell getprop sys.boot_completed | tr -d '\r')" = 1 ] || { say "didn't start:"; tail -60 emulator.log; exit 1; }
           for k in window_animation_scale transition_animation_scale animator_duration_scale; do "$adb" shell settings put global $k 0; done
-          echo "booted: Android $("$adb" shell getprop ro.build.version.release | tr -d '\r')"
+          say "booted: Android $("$adb" shell getprop ro.build.version.release | tr -d '\r')"
       - name: Install Orbit, open it, look at it
         run: |
           adb="$ANDROID_HOME/platform-tools/adb"; mkdir -p shots
