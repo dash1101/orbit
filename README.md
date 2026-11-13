@@ -143,8 +143,14 @@ release that has a build for it.
 Each download on the releases page is the program itself, with nothing to unpack and nothing else to install: the `.exe`
 on Windows, a `.dmg` on macOS (open it and drag Orbit onto Applications), and the program file on Linux (allow it to
 run once with `chmod +x`, since browsers don't keep that). The programs start in a fraction of a second and are 4 to 10
-MB. On Linux and Windows, *orbit settings → Orbit in your apps
-menu* adds a launcher for the copy you downloaded.
+MB.
+
+**Installing Orbit for you, on Linux, needs no password.** *install orbit* at the top (or in Orbit's settings) moves
+the program out of the folder you downloaded it to, into `~/.local/share/orbit`, and adds Orbit to your apps menu with
+its icon, plus an `orbit` command (`~/.local/bin/orbit`). It goes on updating itself there; *remove* in Orbit's settings
+takes all of it away again and keeps your settings. The open window shows Orbit's name and icon once Orbit is in the
+apps menu this way or from the `.deb`: the window goes by Orbit's id, `app.novalabs.orbit`, and so do both menu
+entries. On Windows, *orbit settings → Orbit in the Start menu* adds a launcher for the copy you downloaded.
 
 **Orbit updates itself** on Linux, Windows and macOS. With *Update Orbit by itself* on (it is unless you turn it off in Orbit's settings), Orbit downloads a new release in the background when it starts, and the new version takes over the next time you open Orbit. You can also update by hand: when a new release is out, the top bar says *update orbit to …*
 (and Orbit's own card on the install page offers it). The new program is downloaded from Orbit's GitHub release,

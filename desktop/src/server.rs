@@ -528,6 +528,10 @@ impl Hub {
         if self.dry_run() {
             return Ok(json!({"ok": true, "message": "dry run: Orbit would restart now"}));
         }
+        if self.installer.busy("orbit").is_some() {
+            // its download would land after the switch, and wait as an update to the version just put in place
+            return Err(bad("Orbit's update is still being downloaded: restart Orbit when it's ready"));
+        }
         let busy: Vec<String> = self.installer.recipes.iter().filter(|r| r.id() != "orbit" && self.installer.busy(r.id()).is_some())
             .map(|r| r.name().to_string()).collect();
         if !busy.is_empty() {
@@ -590,7 +594,7 @@ impl Hub {
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(5));
             let on = |k: &str| h.ctx.config.get(k).as_bool().unwrap_or(true);
-            if h.dry_run() || !on("autoUpdate") || !on("checkUpdates") || !crate::recipes::orbit::waiting(None).is_empty() {
+            if h.dry_run() || !on("autoUpdate") || !on("checkUpdates") {
                 return;
             }
             // the installer's own source of releases (the one the update downloads from)
@@ -603,8 +607,13 @@ impl Hub {
             if crate::recipes::orbit::running_program().map(|e| crate::recipes::orbit::deb_install(&e)).unwrap_or(false) {
                 return; // the Debian package: installing needs the password, so the top bar offers it instead
             }
-            if r.requirements("install").iter().any(|x| x["blocking"].as_bool().unwrap_or(false)) || h.installer.busy("orbit").is_some() {
+            if r.requirements("install").iter().any(|x| x["blocking"].as_bool().unwrap_or(false)) {
                 return; // can't replace itself here (a folder it can't write to): the top bar offers the download page
+            }
+            // Looked at last, after asking GitHub: an update started by hand meanwhile is either still running or
+            // already waiting (in that order, so one finishing in between is seen as waiting).
+            if h.installer.busy("orbit").is_some() || !crate::recipes::orbit::waiting(None).is_empty() {
+                return;
             }
             match h.installer.start("orbit", "install", &Value::Null) {
                 Ok(_) => println!("Orbit {tag} is out: downloading it in the background; it takes over at the next start"),
@@ -735,7 +744,12 @@ fn post(hub: &Arc<Hub>, url: &str, body: &Value) -> Res<Reply> {
             });
             return ok(hub.check_updates());
         }
-        "/api/hub/menu" => return ok(desktop_entry::add(&hub.ctx.runner)),
+        "/api/hub/menu" => {
+            // {} adds a launcher for this copy; on Linux, {"install": true} installs Orbit for this user, {"remove": true} removes that
+            let flag = |k: &str| body.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
+            let r = &hub.ctx.runner;
+            return ok(if flag("install") { desktop_entry::install(r) } else if flag("remove") { desktop_entry::remove(r) } else { desktop_entry::add(r) });
+        }
         "/api/hub/window" => {
             // the window's size when it closed (the Linux window build reports it here)
             let size = body.get("size").and_then(|v| v.as_array()).filter(|a| a.len() == 2)

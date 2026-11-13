@@ -99,6 +99,11 @@ a { color: var(--accent); }
 #msg.err { color: var(--down); } #msg.ok { color: var(--ok); }
 #keys { color: var(--muted); white-space: nowrap; }
 #keys kbd { color: var(--text); font: inherit; }
+#keys button { background: none; border: 0; padding: 1px 3px; margin: 0 -3px; font: inherit; color: inherit; cursor: pointer;
+               border-radius: var(--radius); transition: background .15s, color .15s; }
+#keys button:hover, #keys button:focus-visible { background: var(--raise); color: var(--text); outline: none; }
+#keys button:hover kbd { color: var(--accent); }
+#keys button:active { transform: translateY(1px); }
 
 /* nav tiles, like a server rail: a square tile, a status square, a selection bar */
 .tile { position: relative; display: flex; justify-content: center; padding: 5px 0 5px; cursor: pointer;
@@ -471,6 +476,7 @@ input[type=range] { accent-color: var(--accent); }
     <img class="logo" src="/icon.svg" alt="" width="22" height="22"><span class="brand">[<b>orbit</b>]</span>
     <span class="sum" id="sum">connecting…</span>
     <span class="sp"></span>
+    <button class="tag upd-tag" id="orbitinst" hidden>install orbit</button>
     <button class="tag upd-tag" id="orbitupd" hidden title="A newer Orbit is out: open its download page"></button>
     <span class="tag" id="dry" hidden title="Orbit was started with --dry-run: nothing is changed">dry run</span>
   </div>
@@ -478,7 +484,10 @@ input[type=range] { accent-color: var(--accent); }
   <main id="main"></main>
   <div id="foot"><div class="box tight"><span class="lg">status</span>
     <span id="msg">ready</span>
-    <span id="keys"><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>r</kbd> refresh · <kbd>t</kbd> theme · <kbd>i</kbd> install · <kbd>,</kbd> settings · <kbd>?</kbd> help</span>
+    <span id="keys"><button data-key="j" title="next (j or ↓)"><kbd>j</kbd></button>/<button data-key="k" title="previous (k or ↑)"><kbd>k</kbd></button> move ·
+      <button data-key="r"><kbd>r</kbd> refresh</button> · <button data-key="t"><kbd>t</kbd> theme</button> ·
+      <button data-key="i"><kbd>i</kbd> install</button> · <button data-key=","><kbd>,</kbd> settings</button> ·
+      <button data-key="?"><kbd>?</kbd> help</button></span>
   </div></div>
 </div>
 <div id="wiz"><div class="scrim"></div></div>
@@ -1620,6 +1629,10 @@ async function loadHub() {
   applyCustomThemes();
   if (!S.themeEdit) setTheme(S.hub.settings.theme);
   $("#dry").hidden = !S.hub.dryRun;
+  const m = S.hub.menu || {}, ib = $("#orbitinst");
+  ib.hidden = !(m.install && !m.installed);
+  ib.title = `Install Orbit for you: it moves to ${m.home} and goes in your apps menu, with its icon. No password needed.`;
+  ib.onclick = installOrbit;
   const u = S.hub.orbitUpdate, ub = $("#orbitupd");
   ub.hidden = !u;
   if (u && u.pending) { ub.textContent = `restart for orbit ${pv(u.version)}`; ub.onclick = restartOrbit; }
@@ -1763,6 +1776,15 @@ function renderHub() {
         "Orbit's place the next time you open Orbit (or now, with “restart for orbit …” at the top). Needs release checks on.")),
     h("div", { class: "row" }, h("span", {}, "Check for releases now"),
       h("button", { class: "btn small", onclick: async () => { try { say((await api("/api/hub/check-updates", {})).message); setTimeout(async () => { await loadHub(); poll(); }, 2500); } catch (e) { say(e.message, "err"); } } }, "check")),
+    hub.menu && hub.menu.deb ? h("div", { class: "row" }, h("span", {}, "Installed with the Debian package"),
+      h("div", { class: "help" }, "apt keeps Orbit up to date (it asks for your password). Remove it with your software installer, or sudo apt remove orbit.")) :
+    hub.menu && hub.menu.install ? h("div", { class: "row" }, h("span", {}, hub.menu.installed ? "Installed for you" : "Install Orbit for you"),
+      hub.menu.installed ? h("span", { class: "btns" }, h("button", { class: "btn small", onclick: installOrbit }, "refresh"),
+                                                        h("button", { class: "btn small danger", onclick: removeOrbit }, "remove"))
+                         : h("button", { class: "btn small", onclick: installOrbit }, "install"),
+      h("div", { class: "help" }, hub.menu.installed
+        ? `Installed in ${hub.menu.home}, with its apps-menu entry, its icon and the orbit command. Remove takes them away again; your settings stay.`
+        : `Moves this program to ${hub.menu.home} and puts Orbit in your apps menu, with its icon, and the orbit command. No password needed, and it keeps updating itself there.`)) :
     hub.menu && hub.menu.supported ? h("div", { class: "row" }, h("span", {}, `Orbit in ${hub.menu.where}`),
       h("button", { class: "btn small", onclick: async () => {
         try { const r = await api("/api/hub/menu", {}); say(r.message, r.ok ? "ok" : "err"); await loadHub(); renderHub(); } catch (e) { say(e.message, "err"); } } },
@@ -1825,6 +1847,20 @@ function countdownRestart(note, job, left = 5) {
 }
 
 // After Orbit updated itself: a new Orbit starts, this one ends; the page follows it and reloads on the new version.
+async function installOrbit() {
+  const m = S.hub.menu || {};
+  if (!m.installed && !await confirmDlg(`Install Orbit for you? This program moves to ${m.home}, out of the folder you downloaded it to, ` +
+      "and Orbit goes in your apps menu with its icon (and orbit starts it from a terminal). No password needed; it keeps updating itself there." +
+      (m.elsewhere ? " It replaces the Orbit already installed there." : ""))) return;
+  try { const r = await api("/api/hub/menu", { install: true }); say(r.message, r.ok ? "ok" : "err"); } catch (e) { say(e.message, "err"); }
+  await loadHub(); if (S.view === "hub") renderHub();
+}
+async function removeOrbit() {
+  if (!await confirmDlg(`Remove Orbit from this computer? Its program in ${S.hub.menu.home}, the orbit command, its apps-menu entry and icon ` +
+      "go; its settings stay. This window keeps working until you close it.", true)) return;
+  try { const r = await api("/api/hub/menu", { remove: true }); say(r.message, r.ok ? "ok" : "err"); } catch (e) { say(e.message, "err"); }
+  await loadHub(); if (S.view === "hub") renderHub();
+}
 async function restartOrbit() {
   const was = S.hub && S.hub.version;
   try { say((await api("/api/hub/restart", {})).message); } catch (e) { return say(e.message, "err"); }
@@ -1909,10 +1945,15 @@ document.addEventListener("keydown", e => {
   }
   const tag = (e.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea" || tag === "select" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/^(j|k|ArrowDown|ArrowUp)$/.test(e.key)) e.preventDefault();
+  doKey(e.key);
+});
+// the hints at the bottom do what their keys do
+$("#keys").addEventListener("click", e => { const b = e.target.closest("[data-key]"); if (b) doKey(b.dataset.key); });
+function doKey(k) {
   const items = navItems();
-  const k = e.key;
-  if (k === "j" || k === "ArrowDown") { go(items[Math.min(items.length - 1, S.navIdx + 1)].id); e.preventDefault(); }
-  else if (k === "k" || k === "ArrowUp") { go(items[Math.max(0, S.navIdx - 1)].id); e.preventDefault(); }
+  if (k === "j" || k === "ArrowDown") go(items[Math.min(items.length - 1, S.navIdx + 1)].id);
+  else if (k === "k" || k === "ArrowUp") go(items[Math.max(0, S.navIdx - 1)].id);
   else if (/^[1-9]$/.test(k)) { const a = S.apps.filter(x => x.enabled)[+k - 1]; if (a) go(a.id); }
   else if (k === "o") go("overview");
   else if (k === ",") go("hub");
@@ -1924,7 +1965,7 @@ document.addEventListener("keydown", e => {
     say("theme · " + S.hub.themes.find(t => t.id === next).label); if (S.view === "hub") renderHub();
   }
   else if (k === "?") showHelp();
-});
+}
 function showHelp() {
   showDlg("keys", h("div", { class: "kv" },
     ["j / ↓", "next", "k / ↑", "previous", "1–9", "jump to an app", "o", "overview", "i", "install apps", ",", "orbit settings",
