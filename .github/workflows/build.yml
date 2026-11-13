@@ -133,6 +133,7 @@ jobs:
           for k in window_animation_scale transition_animation_scale animator_duration_scale; do "$adb" shell settings put global $k 0; done
           say "booted: Android $("$adb" shell getprop ro.build.version.release | tr -d '\r')"
       - name: Install Orbit, open it, look at it
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           adb="$ANDROID_HOME/platform-tools/adb"; mkdir -p shots
           "$adb" install -r orbit-android.apk
@@ -184,6 +185,22 @@ jobs:
                 *) echo "::warning::Android's install question didn't come up ($focus)" ;; esac ;;
           esac
           "$adb" shell input keyevent KEYCODE_BACK; sleep 2; "$adb" shell input keyevent KEYCODE_BACK; sleep 2
+          # Nova installed from its newest release, as the owner has it: when that release is newer for other systems only
+          # (Nova's server-only releases carry the same app file), Orbit says it's up to date instead of offering it again
+          tag=$(gh release view -R dash1101/Nova --json tagName -q .tagName)
+          gh release download "$tag" -R dash1101/Nova -p nova-universal.apk -D novaapk --clobber
+          "$adb" install -r novaapk/nova-universal.apk > /dev/null
+          have=$("$adb" shell dumpsys package app.novalabs.nova | grep -m1 versionName | sed 's/.*versionName=//' | tr -d '\r ')
+          "$adb" shell am force-stop app.novalabs.orbit; "$adb" shell am start -W -n app.novalabs.orbit/.MainActivity > /dev/null; sleep 15
+          "$adb" exec-out screencap -p > shots/android-4-nova-installed.png
+          seen="$(texts)"; echo "with Nova $have installed (its newest release: $tag): $seen"
+          if [ "${tag#v}" != "$have" ]; then
+            case "$seen" in
+              *"its Android app is the one you have"*) echo "Nova $have is up to date: release $tag is new for other systems only" ;;
+              *"GitHub"*) echo "::warning::GitHub didn't answer here: the up-to-date check isn't tried" ;;
+              *) echo "::error::Orbit doesn't see that release $tag's Android app is the Nova $have installed"; exit 1 ;;
+            esac
+          fi
           "$adb" logcat -d > logcat.txt
           pid=$("$adb" shell pidof app.novalabs.orbit | tr -d '\r')
           if grep -q "FATAL EXCEPTION" logcat.txt || [ -z "$pid" ]; then

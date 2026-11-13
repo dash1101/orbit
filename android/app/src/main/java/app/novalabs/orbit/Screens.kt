@@ -173,6 +173,10 @@ private fun AppCard(model: HubModel, app: Listing, review: () -> Unit) {
             // a newer release came out without the Android app (for other systems first)
             Txt("${Versions.clean(it.newer)} is out for other systems; ${it.version} is the newest for Android", color = t.muted, size = 12.5.sp)
         }
+        card.release?.takeIf { card.sameApp && card.installed != null && Versions.isNewer(it.version, card.installed) }?.let {
+            // a release newer for other systems, with the same Android app in it
+            Txt("${it.version} is out for other systems; its Android app is the one you have", color = t.muted, size = 12.5.sp)
+        }
         if (card.error.isNotEmpty() && app.onAndroid) {
             Txt(card.error, color = t.warn, size = 12.5.sp)
             if (card.hint.isNotEmpty()) Txt(card.hint, color = t.muted, size = 12.5.sp)
