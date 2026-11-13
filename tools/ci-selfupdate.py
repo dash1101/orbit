@@ -484,6 +484,11 @@ def installed_scenario(gh):
         removed = call(port, "/api/hub/menu", {"remove": True}, timeout=60)
         say("remove: " + removed.get("message", ""))
         if not removed.get("ok") or wait_for("everything to be gone", lambda: not gone("remove"), 90, quiet=True) is None:
+            if win:
+                say("left in the folder: " + ", ".join(sorted(x.name for x in target.parent.iterdir())) if target.parent.exists() else "(folder gone)")
+                say(subprocess.run(["powershell", "-NoProfile", "-Command", "Get-CimInstance Win32_Process | Where-Object { $_.Name -match "
+                                    "'powershell|orbit' } | Format-Table -AutoSize ProcessId, ParentProcessId, CommandLine | Out-String -Width 400"],
+                                   capture_output=True, text=True).stdout)
             fail(f"remove left {gone('remove')}")
         if win:
             # the uninstall Settings → Apps runs, while Orbit is open

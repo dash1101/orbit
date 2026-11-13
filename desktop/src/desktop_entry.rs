@@ -281,13 +281,22 @@ pub fn uninstall_cli() -> i32 {
     if r["ok"] == true { 0 } else { 1 }
 }
 
-/// Windows: the installed Orbit's folder is deleted once this Orbit has ended (by a hidden PowerShell that waits).
+/// Windows: the installed Orbit's folder is deleted once this Orbit has ended, by a PowerShell with a hidden console
+/// that waits for it, then tries for a while (a virus scanner may still be reading the program it just saw written).
 fn delete_after_exit(dir: &Path) {
-    let script = format!("Wait-Process -Id {} -Timeout 300 -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 700; \
-                          Remove-Item -LiteralPath {} -Recurse -Force -ErrorAction SilentlyContinue",
-                         std::process::id(), ps_quote(&dir.to_string_lossy()));
-    let _ = crate::runner::detached(&["powershell".into(), "-NoProfile".into(), "-NonInteractive".into(), "-WindowStyle".into(),
-                                      "Hidden".into(), "-Command".into(), script], &[]);
+    let d = ps_quote(&dir.to_string_lossy());
+    let script = format!("Wait-Process -Id {} -Timeout 300 -ErrorAction SilentlyContinue; \
+                          for ($i = 0; $i -lt 60 -and (Test-Path -LiteralPath {d}); $i++) {{ Start-Sleep -Milliseconds 700; \
+                          Remove-Item -LiteralPath {d} -Recurse -Force -ErrorAction SilentlyContinue }}", std::process::id());
+    let mut c = std::process::Command::new("powershell");
+    c.args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000 | 0x0000_0200); // CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP: outlives Orbit, no window
+    }
+    let _ = c.spawn();
 }
 
 /// Windows: Orbit in the list of installed apps, with its version, icon, size and uninstall command.
