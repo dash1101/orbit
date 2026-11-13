@@ -2,8 +2,8 @@
 # Orbit as a Debian/Ubuntu package: make-deb.sh <program> <version> <amd64|arm64> <out.deb>
 #
 # The program is the build with its window (it needs WebKitGTK, which the package depends on). The package puts it in
-# /usr/bin/orbit, with an apps-menu entry (named after the window's id, so the open window shows with Orbit's name and
-# icon) and Orbit's icon. Orbit installed this way updates itself through apt (see desktop/src/recipes/orbit.rs).
+# /usr/bin/orbit, with an apps-menu entry and an icon both named after the window's app id (app.novalabs.orbit, see
+# desktop/src/window.rs), so the open window shows with Orbit's name and icon. Orbit installed this way updates itself through apt (see desktop/src/recipes/orbit.rs).
 set -e
 prog="$1"; version="$2"; arch="$3"; out="$4"
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,8 +11,8 @@ root="$(mktemp -d)"
 chmod 0755 "$root"
 trap 'rm -rf "$root"' EXIT
 install -D -m 0755 "$prog" "$root/usr/bin/orbit"
-install -D -m 0644 "$here/orbit/static/icon.svg" "$root/usr/share/icons/hicolor/scalable/apps/orbit.svg"
-install -D -m 0644 "$here/desktop/icons/icon.png" "$root/usr/share/icons/hicolor/512x512/apps/orbit.png"
+install -D -m 0644 "$here/orbit/static/icon.svg" "$root/usr/share/icons/hicolor/scalable/apps/app.novalabs.orbit.svg"
+install -D -m 0644 "$here/desktop/icons/icon.png" "$root/usr/share/icons/hicolor/512x512/apps/app.novalabs.orbit.png"
 install -D -m 0644 /dev/stdin "$root/usr/share/applications/app.novalabs.orbit.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -20,10 +20,10 @@ Name=Orbit
 GenericName=App hub
 Comment=One place for YTM Starcast and Nova
 Exec=/usr/bin/orbit
-Icon=orbit
+Icon=app.novalabs.orbit
 Terminal=false
 Categories=Utility;System;
-StartupWMClass=orbit
+StartupWMClass=app.novalabs.orbit
 EOF
 install -D -m 0644 /dev/stdin "$root/usr/share/doc/orbit/copyright" <<EOF
 Orbit by NovaLabs: https://github.com/dash1101/orbit

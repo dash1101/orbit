@@ -209,6 +209,13 @@ def scenario(gh, how):
     env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"),
                XDG_DATA_HOME=str(root / "data"))
     menu = sys.platform.startswith("linux") or sys.platform == "win32"
+    if REAL and how != "auto":
+        # A published Orbit up to 0.5.3 could start its own background download right after an update started by
+        # hand, which then waited again once the restart had put the same version in place. This checks the update
+        # by hand, so its background update is off ("auto" checks that one, on the builds being tested).
+        cfg = root / "config" / ("Orbit" if sys.platform == "win32" else "orbit")
+        cfg.mkdir(parents=True)
+        (cfg / "config.json").write_text(json.dumps({"autoUpdate": False}))
     if gh is not None:
         env["ORBIT_TEST_GITHUB_API"] = f"http://127.0.0.1:{gh.server_address[1]}"
 
@@ -223,7 +230,13 @@ def scenario(gh, how):
         say(f"running Orbit {hub['version']}")
         if menu:
             # (on Windows this starts PowerShell, which takes a while the first time on a fresh machine)
-            say("menu entry: " + call(port, "/api/hub/menu", {}, timeout=60).get("message", ""))
+            for attempt in range(3):
+                said = call(port, "/api/hub/menu", {}, timeout=120)
+                say("menu entry: " + said.get("message", ""))
+                if said.get("ok", True) is not False:
+                    break
+            else:
+                fail("Orbit couldn't add its menu entry, so there is nothing to check it follows the update")
         if how == "auto":
             tag = wait_for("Orbit to get the update ready by itself",
                            lambda: (lambda t: t if t.get("pending") else None)(call(port, "/api/hub").get("orbitUpdate") or {}), 180)
@@ -307,7 +320,11 @@ def menu_target(root):
                             f"(New-Object -ComObject WScript.Shell).CreateShortcut('{link}').TargetPath"],
                            capture_output=True, text=True)
         return p.stdout.strip()
-    entry = root / "data" / "applications" / "orbit.desktop"
+    apps = root / "data" / "applications"
+    # named after the window's app id since 0.5.4; orbit.desktop before (a published Orbit's, with --real)
+    entry = next((e for e in (apps / "app.novalabs.orbit.desktop", apps / "orbit.desktop") if e.exists()), None)
+    if entry is None:
+        return ""
     for line in entry.read_text().splitlines():
         if line.startswith("Exec="):
             return line[5:].strip('"')

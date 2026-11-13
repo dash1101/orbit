@@ -95,6 +95,21 @@ pub fn run(url: &str, size: (f64, f64), report: SizeReport) -> i32 {
     };
     let report = Arc::new(report);
     let r2 = report.clone();
+    // Linux desktops show a window with the icon of the apps-menu entry named after the window's app id, which
+    // GTK takes from the program's name (here the unpacked window build, orbit-window-<hash>): name it Orbit's id
+    // instead, the name of Orbit's menu entries (desktop_entry.rs, the .deb).
+    #[cfg(target_os = "linux")]
+    {
+        extern "C" {
+            fn g_set_prgname(name: *const std::os::raw::c_char);
+            fn g_set_application_name(name: *const std::os::raw::c_char);
+        }
+        let (id, name) = (std::ffi::CString::new(crate::desktop_entry::APP_ID).unwrap(), std::ffi::CString::new("Orbit").unwrap());
+        unsafe {
+            g_set_prgname(id.as_ptr()); // GLib copies both
+            g_set_application_name(name.as_ptr());
+        }
+    }
     tauri::Builder::default()
         .setup(move |app| {
             let home = target.clone();
