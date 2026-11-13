@@ -186,6 +186,9 @@ fn switch_to_waiting_update(port: u16) -> bool {
         return false;
     }
     let Ok(Some(new)) = recipes::orbit::switch(Some(&exe)) else { return false };
+    if new != exe {
+        desktop_entry::follow(&exe, &new);
+    }
     let mut argv = vec![new.to_string_lossy().into_owned()];
     argv.extend(std::env::args().skip(1));
     #[cfg(unix)]
