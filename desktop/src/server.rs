@@ -240,8 +240,11 @@ impl Hub {
                     d["state"] = json!("off");
                     d["headline"] = json!(na);
                     d["unavailable"] = json!(true);
-                } else if (s["state"] == "ok" || s["state"] == "warn" || s["running"].as_bool().unwrap_or(false)) && !a.open_label().is_empty() {
-                    d["open"] = json!(a.open_label());
+                } else if s["state"] == "ok" || s["state"] == "warn" || s["running"].as_bool().unwrap_or(false) {
+                    if !a.open_label().is_empty() {
+                        d["open"] = json!(a.open_label());
+                    }
+                    d["cardActions"] = json!(a.card_actions());
                 }
             } else {
                 d["state"] = json!("off");

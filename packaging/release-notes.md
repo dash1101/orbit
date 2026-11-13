@@ -1,5 +1,12 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.5**
+
+- **Approving a browser for Nova is a click away:** *approve a browser* is on Nova's card, and its code box takes the code however it's written (`zag97v`, `ZAG 97V`), or the whole `sudo nova approve …` line pasted in. With a Nova that reports browsers waiting for approval, Nova's card says so and the button lights up.
+- **YTM Starcast's card opens YouTube Music:** with a YTM Starcast that supports it, *YouTube Music* brings your open YouTube Music tab to the front (or opens one), and *settings* opens YTM Starcast's settings inside it. The web app stays on YTM Starcast's own page in Orbit.
+- **Dialog titles aren't cut off any more** (*confirm*, *approve a browser* and the others).
+- **Orbit finds Nova on the computer itself first** (`https://127.0.0.1:8495`, which Nova 0.9.20 and newer answer on Linux), then on your home network, and over Tailscale last.
+
 **New in 0.5.4**
 
 - **Install Orbit on Linux without a password:** *install orbit* at the top moves the program out of your Downloads into `~/.local/share/orbit`, and adds it to your apps menu with its icon, and an `orbit` command. It keeps updating itself there, and *remove* in Orbit's settings takes it all away again (your settings stay).

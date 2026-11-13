@@ -121,6 +121,10 @@ pub trait App: Send + Sync {
     fn open_label(&self) -> String {
         String::new()
     }
+    /// More of its actions as buttons on the overview card while it runs (after "open"; each one from actions()).
+    fn card_actions(&self) -> Vec<Value> {
+        vec![]
+    }
     fn custom(&self) -> bool {
         false
     }

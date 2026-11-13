@@ -29,6 +29,7 @@ pub struct Starcast {
     found: Mutex<Option<(Instant, String)>>, // which service runs it here (forgotten after an install)
     beacon: Mutex<Option<Value>>,            // the last Discord status payload, so the buttons match what it is doing
     extension: Mutex<Value>,                 // YTM Starcast's word on its browser extension (0.2.0a2 and newer), or null
+    focus: Mutex<bool>,                      // it can bring YouTube Music (and its settings there) to the front
 }
 
 fn truthy(v: &Value) -> bool {
@@ -41,7 +42,7 @@ fn s_of(v: &Value) -> String {
 
 impl Starcast {
     pub fn new(ctx: Arc<Ctx>) -> Starcast {
-        Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null) }
+        Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null), focus: Mutex::new(false) }
     }
 
     fn base(&self) -> String {
@@ -206,7 +207,11 @@ impl App for Starcast {
         "ytm-starcast.svg".into()
     }
     fn open_label(&self) -> String {
-        "open web app".into()
+        if *self.focus.lock().unwrap() { String::new() } else { "open web app".into() }
+    }
+    /// YouTube Music itself, and YTM Starcast's settings in it, instead of the web app (when YTM Starcast can).
+    fn card_actions(&self) -> Vec<Value> {
+        self.actions().into_iter().filter(|a| a["id"] == "ytm" || a["id"] == "ytm-settings").collect()
     }
     fn forget_found(&self) {
         *self.found.lock().unwrap() = None;
@@ -280,6 +285,7 @@ impl App for Starcast {
             Err(e) => return done(s, facts, "warn", format!("Running, but /api/state failed: {}", e.message)),
         };
         let (vol, media, caps, parts) = (&st["volume"], &st["media"], &st["capabilities"], &st["parts"]);
+        *self.focus.lock().unwrap() = truthy(&caps["ytm_focus"]);
         let audio_off = parts["audio"] == json!(false);
         if audio_off {
             facts.push(json!(["computer audio", "switched off in YTM Starcast", "muted"]));
@@ -403,11 +409,17 @@ impl App for Starcast {
     }
 
     fn actions(&self) -> Vec<Value> {
-        let mut acts = vec![
-            json!({"id": "open", "label": "open web app", "group": "open", "primary": true}),
+        let focus = *self.focus.lock().unwrap();
+        let mut acts = vec![];
+        if focus {
+            acts.push(json!({"id": "ytm", "label": "YouTube Music", "group": "open", "primary": true, "ext": true}));
+            acts.push(json!({"id": "ytm-settings", "label": "settings", "group": "open", "ext": true}));
+        }
+        acts.extend([
+            json!({"id": "open", "label": "open web app", "group": "open", "primary": !focus}),
             json!({"id": "gui", "label": "desktop window", "group": "open"}),
             json!({"id": "releases", "label": "releases", "group": "open"}),
-        ];
+        ]);
         if self.extension.lock().unwrap().is_object() {
             acts.push(json!({"id": "extension", "label": "set up browser extension", "group": "open"}));
         }
@@ -442,6 +454,22 @@ impl App for Starcast {
         let dry = if self.ctx.dry_run() { " (dry run)" } else { "" };
         match action {
             "open" => return open_url(self, &format!("{}/", self.base())),
+            "ytm" | "ytm-settings" => {
+                // the browser extension brings its YouTube Music tab to the front (opening one if there is none)
+                let settings = action == "ytm-settings";
+                let r = self.post("/api/ytm", &json!({"type": if settings { "settings" } else { "focus" }}), 10.0)
+                    .map_err(|e| bad(format!("YTM Starcast couldn't show YouTube Music: {}", e.message)))?;
+                if r.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+                    return Err(bad(format!("YTM Starcast couldn't show YouTube Music{}",
+                                           r["error"].as_str().map(|e| format!(": {e}")).unwrap_or_default())));
+                }
+                let opened = truthy(&r["opened"]);
+                return Ok(json!({"ok": true, "message": match (settings, opened) {
+                    (_, true) => "opened YouTube Music in the browser",
+                    (true, false) => "YTM Starcast's settings are open in YouTube Music",
+                    (false, false) => "YouTube Music is in front",
+                }}));
+            }
             "gui" => {
                 for exe in Self::gui_paths() {
                     if exe.exists() {
