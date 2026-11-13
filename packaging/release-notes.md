@@ -1,5 +1,9 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.6.1**
+
+- **Android: a release that's new for other systems only no longer shows as an update.** Nova's server-only releases carry the same Android app as before: Orbit compares that app with the one you have and says it's up to date (and why), instead of offering it again. An update whose app turns out not to be newer isn't installed again either.
+
 **New in 0.6.0**, a milestone: it comes for every system, Macs and ARM computers included.
 
 - **No console windows on Windows.** Orbit runs everything in the background without a window, and starts YTM Starcast hidden (also right after installing it), so no window can end it when closed. Checked on a real Windows desktop with every build.

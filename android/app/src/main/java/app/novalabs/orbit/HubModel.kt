@@ -29,9 +29,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /** One app's line on the home screen. */
+/** [sameApp]: the release's Android app is the one installed (a release can be newer for other systems only, with the
+ *  same app file in it, as Nova's server-only releases are). */
 data class Card(val installed: String? = null, val release: Release? = null, val error: String = "",
-                val hint: String = "", val loading: Boolean = false) {
-    val update get() = installed != null && release != null && Versions.isNewer(release.version, installed)
+                val hint: String = "", val loading: Boolean = false, val sameApp: Boolean = false) {
+    val update get() = installed != null && release != null && !sameApp && Versions.isNewer(release.version, installed)
 }
 
 enum class StepState { PENDING, ACTIVE, DONE, SKIPPED, FAILED }
@@ -199,6 +201,47 @@ class HubModel(app: Application) : AndroidViewModel(app) {
     /** The package id of the copy that's installed (an app may be installed under an older id). */
     private fun installedPackage(a: Listing): String? = a.pkgs.firstOrNull { versionOf(it) != null }
 
+    private fun info(pkg: String): android.content.pm.PackageInfo? = try {
+        if (Build.VERSION.SDK_INT >= 33) ctx.packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+        else @Suppress("DEPRECATION") ctx.packageManager.getPackageInfo(pkg, 0)
+    } catch (e: PackageManager.NameNotFoundException) {
+        null
+    }
+
+    private fun code(p: android.content.pm.PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= 28) p.longVersionCode else @Suppress("DEPRECATION") p.versionCode.toLong()
+
+    /** SHA-256 of the installed app's file, worked out once per installed version (kept in Orbit's settings). */
+    private fun installedSha(a: Listing): String? {
+        val pkg = installedPackage(a) ?: return null
+        val p = info(pkg) ?: return null
+        val key = "apksha:$pkg"
+        val kept = prefs.getString(key, "") ?: ""
+        if (kept.startsWith("${p.lastUpdateTime}:")) return kept.substringAfter(":")
+        val file = p.applicationInfo?.sourceDir?.let { File(it) }?.takeIf { it.canRead() } ?: return null
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { ins -> val buf = ByteArray(1 shl 16); while (true) { val n = ins.read(buf); if (n < 0) break; md.update(buf, 0, n) } }
+        val sha = md.digest().joinToString("") { "%02x".format(it) }
+        prefs.edit().putString(key, "${p.lastUpdateTime}:$sha").apply()
+        return sha
+    }
+
+    /** Is [rel]'s Android app the one installed? (Its published checksum against the installed file's; the answer is
+     *  kept per release and installed version, so the checksum list is only fetched once.) */
+    private fun sameAsInstalled(a: Listing, rel: Release): Boolean {
+        val pkg = installedPackage(a) ?: return false
+        val stamp = info(pkg)?.lastUpdateTime ?: return false
+        val key = "same:${a.id}"
+        val kept = prefs.getString(key, "") ?: ""
+        if (kept.startsWith("${rel.tag}|$stamp|")) return kept.endsWith("|true")
+        val apkName = a.apk(rel.assets.keys) ?: return false
+        val sumsAsset = rel.assets[a.sums] ?: return false
+        val expected = Checks.parseSums(GitHub.text(sumsAsset, a.repo, token))[apkName] ?: return false
+        val same = expected.equals(installedSha(a) ?: return false, ignoreCase = true)
+        prefs.edit().putString(key, "${rel.tag}|$stamp|$same").apply()
+        return same
+    }
+
     private fun versionOf(pkg: String): String? {
         return try {
             val info = if (Build.VERSION.SDK_INT >= 33)
@@ -224,9 +267,12 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 val r = runCatching { withContext(Dispatchers.IO) { GitHub.latest(a.repo, token) { a.apk(it) != null } } }
                 val c = cards[a.id] ?: Card()
+                // a release that looks newer may carry the very app that's installed (newer for other systems only)
+                val same = r.getOrNull()?.takeIf { c.installed != null && Versions.isNewer(it.version, c.installed) }
+                    ?.let { rel -> runCatching { withContext(Dispatchers.IO) { sameAsInstalled(a, rel) } }.getOrDefault(false) } ?: false
                 cards[a.id] = r.fold(
-                    { fetched[a.id] = System.currentTimeMillis(); c.copy(release = it, error = "", hint = "", loading = false) },
-                    { e -> c.copy(error = e.message ?: "couldn't check", hint = (e as? Problem)?.hint ?: "", loading = false) })
+                    { fetched[a.id] = System.currentTimeMillis(); (cards[a.id] ?: c).copy(release = it, error = "", hint = "", loading = false, sameApp = same) },
+                    { e -> (cards[a.id] ?: c).copy(error = e.message ?: "couldn't check", hint = (e as? Problem)?.hint ?: "", loading = false) })
             }
         }
     }
@@ -268,7 +314,8 @@ class HubModel(app: Application) : AndroidViewModel(app) {
         }
         val j = InstallJob(a, title, steps)
         job = j
-        running = viewModelScope.launch { perform(j, before) }
+        val update = cards[a.id]?.update == true
+        running = viewModelScope.launch { perform(j, before, update) }
     }
 
     private fun Step.begin() { state = StepState.ACTIVE; started = System.currentTimeMillis() }
@@ -276,7 +323,7 @@ class HubModel(app: Application) : AndroidViewModel(app) {
         state = s; ended = System.currentTimeMillis(); if (s == StepState.DONE) progress = 1f
     }
 
-    private suspend fun perform(j: InstallJob, before: String?) {
+    private suspend fun perform(j: InstallJob, before: String?, update: Boolean = false) {
         val a = j.app
         val dir = File(ctx.cacheDir, "downloads").apply { mkdirs() }
         var file: File? = null
@@ -346,6 +393,19 @@ class HubModel(app: Application) : AndroidViewModel(app) {
             if (archived == null || archived.packageName !in a.pkgs) throw Problem("The download isn't ${a.name}'s app, so it won't be installed.")
             s.detail = "SHA-256 ${sha.take(12)}… · ${archived.versionName}"
             s.end()
+
+            // an update whose app isn't newer than the one installed (a release newer for other systems only): done
+            val have = installedPackage(a)?.let { info(it) }
+            if (update && have != null && code(archived) <= code(have)) {
+                s = step("install")
+                s.detail = "already installed: ${archived.versionName}"
+                s.end(StepState.SKIPPED)
+                prefs.edit().putString("same:${a.id}", "${rel.tag}|${have.lastUpdateTime}|true").apply()
+                j.headline = "${a.name} is already up to date."
+                j.body = "The ${rel.tag} release's Android app is ${archived.versionName}, the one you have: that release is new for other systems."
+                j.state = JobState.DONE
+                return
+            }
 
             // 6 · install
             s = step("install")
