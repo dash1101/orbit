@@ -25,6 +25,20 @@ object GitHub {
     private const val API = "https://api.github.com"
     private const val UA = "orbit-android"
 
+    /** GitHub said no: its hourly limit used up (said so in its headers, with when it resets), or the sign-in. */
+    private fun refused(c: HttpURLConnection, token: String?): Problem {
+        val reset = c.getHeaderField("X-RateLimit-Reset")?.toLongOrNull()
+        if (c.getHeaderField("X-RateLimit-Remaining") == "0" && reset != null) {
+            val minutes = ((reset - System.currentTimeMillis() / 1000) / 60 + 1).coerceAtLeast(1)
+            return Problem("GitHub's limit for requests is used up for now.", if (token.isNullOrBlank())
+                "Without a sign-in GitHub answers 60 requests an hour per network. Try again in about $minutes min, or sign " +
+                "in with GitHub in Orbit's settings." else "Try again in about $minutes min.")
+        }
+        return Problem("GitHub refused the request.", if (token.isNullOrBlank())
+            "Without a sign-in GitHub answers about 60 requests an hour per network: wait a few minutes, or sign in with " +
+            "GitHub in Orbit's settings." else "Your sign-in or token may have expired: sign in again in Orbit's settings.")
+    }
+
     fun latest(repo: String, token: String?): Release {
         val c = open("$API/repos/$repo/releases?per_page=10", token, "application/vnd.github+json")
         val body = try {
@@ -34,8 +48,7 @@ object GitHub {
                     "If it's private, sign in with GitHub in Orbit's settings." else
                     "Your sign-in or token can't see it. Settings → check access shows what it can read. A fine-grained " +
                     "token needs Repository access → this repository, and Permissions → Contents: Read-only.")
-                401, 403 -> throw Problem("GitHub refused the request.",
-                    "Wait a few minutes. If you added a token, check it's still valid.")
+                401, 403 -> throw refused(c, token)
                 else -> throw Problem("GitHub answered ${c.responseCode}.", "Try again in a moment.")
             }
         } catch (e: IOException) {
