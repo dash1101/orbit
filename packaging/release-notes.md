@@ -5,6 +5,9 @@
 - **YTM Starcast on Windows runs without a console window, and Orbit can start it again.** Orbit starts YTM Starcast hidden, also right after installing it, so there's no console window that ends it when closed. Its page in Orbit has *start*, *stop*, *restart* and *start at login* on Windows too, as on Linux. Nothing Orbit runs in the background shows a window.
 - **An app that isn't installed says so**, with its install button and nothing to open. An installed app that isn't running offers *start* instead of *open*.
 - **Choose the ports:** Orbit's own port in its settings (it takes effect the next time Orbit starts; a port another program uses is refused), and YTM Starcast's when you install or update it. Orbit finds YTM Starcast on its port.
+- **YTM Starcast's page shows where to open it on your phone:** its addresses, and a QR code to scan (with YTM Starcast 0.2.0-alpha.10 and newer). On Windows its log is there too.
+- **YTM Starcast's own window is left out** when Orbit installs it, as Orbit shows what it did; a choice in the install brings it back.
+- **Installing Orbit for you shows each step** as it's done, and asks before Orbit starts again from its new place (*restart now*, or *later* with *restart orbit* at the top).
 - **Updating YTM Starcast on Windows keeps its options** (an access token, a port), as on Linux.
 
 **New in 0.5.9**

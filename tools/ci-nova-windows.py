@@ -309,34 +309,41 @@ public static class W {
 }
 '@
 $log = $args[0]; $ready = $args[1]; $stop = $args[2]   # (inside the callback, $args is its own)
-$all = $log + ".all"; $pass = 0
-$seen = @{}
-Set-Content -LiteralPath $ready -Value "ready"
+# console windows: the classic console's, and Windows Terminal's (where Windows 11 opens consoles). ConPTY's own
+# PseudoConsoleWindow is never shown to anyone (Orbit's terminal tab uses ConPTY), so it doesn't count.
+$kinds = @('ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS')
+$known = @{}; $title = @{}; $first = $true
 while (-not (Test-Path -LiteralPath $stop)) {
   [W]::EnumWindows({ param($h, $l)
-    if ([W]::IsWindowVisible($h) -and -not $seen.ContainsKey($h)) {
+    if ([W]::IsWindowVisible($h)) {
       $c = New-Object Text.StringBuilder 256; [void][W]::GetClassName($h, $c, 256)
-      if ($c.ToString() -in @('ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS', 'PseudoConsoleWindow')) {
+      if ($kinds -contains $c.ToString()) {
         $t = New-Object Text.StringBuilder 512; [void][W]::GetWindowText($h, $t, 512)
-        $seen[$h] = 1; Add-Content -LiteralPath $log -Value ("{0:HH:mm:ss.fff}|{1}|{2}" -f (Get-Date), $c, $t)
-      } else {
-        $t = New-Object Text.StringBuilder 512; [void][W]::GetWindowText($h, $t, 512)
-        $seen[$h] = 1; Add-Content -LiteralPath $all -Value ("{0}|{1}" -f $c, $t)
+        $k = [string]$h
+        if (-not $known.ContainsKey($k)) {
+          $known[$k] = $first
+          Add-Content -LiteralPath $log -Value ("{0:HH:mm:ss.fff}|{1}|{2}|{3}|{4}" -f (Get-Date), $k, $(if ($first) { 'there before' } else { 'new' }), $c, $t)
+          $title[$k] = $t.ToString()
+        } elseif ($title[$k] -ne $t.ToString()) {
+          $title[$k] = $t.ToString()
+          Add-Content -LiteralPath $log -Value ("{0:HH:mm:ss.fff}|{1}|title|{2}|{3}" -f (Get-Date), $k, $c, $t)
+        }
       }
     }
     $true }, [IntPtr]::Zero) | Out-Null
-  $pass++; if ($pass % 100 -eq 1) { Add-Content -LiteralPath $all -Value ("pass {0}: {1} windows seen so far, session {2}" -f $pass, $seen.Count, (Get-Process -Id $PID).SessionId) }
-  Start-Sleep -Milliseconds 80
+  if ($first) { $first = $false; Set-Content -LiteralPath $ready -Value "ready" }
+  Start-Sleep -Milliseconds 60
 }
 """
 
 
 def watch_windows(folder):
-    """Windows: start recording every console window that opens on the desktop (what a person would see flash up),
-    from now until the returned function is called; it returns them, as (time, class, title) lines."""
+    """Windows: record every console window that opens on the desktop (a classic console or Windows Terminal, what
+    a person would see flash up) from now until the returned function is called, which returns the new ones as
+    {window: [lines]} (it opens one on purpose first, to show it sees them, and leaves that one out)."""
     import subprocess
     if os.name != "nt":
-        return lambda: []
+        return lambda: {}
     script, log, ready, stop = (folder / n for n in ("watch.ps1", "windows.txt", "ready.txt", "stop.txt"))
     script.write_text(WATCH)
     subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), str(log), str(ready), str(stop)],
@@ -346,24 +353,31 @@ def watch_windows(folder):
         time.sleep(0.3)
     if not ready.exists():
         fail("the window watcher didn't start")
+
+    def windows():
+        out = {}
+        for ln in (log.read_text(errors="replace").splitlines() if log.exists() else []):
+            parts = ln.split("|", 4)
+            if len(parts) == 5:
+                out.setdefault(parts[1], []).append(ln)
+        return {w: lines for w, lines in out.items() if "|there before|" not in lines[0]}
+
     # it sees a console window on this desktop: open one on purpose (or "none seen" would prove nothing)
-    # (a console window is titled with its program's path from the start: ping.exe's is easy to tell apart)
-    subprocess.Popen(["ping", "-n", "8", "127.0.0.1"], creationflags=0x00000010, stdout=subprocess.DEVNULL)  # CREATE_NEW_CONSOLE
-    check = lambda: log.exists() and "ping.exe" in log.read_text(errors="replace").lower()
+    subprocess.Popen(["ping", "-n", "6", "127.0.0.1"], creationflags=0x00000010, stdout=subprocess.DEVNULL)  # CREATE_NEW_CONSOLE
     end = time.time() + 20
-    while time.time() < end and not check():
+    while time.time() < end and not windows():
         time.sleep(0.3)
-    if not check():
-        other = Path(str(log) + ".all")
-        say("console windows seen:\n" + (log.read_text(errors="replace") if log.exists() else "(none)"))
-        say("other windows seen:\n" + (other.read_text(errors="replace")[-3000:] if other.exists() else "(nothing at all)"))
+    check = set(windows())
+    if not check:
+        say("what the watcher saw:\n" + (log.read_text(errors="replace") if log.exists() else "(nothing)"))
         fail("the window watcher doesn't see console windows on this machine")
-    say("window watcher: it sees console windows here (the check window was seen)")
+    say("window watcher: it sees console windows here (the one opened on purpose: " + "; ".join(windows()[w][0] for w in check) + ")")
+    time.sleep(7)   # that one closes (ping ends)
 
     def done():
         stop.write_text("stop")
         time.sleep(1)
-        return [ln for ln in log.read_text(errors="replace").splitlines() if ln.strip() and "ping.exe" not in ln.lower()] if log.exists() else []
+        return {w: lines for w, lines in windows().items() if w not in check}
     return done
 
 
@@ -495,13 +509,11 @@ def through_the_program(exe, apps, migrate=False):
         say(f"\nAll of {', '.join(apps)}: installed, answered and removed through the standalone Orbit.")
         polling["on"] = False
         seen = windows()
-        theirs = [w for w in seen if "ytm-starcast" in w.lower()]
-        ours = [w for w in seen if w not in theirs]
-        for w in theirs:
-            say(f"::warning::a console window of YTM Starcast's own: {w}")
-        if ours:
-            fail("console windows opened during the run (Orbit should run everything without one):\n  " + "\n  ".join(ours))
-        say(f"No console window from Orbit during the run ({len(theirs)} of YTM Starcast's own)." if os.name == "nt" else "")
+        if seen:
+            fail("console windows opened while Orbit installed, polled and removed apps (nothing should show one):\n  "
+                 + "\n  ".join(" / ".join(lines) for lines in seen.values()))
+        if os.name == "nt":
+            say("No console window opened while Orbit installed, polled and removed the apps.")
     finally:
         polling["on"] = False
         p.kill()

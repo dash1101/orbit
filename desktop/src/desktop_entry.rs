@@ -104,9 +104,10 @@ pub fn state() -> Value {
     let deb = linux && exe.as_deref().map(crate::recipes::orbit::deb_install).unwrap_or(false);
     let installed = exe.as_deref().map(|e| same_file(e, &target)).unwrap_or(false);
     let added = if linux { linux_paths().0.exists() || linux_old_paths().is_some() } else { windows_link().exists() };
+    let steps: Vec<Value> = install_steps().into_iter().map(|(id, label)| json!({"id": id, "label": label})).collect();
     json!({"supported": true, "where": if linux { "your apps menu" } else { "the Start menu" }, "added": added,
            "install": !deb, "installed": installed, "deb": deb, "home": shown(&home),
-           "elsewhere": !installed && target.exists(), "command": linux})
+           "elsewhere": !installed && target.exists(), "command": linux, "steps": steps})
 }
 
 fn ps_quote(x: &str) -> String {
@@ -144,70 +145,135 @@ fn move_file(from: &Path, to: &Path) -> std::io::Result<bool> {
     Ok(false)
 }
 
-/// Install Orbit for this user, with no password or administrator: the program moves to ~/.local/share/orbit on Linux
-/// (`orbit` starts it from ~/.local/bin; apps-menu entry and icon) or %LOCALAPPDATA%\Programs\Orbit on Windows
-/// (Start-menu shortcut, and an entry in the list of installed apps). An update already waiting next to it comes
-/// along, and the program goes on updating itself there. On Linux the running Orbit keeps running from its new place;
-/// on Windows, or when it was copied to another drive, the caller starts it again from there ("restart").
-pub fn install(runner: &Runner) -> Value {
-    let (Some(home), Some(target)) = (installed_home(), installed_program()) else { return add(runner) };
-    let Some(exe) = crate::recipes::orbit::running_program() else {
-        return json!({"ok": false, "message": "Orbit can't find its own program"});
+/// The steps of installing Orbit for this user, in order, for this system: (id, what it does).
+pub fn install_steps() -> Vec<(&'static str, String)> {
+    let Some(home) = installed_home() else { return vec![] };
+    if cfg!(target_os = "linux") {
+        vec![("move", format!("Move Orbit to {}", shown(&home))), ("command", "Add the orbit command".into()),
+             ("menu", "Add it to your apps menu, with its icon".into())]
+    } else {
+        vec![("move", format!("Move Orbit to {}", shown(&home))), ("menu", "Add it to the Start menu".into()),
+             ("register", "Add it to Windows' list of installed apps".into())]
+    }
+}
+
+/// One step of installing Orbit for this user, with no password or administrator (install_steps):
+/// - "move": the program moves to ~/.local/share/orbit (Linux) or %LOCALAPPDATA%\Programs\Orbit (Windows), with an
+///   update already waiting next to it. "restart": true when Orbit must start again from there to run from its new
+///   place (Windows, where a program renamed while it runs keeps its old path, or when it was copied to another drive),
+///   with "program" and "old" (a copy left behind, which the new Orbit deletes once this one has ended).
+/// - "command": `orbit` in ~/.local/bin (Linux), unless something else of that name is there.
+/// - "menu": the apps-menu entry and icon (Linux), or the Start-menu shortcut (Windows).
+/// - "register": Orbit in Windows' installed apps, with its uninstall command.
+/// Run after "move", the others work on the installed program. The program goes on updating itself there.
+pub fn install_step(runner: &Runner, step: &str) -> Value {
+    let (Some(home), Some(target)) = (installed_home(), installed_program()) else {
+        return json!({"ok": false, "message": "installing Orbit for you isn't something this system has"});
     };
     let linux = cfg!(target_os = "linux");
-    if linux && crate::recipes::orbit::deb_install(&exe) {
-        return json!({"ok": false, "message": "This Orbit comes from the Debian package: apt keeps it installed and up to date."});
-    }
-    let cmd = linux_command();
-    if runner.dry_run {
-        runner.record("move", vec![exe.to_string_lossy().into(), target.to_string_lossy().into()]);
-        if linux {
-            runner.record("link", vec![cmd.to_string_lossy().into(), target.to_string_lossy().into()]);
-        } else {
-            runner.record("reg add", vec![UNINSTALL_KEY.into()]);
+    let t = target.to_string_lossy().into_owned();
+    match step {
+        "move" => {
+            let Some(exe) = crate::recipes::orbit::running_program() else {
+                return json!({"ok": false, "message": "Orbit can't find its own program"});
+            };
+            if linux && crate::recipes::orbit::deb_install(&exe) {
+                return json!({"ok": false, "message": "This Orbit comes from the Debian package: apt keeps it installed and up to date."});
+            }
+            if runner.dry_run {
+                runner.record("move", vec![exe.to_string_lossy().into(), t.clone()]);
+                return json!({"ok": true, "message": format!("dry run: would move Orbit to {}", shown(&home)), "restart": false});
+            }
+            use crate::recipes::orbit::beside;
+            let mut copied = false;
+            let r = (|| -> std::io::Result<()> {
+                std::fs::create_dir_all(&home)?;
+                if !same_file(&exe, &target) {
+                    for suffix in ["", ".new", ".new.ok", ".old"] {
+                        let _ = std::fs::remove_file(beside(&target, suffix)); // an earlier install's, replaced by this one
+                    }
+                    copied = !move_file(&exe, &target)?;
+                    for suffix in [".new", ".new.ok"] {
+                        let waiting = beside(&exe, suffix);
+                        if waiting.exists() {
+                            let _ = move_file(&waiting, &beside(&target, suffix));
+                        }
+                    }
+                }
+                Ok(())
+            })();
+            if let Err(e) = r {
+                return json!({"ok": false, "message": format!("couldn't move Orbit to {}: {e}", shown(&home))});
+            }
+            let moved = !same_file(&exe, &target) || copied; // (on Linux a renamed program knows its new place)
+            let old = if copied && exe.exists() { exe.to_string_lossy().into_owned() } else { String::new() };
+            json!({"ok": true, "message": format!("Orbit is in {}", shown(&home)), "copied": copied,
+                   "restart": copied || (!linux && moved), "old": old, "program": t})
         }
+        "command" if linux => {
+            let cmd = linux_command();
+            if runner.dry_run {
+                runner.record("link", vec![cmd.to_string_lossy().into(), t.clone()]);
+                return json!({"ok": true, "message": "dry run: would add the orbit command"});
+            }
+            let ours = std::fs::read_link(&cmd).map(|x| x == target).unwrap_or(false);
+            if !ours && std::fs::symlink_metadata(&cmd).is_ok() {
+                return json!({"ok": true, "message": format!("{} is something else's: left as it is", shown(&cmd)), "note": "skipped"});
+            }
+            let r = (|| -> std::io::Result<()> {
+                if !ours {
+                    std::fs::create_dir_all(cmd.parent().unwrap())?;
+                    #[cfg(unix)]
+                    std::os::unix::fs::symlink(&target, &cmd)?;
+                }
+                Ok(())
+            })();
+            match r {
+                Ok(()) => json!({"ok": true, "message": "orbit starts it from a terminal"}),
+                Err(e) => json!({"ok": false, "message": format!("couldn't add the orbit command: {e}")}),
+            }
+        }
+        "menu" => {
+            if runner.dry_run {
+                return add(runner);
+            }
+            if linux { add_linux(&t) } else { add_other(runner, &t) }
+        }
+        "register" if !linux => {
+            if runner.dry_run {
+                runner.record("reg add", vec![UNINSTALL_KEY.into()]);
+                return json!({"ok": true, "message": "dry run: would add Orbit to the installed apps"});
+            }
+            register_uninstall(&target);
+            json!({"ok": true, "message": "Orbit is in Windows' installed apps"})
+        }
+        _ => json!({"ok": false, "message": format!("{step}: not a step of installing Orbit here")}),
+    }
+}
+
+/// Install Orbit for this user in one go (every step of install_steps): what `{"install": true}` asks for.
+pub fn install(runner: &Runner) -> Value {
+    let Some(home) = installed_home() else { return add(runner) };
+    let mut moved = json!({});
+    let mut trouble = String::new();
+    for (step, _) in install_steps() {
+        let r = install_step(runner, step);
+        if r["ok"] == false {
+            if step == "move" {
+                return r;
+            }
+            trouble = format!(", but {}", r["message"].as_str().unwrap_or(""));
+        }
+        if step == "move" {
+            moved = r;
+        }
+    }
+    if runner.dry_run {
         return json!({"ok": true, "message": format!("dry run: would install Orbit for you in {}", shown(&home))});
     }
-    use crate::recipes::orbit::beside;
-    let mut copied = false;
-    let r = (|| -> std::io::Result<()> {
-        std::fs::create_dir_all(&home)?;
-        if !same_file(&exe, &target) {
-            for suffix in ["", ".new", ".new.ok", ".old"] {
-                let _ = std::fs::remove_file(beside(&target, suffix)); // an earlier install's, replaced by this one
-            }
-            copied = !move_file(&exe, &target)?;
-            for suffix in [".new", ".new.ok"] {
-                let waiting = beside(&exe, suffix);
-                if waiting.exists() {
-                    let _ = move_file(&waiting, &beside(&target, suffix));
-                }
-            }
-        }
-        // `orbit` on the command line, unless something else of that name is there already
-        let ours = std::fs::read_link(&cmd).map(|t| t == target).unwrap_or(false);
-        if linux && !ours && std::fs::symlink_metadata(&cmd).is_err() {
-            std::fs::create_dir_all(cmd.parent().unwrap())?;
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(&target, &cmd)?;
-        }
-        Ok(())
-    })();
-    if let Err(e) = r {
-        return json!({"ok": false, "message": format!("couldn't install Orbit in {}: {e}", shown(&home))});
-    }
-    let t = target.to_string_lossy().into_owned();
-    let menu = if linux { add_linux(&t) } else { add_other(runner, &t) };
-    if !linux {
-        register_uninstall(&target);
-    }
-    let mut message = format!("Orbit is installed for you, in {} and {}", shown(&home), if linux { "your apps menu" } else { "the Start menu" });
-    if menu["ok"] == false {
-        message = format!("Orbit is installed for you, in {}, but {}", shown(&home), menu["message"].as_str().unwrap_or(""));
-    }
-    // a copy left behind (a running program on Windows): the new Orbit deletes it once this one has ended
-    let old = if copied && exe.exists() { exe.to_string_lossy().into_owned() } else { String::new() };
-    json!({"ok": true, "message": message, "copied": copied, "restart": copied || !linux, "old": old, "program": t})
+    let where_ = if cfg!(target_os = "linux") { "your apps menu" } else { "the Start menu" };
+    json!({"ok": true, "message": format!("Orbit is installed for you, in {} and {where_}{trouble}", shown(&home)),
+           "copied": moved["copied"], "restart": moved["restart"], "old": moved["old"], "program": moved["program"]})
 }
 
 /// Remove Orbit installed for this user: the program, its command (Linux), menu entry or Start-menu shortcut and

@@ -629,6 +629,20 @@ impl StarcastRecipe {
     fn menu(&self, s: &mut Session) -> Res<bool> {
         let h = self.h();
         s.symlink(&self.venv_bin(NEW.slug, NEW), &h.bin_dir().join(NEW.slug))?;
+        // YTM Starcast's own window (and its menu entry): only when wanted; its marker keeps its own updates agreeing
+        let marker = self.app_dir(NEW).join("no-desktop-app");
+        if !s.opt_bool("desktop_app", false) {
+            for p in [h.bin_dir().join(format!("{}-gui", NEW.slug)), self.desktop_path(NEW)] {
+                if p.exists() || std::fs::symlink_metadata(&p).is_ok() {
+                    s.remove(std::slice::from_ref(&p))?;
+                }
+            }
+            s.write_file(&marker, "Orbit shows what YTM Starcast's window did (left out when installed from Orbit)\n", None)?;
+            return Ok(true);
+        }
+        if marker.exists() {
+            s.remove(std::slice::from_ref(&marker))?;
+        }
         s.symlink(&self.venv_bin(&format!("{}-gui", NEW.slug), NEW), &h.bin_dir().join(format!("{}-gui", NEW.slug)))?;
         if !s.dry_run {
             let lib = self.venv(NEW).join("lib");
@@ -873,6 +887,13 @@ impl StarcastRecipe {
     fn win_shortcut(&self, s: &mut Session) -> Res<bool> {
         let target = self.app_dir(NEW).join(format!("{}-gui.exe", NEW.slug));
         let link = self.shortcut_path(NEW);
+        if !s.opt_bool("desktop_app", false) {
+            if link.exists() {
+                s.remove(std::slice::from_ref(&link))?;
+            }
+            s.detail("left out: Orbit shows what YTM Starcast's window did");
+            return Ok(true);
+        }
         // the Start menu's folder can be missing (a new or redirected profile): make it first
         let script = format!("New-Item -ItemType Directory -Force -Path {} | Out-Null;$s=(New-Object -ComObject WScript.Shell).CreateShortcut({});\
                               $s.TargetPath={};$s.WorkingDirectory={};$s.Description='YouTube Music companion';$s.Save()",
@@ -886,9 +907,22 @@ impl StarcastRecipe {
         if s.opt_bool("autostart", true) {
             // -Lan is always given: without it the script keeps the --lan its task had before
             let lan = if s.opt_bool("lan", false) { "-Lan" } else { "-Lan:$false" };
-            self.ps(s, &format!("& {} {lan}; exit 0", ps_str(&sv(&script))), Some("Couldn't set YTM Starcast to start at logon."))?;
-            // its port, which the script doesn't set: in the task's arguments (8777 needs none)
+            // YTM Starcast 0.2.0a10 and newer: its script takes -NoDesktopApp and -Port (and keeps them at updates)
+            let text = if s.dry_run { String::new() } else { std::fs::read_to_string(&script).unwrap_or_default() };
             let port = self.chosen_port(s);
+            let mut more = String::new();
+            if text.contains("NoDesktopApp") {
+                more.push_str(if s.opt_bool("desktop_app", false) { " -NoDesktopApp:$false" } else { " -NoDesktopApp" });
+            }
+            let takes_port = text.contains("$Port");
+            if takes_port {
+                more.push_str(&format!(" -Port {port}"));
+            }
+            self.ps(s, &format!("& {} {lan}{more}; exit 0", ps_str(&sv(&script))), Some("Couldn't set YTM Starcast to start at logon."))?;
+            if takes_port {
+                return Ok(true);
+            }
+            // an older YTM Starcast: its port goes into the task's arguments here (8777 needs none)
             let add = if port == PORT { String::new() } else { format!(" --port {port}") };
             self.ps(s, &format!("$t = Get-ScheduledTask -TaskName {}; $a = $t.Actions[0]; \
                                  $a.Arguments = (($a.Arguments -replace '\\s*--port(=|\\s+)\\d+', '') + '{add}').Trim(); \
@@ -1073,6 +1107,9 @@ impl Recipe for StarcastRecipe {
         opts.push(with(option("port", "Port", "int", json!(self.existing_port()),
                               "Where YTM Starcast answers on this computer (usually 8777). Phones and the browser extension use it too: \
                                change it only when another program needs this one."), json!({"min": 1024, "max": 65535})));
+        opts.push(option("desktop_app", "YTM Starcast's own window too", "bool", json!(false),
+                         "Orbit shows what it did (the phone addresses with a QR code, the switches, the log), so it's left out \
+                          unless you want it. Turning this off removes it."));
         opts.push(option("lan", "Also reach it on my home Wi-Fi", "bool", json!(self.existing_lan()),
                          "Lets phones on the same network connect. It then asks for an access token, which YTM Starcast shows you. Not needed with Tailscale."));
         if h.system != "windows" {
@@ -1142,15 +1179,17 @@ impl Recipe for StarcastRecipe {
         }
         let v = rel.and_then(|r| r["tag"].as_str()).unwrap_or("the latest release");
         lines.push(format!("Download YTM Starcast {v} from GitHub and check its checksum"));
+        let window = opt("desktop_app").unwrap_or(false);
         if h.system == "windows" {
-            lines.push(format!("Put the program in {} and add YTM Starcast to the Start menu", self.app_dir(NEW).display()));
+            lines.push(format!("Put the program in {}{}", self.app_dir(NEW).display(),
+                               if window { ", with YTM Starcast's own window in the Start menu" } else { " (YTM Starcast's own window left out: Orbit shows what it did)" }));
         } else {
             lines.push(format!("Install it with its own Python in {}", self.app_dir(NEW).display()));
             if opt("ytdlp").unwrap_or(false) {
                 lines.push("Add yt-dlp so this computer can fetch songs for the phone (from PyPI)".into());
             }
-            if h.system == "linux" {
-                lines.push("Add YTM Starcast to your apps menu".into());
+            if h.system == "linux" && window {
+                lines.push("Add YTM Starcast's own window to your apps menu".into());
             }
         }
         if opt("autostart").unwrap_or(h.system == "linux" && h.has_systemd()) {
@@ -1210,7 +1249,7 @@ impl Recipe for StarcastRecipe {
                 // also an old Pocketfader in a folder Orbit doesn't know: both use the same port
                 step("stop", "Stop the running copy", 0.5, move |s: &mut Session| r.win_stop(s, !moved)),
                 step("copy", "Install the program", 1.0, me(Self::win_copy)),
-                step("shortcut", "Add it to the Start menu", 0.5, me(Self::win_shortcut)),
+                step("shortcut", "Its own window in the Start menu (if chosen)", 0.5, me(Self::win_shortcut)),
             ]);
             if moved {
                 steps.push(step("retire", "Stop Pocketfader starting at logon (its old name)", 0.5, me(Self::win_retire)));
@@ -1239,7 +1278,7 @@ impl Recipe for StarcastRecipe {
         };
         let retire = || if due { vec![step("retire", "Stop Pocketfader (its old name)", 0.5, me(Self::retire))] } else { vec![] };
         if sysname == "linux" {
-            steps.push(step("menu", "Add it to your apps menu", 0.5, me(Self::menu)));
+            steps.push(step("menu", "The ytm-starcast command (and its window, if chosen)", 0.5, me(Self::menu)));
             steps.extend(retire());
             if !self.h().has_systemd() && self.autostart_path(OLD).exists() {
                 steps.push(step("login", "Start it when you log in, as Pocketfader did", 0.5, me(Self::xdg_autostart)));

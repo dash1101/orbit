@@ -33,6 +33,7 @@ pub struct Starcast {
     refine_off: Mutex<bool>,                 // Refine (where those settings are) is switched off in YTM Starcast
     answering: Mutex<bool>,                  // it answered when last looked at
     port: Mutex<Option<(Instant, u16)>>,     // the port its service or task starts it with (looked at now and then)
+    connect: Mutex<Option<(Instant, Value)>>, // where to open it on a phone (/api/connect), kept a minute
 }
 
 fn truthy(v: &Value) -> bool {
@@ -47,7 +48,7 @@ impl Starcast {
     pub fn new(ctx: Arc<Ctx>) -> Starcast {
         Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null), focus: Mutex::new(false),
                    refine_off: Mutex::new(false), answering: Mutex::new(false),
-                   port: Mutex::new(None) }
+                   port: Mutex::new(None), connect: Mutex::new(None) }
     }
 
     /// The port the installed YTM Starcast is started with: its systemd service (Linux) or scheduled task (Windows),
@@ -180,6 +181,30 @@ impl Starcast {
     }
 
     /// YTM Starcast's desktop window, wherever it was installed: YTM Starcast's places first, then Pocketfader's.
+    /// YTM Starcast's own window, when it's installed and wanted (left out with "no-desktop-app", as Orbit installs it).
+    fn desktop_app_here() -> bool {
+        let home = crate::config::home();
+        let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Local"));
+        let left_out = [home.join(".local/share/ytm-starcast/no-desktop-app"), local.join("Programs").join("YTM Starcast").join("no-desktop-app")];
+        !left_out.iter().any(|p| p.exists()) && Self::gui_paths().iter().any(|p| p.exists())
+    }
+
+    /// Where to open YTM Starcast on a phone: /api/connect (0.2.0a10 and newer), with a QR code of the best address.
+    /// Kept a minute (the QR codes are made on every ask).
+    fn connect(&self) -> Value {
+        if let Some((at, v)) = self.connect.lock().unwrap().clone() {
+            if at.elapsed() < Duration::from_secs(60) {
+                return v;
+            }
+        }
+        let v = self.get("/api/connect", 3.0).ok().filter(|v| v["addresses"].is_array()).map(|v| json!({
+            "best": v["best"], "qr": v["qr"], "token": v["token"],
+            "addresses": v["addresses"].as_array().cloned().unwrap_or_default().iter()
+                .map(|a| json!({"label": a["label"], "url": a["url"], "phone": a["phone"], "kind": a["kind"]})).collect::<Vec<_>>()})).unwrap_or(Value::Null);
+        *self.connect.lock().unwrap() = Some((Instant::now(), v.clone()));
+        v
+    }
+
     pub fn gui_paths() -> Vec<PathBuf> {
         let home = crate::config::home();
         let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Local"));
@@ -240,6 +265,19 @@ impl App for Starcast {
     }
     fn open_label(&self) -> String {
         if *self.focus.lock().unwrap() { String::new() } else { "open web app".into() }
+    }
+    /// Its log: on Windows the file it writes (YTM Starcast 0.2.0a10 and newer), elsewhere its service's journal.
+    fn logs(&self) -> String {
+        if cfg!(windows) {
+            let appdata = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| crate::config::home().join("AppData").join("Roaming"));
+            let text = std::fs::read_to_string(appdata.join("ytm-starcast").join("server.log")).unwrap_or_default();
+            let lines: Vec<&str> = text.lines().collect();
+            return lines[lines.len().saturating_sub(80)..].join("\n");
+        }
+        match self.units().first() {
+            Some((unit, user)) => crate::systemd::journal(&self.ctx.runner, unit, *user, 80),
+            None => String::new(),
+        }
     }
     fn windows_task(&self) -> Option<(String, String)> {
         Some(("YTM Starcast".into(), "ytm-starcast.exe".into())) // as YTM Starcast's Windows installer sets it up
@@ -327,6 +365,7 @@ impl App for Starcast {
             Err(e) => return done(s, facts, "warn", format!("Running, but /api/state failed: {}", e.message)),
         };
         let (vol, media, caps, parts) = (&st["volume"], &st["media"], &st["capabilities"], &st["parts"]);
+        s.insert("connect".into(), self.connect()); // the phone addresses (YTM Starcast 0.2.0a10 and newer)
         *self.focus.lock().unwrap() = truthy(&caps["ytm_focus"]);
         *self.refine_off.lock().unwrap() = parts["refine"] == json!(false);
         let audio_off = parts["audio"] == json!(false);
@@ -465,9 +504,12 @@ impl App for Starcast {
             acts.push(json!({"id": "open", "label": "open web app", "group": "open", "primary": !focus}));
         }
         acts.extend([
-            json!({"id": "gui", "label": "desktop window", "group": "open"}),
+
             json!({"id": "releases", "label": "releases", "group": "open"}),
         ]);
+        if Self::desktop_app_here() {
+            acts.push(json!({"id": "gui", "label": "desktop window", "group": "open"}));
+        }
         if up && self.extension.lock().unwrap().is_object() {
             acts.push(json!({"id": "extension", "label": "set up browser extension", "group": "open"}));
         }
