@@ -61,11 +61,28 @@ pub struct Nova {
     ctx: Arc<Ctx>,
     found: Mutex<Option<String>>,
     pub status_file: PathBuf,
+    waiting: Mutex<u64>, // browsers and actions waiting for approval, as Nova last said (see health)
+}
+
+/// The approval code in what was typed or pasted: "ZAG97V", "zag 97v", "ZAG-97V", or the whole
+/// "sudo nova approve ZAG97V" line as the browser or the Nova app shows it (options after the code are left out).
+pub fn approval_code(typed: &str) -> Res<String> {
+    let lower = typed.to_ascii_lowercase();
+    let rest = match lower.rfind("approve") {
+        Some(i) => &typed[i + "approve".len()..],
+        None => typed,
+    };
+    let code: String = rest.split_whitespace().take_while(|w| !w.starts_with("--")).collect::<String>().replace('-', "").to_ascii_uppercase();
+    if (4..=12).contains(&code.len()) && code.chars().all(|c| c.is_ascii_alphanumeric()) {
+        Ok(code)
+    } else {
+        Err(bad("Code shown in the browser: that isn't one (a code is six letters and numbers, like ZAG97V)"))
+    }
 }
 
 impl Nova {
     pub fn new(ctx: Arc<Ctx>) -> Nova {
-        Nova { ctx, found: Mutex::new(None), status_file: PathBuf::from(STATUS_FILE) }
+        Nova { ctx, found: Mutex::new(None), status_file: PathBuf::from(STATUS_FILE), waiting: Mutex::new(0) }
     }
 
     fn windows() -> bool {
@@ -111,7 +128,14 @@ impl Nova {
         let (rc, out) = self.ctx.runner.read(&["hostname".into(), "-I".into()], Duration::from_secs(2));
         let mut hosts = vec!["127.0.0.1".to_string()];
         if rc == 0 {
-            hosts.extend(out.split_whitespace().filter(|h| !h.contains(':')).map(String::from));
+            // the computer itself, then the home network, other addresses, and Tailscale last (as Nova itself suggests)
+            let mut more: Vec<(u8, String)> = out.split_whitespace().filter_map(|h| h.parse::<std::net::Ipv4Addr>().ok()).map(|ip| {
+                let o = ip.octets();
+                let rank = if ip.is_private() { 0 } else if o[0] == 100 && (64..128).contains(&o[1]) { 2 } else { 1 };
+                (rank, ip.to_string())
+            }).collect();
+            more.sort_by_key(|(rank, _)| *rank); // stable: each group keeps the system's order
+            hosts.extend(more.into_iter().map(|(_, h)| h));
         }
         hosts
     }
@@ -129,6 +153,12 @@ impl Nova {
                     return Some(url);
                 }
             }
+        }
+        // Nova on this computer itself first (on Linux, Nova 0.9.20 and newer answer there too), over an address found before
+        if cfg!(target_os = "linux") && net::port_open("127.0.0.1", PORT, Duration::from_millis(300)) {
+            let f = format!("https://127.0.0.1:{PORT}");
+            *self.found.lock().unwrap() = Some(f.clone());
+            return Some(f);
         }
         if let Some(f) = self.found.lock().unwrap().clone() {
             if let Ok(u) = url::Url::parse(&f) {
@@ -174,7 +204,10 @@ impl Nova {
             .filter(|a| a["level"] == "warning" || a["level"] == "critical")
             .map(|a| clean(&a["title"])).filter(|t| !t.is_empty()).collect();
         let m = if d["metrics"].is_object() { d["metrics"].clone() } else { json!({}) };
-        Some(json!({"level": level, "headline": clean(&d["headline"]), "issues": issues, "metrics": m, "age": age,
+        // what waits for approval (counts only: the code is read off the browser that asks)
+        let count = |k: &str| d["waiting"][k].as_u64().unwrap_or(0).min(99);
+        let waiting = json!({"browsers": count("browsers"), "actions": count("actions")});
+        Some(json!({"level": level, "headline": clean(&d["headline"]), "issues": issues, "metrics": m, "age": age, "waiting": waiting,
                     "stale": age.map(|a| a > STALE_AFTER).unwrap_or(true)}))
     }
 
@@ -345,7 +378,8 @@ impl Nova {
             t("term:devices", "paired devices", "phones & browsers", false, json!({})),
             t("term:approvals", "waiting for approval", "phones & browsers", false, json!({})),
             t("term:approve", "approve a browser", "phones & browsers", true, json!({"ask": {"label": "Code shown in the browser",
-                "pattern": "[A-Za-z0-9 -]{4,24}", "patternHelp": "letters and numbers, as shown in the browser"}})),
+                "help": "Six letters and numbers, like ZAG97V. Pasting the whole “sudo nova approve …” line works too.",
+                "pattern": "[A-Za-z0-9 -]{4,80}", "patternHelp": "letters and numbers, as shown in the browser"}})),
             t("term:remove", "remove a device", "phones & browsers", true, json!({"danger": true, "ask": {
                 "label": "Name or ID of the device (see paired devices)", "pattern": r"[\w.'(][\w .'()-]{0,59}",
                 "patternHelp": "its name or ID, as listed in paired devices",
@@ -425,6 +459,12 @@ impl App for Nova {
     fn open_label(&self) -> String {
         "nova web".into()
     }
+    /// "approve a browser" on the card (the button to press when something is waiting).
+    fn card_actions(&self) -> Vec<Value> {
+        let waiting = *self.waiting.lock().unwrap() > 0;
+        self.actions().into_iter().filter(|a| a["id"].as_str().map(|i| i.ends_with(":approve")).unwrap_or(false))
+            .map(|mut a| { a["primary"] = json!(waiting); a }).collect()
+    }
     fn units(&self) -> Vec<(String, bool)> {
         UNITS.iter().map(|(u, _)| (u.to_string(), false)).collect()
     }
@@ -496,12 +536,22 @@ impl App for Nova {
         let issues: Vec<String> = hl.as_ref().map(|h| h["issues"].as_array().cloned().unwrap_or_default().iter()
             .filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
         let stale = hl.as_ref().map(|h| h["stale"].as_bool().unwrap_or(true)).unwrap_or(false);
+        let (browsers, actions) = hl.as_ref().filter(|_| !stale)
+            .map(|h| (h["waiting"]["browsers"].as_u64().unwrap_or(0), h["waiting"]["actions"].as_u64().unwrap_or(0))).unwrap_or((0, 0));
+        *self.waiting.lock().unwrap() = browsers + actions;
         let (state, headline) = if ping.is_none() {
             ("down", format!("Nova isn't answering{}", if core_bad.is_empty() { String::new() } else { format!(" ({} not running)", core_bad.join(", ")) }))
         } else if !core_bad.is_empty() {
             ("warn", format!("Answering, but {} isn't running", core_bad.join(", ")))
         } else if !failed_jobs.is_empty() {
             ("warn", format!("Running · the last {} failed", failed_jobs[0]))
+        } else if browsers + actions > 0 {
+            ("warn", match (browsers, actions) {
+                (1, 0) => "A browser is waiting for your approval: approve it with the code it shows".to_string(),
+                (b, 0) => format!("{b} browsers are waiting for your approval"),
+                (0, 1) => "A browser is waiting for you to approve what it asked: use the code it shows".to_string(),
+                (b, a) => format!("{} things are waiting for your approval", b + a),
+            })
         } else if hl.is_some() && stale {
             ("warn", "Running, but its alerts have stopped checking the server".to_string())
         } else if !issues.is_empty() {
@@ -540,7 +590,7 @@ impl App for Nova {
         let key = action.strip_prefix("term:").unwrap_or("");
         if key == "approve" {
             let code = ask_value(self, action, args)?;
-            return Ok(Some(json!({"argv": ["sudo", "nova", "approve", code.replace(' ', "")], "title": "Nova · approve a browser"})));
+            return Ok(Some(json!({"argv": ["sudo", "nova", "approve", approval_code(&code)?], "title": "Nova · approve a browser"})));
         }
         if key == "remove" {
             let who = ask_value(self, action, args)?;
@@ -594,7 +644,7 @@ impl App for Nova {
         if let Some(key) = action.strip_prefix("win:").filter(|_| Self::windows()) {
             let label = self.win_actions().into_iter().find(|a| a["id"] == action).and_then(|a| a["label"].as_str().map(String::from)).unwrap_or(key.into());
             return match key {
-                "approve" => self.win_admin_window("Nova · approve a browser", &["approve".into(), ask_value(self, action, args)?.replace(' ', "")]),
+                "approve" => self.win_admin_window("Nova · approve a browser", &["approve".into(), approval_code(&ask_value(self, action, args)?)?]),
                 "remove" => self.win_admin_window("Nova · remove a device", &["remove".into(), ask_value(self, action, args)?]),
                 "journal" => {
                     let log = Self::program_data().join("Nova").join("log").join("api.log");
@@ -628,5 +678,39 @@ impl App for Nova {
                     administrator or members of the 'adm' or 'systemd-journal' groups.\n Use “api log” under actions to read it with sudo.)".into();
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_code_is_found_in_what_was_typed_or_pasted() {
+        for typed in ["ZAG97V", "zag97v", " ZAG 97V ", "ZAG-97V", "sudo nova approve ZAG97V", "  sudo nova approve zag97v --role admin"] {
+            assert_eq!(approval_code(typed).unwrap(), "ZAG97V", "{typed:?}");
+        }
+        for wrong in ["", "sudo nova approve", "ZA", "sudo nova approve ZAG97V; rm -rf /"] {
+            assert!(approval_code(wrong).is_err(), "{wrong:?}");
+        }
+    }
+
+    #[test]
+    fn approvals_waiting_show_on_the_card() {
+        let dir = std::env::temp_dir().join(format!("orbit-nova-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ctx = Arc::new(Ctx { config: Arc::new(crate::config::Config::new(Some(dir.join("config.json")))),
+                                 runner: Arc::new(crate::runner::Runner::new(true)), releases: Arc::new(net::Releases::new()) });
+        let mut nova = Nova::new(ctx);
+        nova.status_file = dir.join("status.json");
+        let now = chrono::Utc::now().to_rfc3339();
+        let write = |waiting: Value| std::fs::write(dir.join("status.json"),
+            json!({"level": "ok", "headline": "all good", "updated": now, "active": [], "waiting": waiting}).to_string()).unwrap();
+        write(json!({"browsers": 1, "actions": 0}));
+        let h = nova.health().unwrap();
+        assert_eq!(h["waiting"], json!({"browsers": 1, "actions": 0}));
+        write(json!(null)); // a Nova that doesn't say
+        assert_eq!(nova.health().unwrap()["waiting"], json!({"browsers": 0, "actions": 0}));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

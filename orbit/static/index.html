@@ -219,7 +219,9 @@ pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--
 /* dialog */
 #dlg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; place-items: center; z-index: 9; padding: 16px; }
 #dlg.open { display: grid; }
-#dlg .box { background: var(--bg); width: min(560px, 100%); max-height: 80vh; overflow: auto; }
+/* the contents scroll, not the box: a box that scrolls clips its title, which sits on the border */
+#dlg .box { background: var(--bg); width: min(560px, 100%); max-height: 80vh; display: flex; flex-direction: column; }
+#dlgb { overflow: auto; min-height: 0; padding: 4px; margin: -4px; }   /* room for the buttons' focus ring */
 #dlg .body { margin: 2px 0 14px; white-space: pre-wrap; }
 #dlg pre { margin: 0 0 12px; max-height: 50vh; overflow: auto; font-size: 12.5px; color: var(--muted); white-space: pre-wrap; }
 .empty { color: var(--muted); padding: 30px 0; text-align: center; }
@@ -725,6 +727,9 @@ function cardButtons(a) {
   const b = [];
   if (a.open) b.push(h("button", { class: "btn small", title: "open " + a.name, onclick: e => {
     e.stopPropagation(); runAction(a, { id: "open", label: a.open }); } }, a.open + " ↗"));
+  // an app's own buttons for the card (Nova: approve a browser; YTM Starcast: YouTube Music, settings)
+  for (const act of a.cardActions || []) b.push(h("button", { class: "btn small" + (act.primary ? " primary" : ""), onclick: e => {
+    e.stopPropagation(); runAction(a, act); } }, act.label + (act.ext ? " ↗" : "")));
   const i = a.install;
   if (i && i.supported !== "none" && (!i.installed || i.update || i.busy)) {
     const label = i.busy ? "installing…" : !i.installed ? "install" : "update to " + pv(i.latest);
