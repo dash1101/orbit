@@ -106,6 +106,9 @@ impl Sources {
             .map_err(|e| match e.status {
                 404 => failed(format!("Couldn't find {repo} on GitHub."),
                               "If it's a private repository, sign in with GitHub in Orbit's settings (or run gh auth login), then try again."),
+                401 | 403 if e.limit_resets_in.is_some() => failed("GitHub's limit for requests is used up for now.",
+                    format!("Without a sign-in GitHub answers 60 requests an hour per network. Try again in about {} min, or sign \
+                             in with GitHub in Orbit's settings.", e.limit_resets_in.unwrap_or(1))),
                 401 | 403 => failed("GitHub turned the request down for now.",
                                     "Without a sign-in GitHub answers about 60 requests an hour per network. Wait a few minutes and try \
                                      again. If you signed in, your sign-in may have expired: sign in again in Orbit's settings."),

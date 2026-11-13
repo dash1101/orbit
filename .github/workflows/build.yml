@@ -136,6 +136,8 @@ jobs:
         run: |
           adb="$ANDROID_HOME/platform-tools/adb"; mkdir -p shots
           "$adb" install -r orbit-android.apk
+          # Orbit's "install apps" permission, given before it starts (it looks when it opens and comes back to the front)
+          "$adb" shell appops set app.novalabs.orbit REQUEST_INSTALL_PACKAGES allow
           "$adb" logcat -c
           "$adb" shell am start -W -n app.novalabs.orbit/.MainActivity
           sleep 20
@@ -144,8 +146,7 @@ jobs:
                       | grep -o 'text="[^"]*"' | sed 's/text="//; s/"$//' | grep -v '^$' | tr '\n' '|'; echo; }
           echo "on screen: $(texts)"
           # install Nova: Orbit's wizard downloads it from GitHub, checks its signature, then hands it to Android, which
-          # asks (the test stops at Android's question). Orbit's "install apps" permission is given here beforehand.
-          "$adb" shell appops set app.novalabs.orbit REQUEST_INSTALL_PACKAGES allow
+          # asks (the test stops at Android's question).
           tap() {  # tap the node with this text: "first" after the text $2 (or anywhere), or the "last" one on screen
             "$adb" shell uiautomator dump /sdcard/ui.xml > /dev/null; "$adb" exec-out cat /sdcard/ui.xml > ui.xml
             xy=$(WANT="$1" AFTER="$2" WHICH="$3" python3 -c '

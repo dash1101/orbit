@@ -15,11 +15,13 @@ pub struct HttpError {
     pub message: String,
     /// The app's own explanation (the "message" of its JSON reply), when it sent one.
     pub text: String,
+    /// GitHub: its hourly limit is used up, and resets in this many minutes.
+    pub limit_resets_in: Option<u64>,
 }
 
 impl HttpError {
     pub fn new(status: u16, message: impl Into<String>) -> HttpError {
-        HttpError { status, message: message.into(), text: String::new() }
+        HttpError { status, message: message.into(), text: String::new(), limit_resets_in: None }
     }
 }
 
@@ -174,12 +176,15 @@ pub fn request_text(method: &str, url: &str, body: Option<&Value>, opt: &Req) ->
         }
         Err(ureq::Error::Status(code, resp)) => {
             let reason = resp.status_text().to_string();
+            let reset = resp.header("x-ratelimit-reset").and_then(|v| v.trim().parse::<f64>().ok());
+            let limit_resets_in = reset.filter(|_| resp.header("x-ratelimit-remaining").map(|v| v.trim() == "0").unwrap_or(false))
+                .map(|r| ((r - now()) / 60.0).ceil().max(1.0) as u64);
             let mut buf = Vec::new();
             let _ = resp.into_reader().take(64 << 10).read_to_end(&mut buf);
             let reply = serde_json::from_slice::<Value>(&buf).unwrap_or(Value::Null);
             let msg = reply.get("error").and_then(|e| e.as_str()).filter(|s| !s.is_empty()).map(String::from).unwrap_or(reason);
             let text = reply.get("message").and_then(|m| m.as_str()).unwrap_or("").to_string();
-            Err(HttpError { status: code, message: msg, text })
+            Err(HttpError { status: code, message: msg, text, limit_resets_in })
         }
         Err(ureq::Error::Transport(t)) => {
             if let Some(k) = loc {
