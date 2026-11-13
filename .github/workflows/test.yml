@@ -11,9 +11,10 @@ permissions:
 jobs:
   python:
     strategy:
+      fail-fast: false
       matrix:
         python: ["3.9", "3.13"]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04   # the newest Ubuntu runner no longer has Python 3.9, the oldest Orbit runs on
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
