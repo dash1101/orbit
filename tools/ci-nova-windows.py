@@ -309,6 +309,7 @@ public static class W {
 }
 '@
 $log = $args[0]; $ready = $args[1]; $stop = $args[2]   # (inside the callback, $args is its own)
+$all = $log + ".all"; $pass = 0
 $seen = @{}
 Set-Content -LiteralPath $ready -Value "ready"
 while (-not (Test-Path -LiteralPath $stop)) {
@@ -318,9 +319,13 @@ while (-not (Test-Path -LiteralPath $stop)) {
       if ($c.ToString() -in @('ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS', 'PseudoConsoleWindow')) {
         $t = New-Object Text.StringBuilder 512; [void][W]::GetWindowText($h, $t, 512)
         $seen[$h] = 1; Add-Content -LiteralPath $log -Value ("{0:HH:mm:ss.fff}|{1}|{2}" -f (Get-Date), $c, $t)
-      } else { $seen[$h] = 1 }
+      } else {
+        $t = New-Object Text.StringBuilder 512; [void][W]::GetWindowText($h, $t, 512)
+        $seen[$h] = 1; Add-Content -LiteralPath $all -Value ("{0}|{1}" -f $c, $t)
+      }
     }
     $true }, [IntPtr]::Zero) | Out-Null
+  $pass++; if ($pass % 100 -eq 1) { Add-Content -LiteralPath $all -Value ("pass {0}: {1} windows seen so far, session {2}" -f $pass, $seen.Count, (Get-Process -Id $PID).SessionId) }
   Start-Sleep -Milliseconds 80
 }
 """
@@ -347,6 +352,8 @@ def watch_windows(folder):
     while time.time() < end and not (log.exists() and "orbit-watch-check" in log.read_text(errors="replace")):
         time.sleep(0.3)
     if not (log.exists() and "orbit-watch-check" in log.read_text(errors="replace")):
+        other = Path(str(log) + ".all")
+        say("what the watcher saw:\n" + (other.read_text(errors="replace")[-3000:] if other.exists() else "(nothing at all)"))
         fail("the window watcher doesn't see console windows on this machine")
     say("window watcher: it sees console windows here (the check window was seen)")
 

@@ -1,15 +1,17 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.10**
+
+- **YTM Starcast on Windows runs without a console window, and Orbit can start it again.** Orbit starts YTM Starcast hidden, also right after installing it, so there's no console window that ends it when closed. Its page in Orbit has *start*, *stop*, *restart* and *start at login* on Windows too, as on Linux. Nothing Orbit runs in the background shows a window.
+- **An app that isn't installed says so**, with its install button and nothing to open. An installed app that isn't running offers *start* instead of *open*.
+- **Choose the ports:** Orbit's own port in its settings (it takes effect the next time Orbit starts; a port another program uses is refused), and YTM Starcast's when you install or update it. Orbit finds YTM Starcast on its port.
+- **Updating YTM Starcast on Windows keeps its options** (an access token, a port), as on Linux.
+
 **New in 0.5.9**
 
 - **When GitHub's limit for requests is used up, Orbit says so**, with how many minutes until it resets, and that signing in with GitHub (in Orbit's settings) lifts it. Without a sign-in GitHub answers 60 requests an hour per network; Orbit used to call this GitHub refusing the request. On the desktop and in the Android app.
 
-**New in 0.5.8**
-
-- **Install Orbit on Windows without an administrator:** *install orbit* at the top moves the program out of your Downloads into `%LOCALAPPDATA%\Programs\Orbit`, adds it to the Start menu and to Windows' list of installed apps, and Orbit starts again from there. It keeps updating itself there; uninstall it from *Settings → Apps*, or with *remove* in Orbit's settings (your settings stay).
-- **`orbit --uninstall`** removes Orbit installed for you, on Linux too.
-
-**Earlier in 0.5:** a desktop notification when Nova waits for your approval (Linux), the window keeps its side bar at any size, and the paper theme is easier to read (0.5.7); Nova's card approves a browser, and its code box takes a pasted `sudo nova approve …` line (0.5.5); YTM Starcast's card brings up YouTube Music and YTM Starcast's settings in it (0.5.5, with YTM Starcast 0.2.0-alpha.5); Orbit installs on Linux without a password, and its window shows Orbit's icon (0.5.4); the keys at the bottom are buttons too (0.5.4); Macs and ARM computers get builds at milestones, and Orbit there updates itself to the newest release with a build for it (0.5.3); a `.deb` for Debian and Ubuntu, and builds for ARM (0.5.2); Orbit updates itself in the background (0.5.1); Orbit is one small, fast program with its own window, and offers to install the web engine it needs (0.5.0).
+**Earlier in 0.5:** Orbit installs for you on Windows too, and `orbit --uninstall` (0.5.8); a desktop notification when Nova waits for your approval (Linux), the window keeps its side bar at any size, and the paper theme is easier to read (0.5.7); Nova's card approves a browser, and its code box takes a pasted `sudo nova approve …` line (0.5.5); YTM Starcast's card brings up YouTube Music and YTM Starcast's settings in it (0.5.5, with YTM Starcast 0.2.0-alpha.5); Orbit installs on Linux without a password, and its window shows Orbit's icon (0.5.4); the keys at the bottom are buttons too (0.5.4); Macs and ARM computers get builds at milestones, and Orbit there updates itself to the newest release with a build for it (0.5.3); a `.deb` for Debian and Ubuntu, and builds for ARM (0.5.2); Orbit updates itself in the background (0.5.1); Orbit is one small, fast program with its own window, and offers to install the web engine it needs (0.5.0).
 
 **New in 0.4.0:** Pocketfader and YTM Beacon are now one app, YTM Starcast, and moving over takes one click: Orbit puts YTM Starcast in place, stops Pocketfader, removes YTM Beacon with its own uninstaller (your choice), and your settings and paired phones carry over. Remove the YTM Beacon extension from your browser yourself, and add YTM Starcast's extension (`ytm-starcast-extension.zip` in YTM Starcast's release). On Android, the Pocketfader app updates to YTM Starcast in place.
 
