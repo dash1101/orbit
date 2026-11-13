@@ -273,12 +273,14 @@ def scenario(gh, how):
         if left != [final.name]:
             fail(f"left next to Orbit: {left} (expected only {final.name})")
         if menu:
-            target = menu_target(root)
-            say(f"the menu entry starts: {target}")
-            try:
-                same = os.path.samefile(target, final_exe)      # the same file, however its path is written
-            except OSError:
-                same = False
+            def follows():
+                try:
+                    return os.path.samefile(menu_target(root), final_exe)   # the same file, however its path is written
+                except OSError:
+                    return False
+            # the new Orbit updates its menu entry by itself once it runs (on Windows that takes PowerShell a while)
+            same = wait_for("the menu entry to follow", follows, 90, quiet=True)
+            say(f"the menu entry starts: {menu_target(root)}")
             if not same:
                 fail(f"the menu entry doesn't start {final_exe}")
         say(f"{how}: the program in place is {WANT}, as {final.name}, and nothing else is left.")
