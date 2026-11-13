@@ -137,8 +137,10 @@ jobs:
         run: |
           adb="$ANDROID_HOME/platform-tools/adb"; mkdir -p shots
           "$adb" install -r orbit-android.apk
-          # Orbit's "install apps" permission, given before it starts (it looks when it opens and comes back to the front)
+          # Orbit's "install apps" permission, given before it starts (it looks when it opens and comes back to the front),
+          # and its notifications (its update check in the background runs a first time soon after it opens)
           "$adb" shell appops set app.novalabs.orbit REQUEST_INSTALL_PACKAGES allow
+          "$adb" shell pm grant app.novalabs.orbit android.permission.POST_NOTIFICATIONS
           "$adb" logcat -c
           "$adb" shell am start -W -n app.novalabs.orbit/.MainActivity
           sleep 20
@@ -201,20 +203,21 @@ jobs:
               *) echo "::error::Orbit doesn't see that release $tag's Android app is the Nova $have installed"; exit 1 ;;
             esac
           fi
-          # update notifications, from the check in the background (run now): Orbit (this build says 0.0.0-dev) has an
-          # update; Nova, installed from its newest release, has none, whatever that release's number
-          "$adb" shell pm grant app.novalabs.orbit android.permission.POST_NOTIFICATIONS
-          job=$("$adb" shell dumpsys jobscheduler | grep -oE "JOB #u[0-9a-z]+/[0-9]+: [0-9a-f]+ app.novalabs.orbit/androidx.work" | head -1 | sed -E 's#.*/([0-9]+):.*#\1#')
-          if [ -z "$job" ]; then echo "::error::Orbit's update check isn't scheduled"; exit 1; fi
-          "$adb" shell cmd jobscheduler run -f app.novalabs.orbit "$job" > /dev/null; sleep 25
-          notes=$("$adb" shell dumpsys notification --noredact | grep -oE "android.title=String \([^)]*\)" | sort -u | tr '\n' ' ')
+          # update notifications, from the check in the background (its first run, soon after Orbit opened): Orbit (this
+          # build says 0.0.0-dev) has an update
+          notes=""
+          for i in $(seq 30); do
+            notes=$("$adb" shell dumpsys notification --noredact | grep -oE "android.title=String \([^)]*\)" | sort -u | tr '\n' ' ')
+            case "$notes" in *"Orbit "*" is out"*) break ;; esac
+            sleep 3
+          done
           echo "notifications: $notes"
           case "$notes" in
             *"Orbit "*" is out"*) echo "the update check said Orbit has an update" ;;
-            *) case "$(texts)" in *GitHub*) echo "::warning::GitHub didn't answer here: no update to say" ;;
-                 *) echo "::error::no notification for Orbit's update"; exit 1 ;; esac ;;
+            *) case "$(texts)" in *"Couldn't reach GitHub"*|*"GitHub's limit"*|*"GitHub refused"*) echo "::warning::GitHub didn't answer here: no update to say" ;;
+                 *) echo "::error::no notification for Orbit's update"; "$adb" logcat -d | grep -iE "WM-|UpdateCheck|orbit" | tail -30; exit 1 ;; esac ;;
           esac
-          case "$notes" in *"Nova "*" is out"*) [ "${tag#v}" != "$have" ] && { echo "::error::a notification for a Nova release that's new for other systems only"; exit 1; } ;; esac
+          case "$notes" in *"Nova "*" is out"*) echo "::error::a notification for a Nova release that's new for other systems only"; exit 1 ;; esac
           "$adb" logcat -d > logcat.txt
           pid=$("$adb" shell pidof app.novalabs.orbit | tr -d '\r')
           if grep -q "FATAL EXCEPTION" logcat.txt || [ -z "$pid" ]; then
