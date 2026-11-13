@@ -62,6 +62,7 @@ pub struct Nova {
     found: Mutex<Option<String>>,
     pub status_file: PathBuf,
     waiting: Mutex<u64>, // browsers and actions waiting for approval, as Nova last said (see health)
+    setup_done: Mutex<Option<bool>>, // Nova 0.9.23+ says whether it has been set up (Linux)
 }
 
 /// The approval code in what was typed or pasted: "ZAG97V", "zag 97v", "ZAG-97V", or the whole
@@ -83,8 +84,10 @@ pub fn approval_code(typed: &str) -> Res<String> {
 impl Nova {
     pub fn new(ctx: Arc<Ctx>) -> Nova {
         // (Orbit's own tests can name another status file)
-        let status = std::env::var("ORBIT_TEST_NOVA_STATUS").ok().filter(|p| !p.is_empty()).unwrap_or_else(|| STATUS_FILE.into());
-        Nova { ctx, found: Mutex::new(None), status_file: PathBuf::from(status), waiting: Mutex::new(0) }
+        // (Windows: Nova 0.9.23 and newer keep one there that users can read)
+        let default = if cfg!(windows) { Self::program_data().join("Nova").join("alerts").join("www").join("status.json") } else { PathBuf::from(STATUS_FILE) };
+        let status = std::env::var("ORBIT_TEST_NOVA_STATUS").ok().filter(|p| !p.is_empty()).map(PathBuf::from).unwrap_or(default);
+        Nova { ctx, found: Mutex::new(None), status_file: status, waiting: Mutex::new(0), setup_done: Mutex::new(None) }
     }
 
     fn windows() -> bool {
@@ -156,6 +159,21 @@ impl Nova {
                 }
             }
         }
+        // the address Nova says it answers on here (0.9.23 and newer: its port may not be the usual one)
+        if let Some(h) = self.health() {
+            let pick = if Self::windows() { ["plain", "local"] } else { ["local", "plain"] };
+            for kind in pick {
+                if let Some(u) = h["urls"].as_array().and_then(|l| l.iter().find(|x| x["kind"] == kind)).and_then(|x| x["url"].as_str()) {
+                    if let Ok(p) = url::Url::parse(u) {
+                        if net::port_open(p.host_str().unwrap_or(""), p.port_or_known_default().unwrap_or(0), Duration::from_millis(300)) {
+                            let f = u.trim_end_matches('/').to_string();
+                            *self.found.lock().unwrap() = Some(f.clone());
+                            return Some(f);
+                        }
+                    }
+                }
+            }
+        }
         // Nova on this computer itself first (on Linux, Nova 0.9.20 and newer answer there too), over an address found before
         if cfg!(target_os = "linux") && net::port_open("127.0.0.1", PORT, Duration::from_millis(300)) {
             let f = format!("https://127.0.0.1:{PORT}");
@@ -193,6 +211,23 @@ impl Nova {
     }
 
     /// What Nova's monitor last wrote about the server, or None.
+    /// Nova's own addresses as facts (its status file, 0.9.23 and newer); None from an older Nova.
+    fn address_facts(hl: Option<&Value>) -> Option<Vec<Value>> {
+        let urls = hl?["urls"].as_array().filter(|u| !u.is_empty())?;
+        Some(urls.iter().map(|u| json!([u["label"], u["url"]])).collect())
+    }
+
+    /// The check-up's findings for the details box: what needs doing first, or that all is fine.
+    fn doctor_rows(hl: Option<&Value>) -> Vec<Value> {
+        let Some(checks) = hl.and_then(|h| h["doctor"].as_array()).filter(|c| !c.is_empty()) else { return vec![] };
+        let bad: Vec<Value> = checks.iter().filter(|c| c["level"] != "ok").map(|c| {
+            let mark = if c["level"] == "stop" { "✗" } else { "!" };
+            let fix = c["fix"].as_str().filter(|f| !f.is_empty()).unwrap_or("see nova doctor");
+            json!([format!("{mark} {}", c["title"].as_str().unwrap_or("")), fix])
+        }).collect();
+        if bad.is_empty() { vec![json!(["check-up", format!("all {} checks fine", checks.len())])] } else { bad }
+    }
+
     pub fn health(&self) -> Option<Value> {
         let d: Value = serde_json::from_str(&std::fs::read_to_string(&self.status_file).ok()?).ok()?;
         let level = d["level"].as_str()?;
@@ -209,7 +244,17 @@ impl Nova {
         // what waits for approval (counts only: the code is read off the browser that asks)
         let count = |k: &str| d["waiting"][k].as_u64().unwrap_or(0).min(99);
         let waiting = json!({"browsers": count("browsers"), "actions": count("actions")});
+        // Nova 0.9.23 and newer: its addresses (never the Cloudflare one), whether it's set up, its check-up's findings
+        let url = |k: &str| d["urls"][k].as_str().filter(|u| u.starts_with("https://") || u.starts_with("http://")).map(String::from);
+        let urls: Vec<Value> = [("local", "this computer"), ("plain", "this computer (http)"), ("home", "home network"), ("tailnet", "tailnet")]
+            .iter().filter_map(|(k, label)| url(k).map(|u| json!({"kind": k, "label": label, "url": u}))).collect();
+        let doctor: Vec<Value> = d["doctor"].as_array().cloned().unwrap_or_default().into_iter()
+            .filter(|c| matches!(c["level"].as_str(), Some("ok") | Some("warn") | Some("stop")))
+            .map(|c| json!({"level": c["level"], "title": clean(&c["title"]), "fix": c["fix"].as_str().unwrap_or("").chars().take(200).collect::<String>()}))
+            .take(30).collect();
+        let setup = d["setup"]["done"].as_bool(); // (none from an older Nova)
         Some(json!({"level": level, "headline": clean(&d["headline"]), "issues": issues, "metrics": m, "age": age, "waiting": waiting,
+                    "urls": urls, "doctor": doctor, "setupDone": setup,
                     "stale": age.map(|a| a > STALE_AFTER).unwrap_or(true)}))
     }
 
@@ -294,6 +339,21 @@ impl Nova {
                 s.insert("headline".into(), json!("Nova isn't answering"));
                 s.insert("detail".into(), json!("Its three tasks are in Task Scheduler (folder \\Nova\\); its logs are in C:\\ProgramData\\Nova\\log."));
             }
+        }
+        // Nova 0.9.23 and newer: a status file users can read here too (addresses, health, check-up)
+        let hl = self.health();
+        if let Some(rows) = Self::address_facts(hl.as_ref()) {
+            f.retain(|x| x[0] != "web");
+            for r in rows.into_iter().rev() {
+                f.insert(0, r);
+            }
+        }
+        if let Some(h) = &hl {
+            f.extend(self.health_facts(h));
+        }
+        let rows = Self::doctor_rows(hl.as_ref());
+        if !rows.is_empty() {
+            s.insert("more".into(), json!(rows));
         }
         if crate::runner::Runner::available("tailscale") {
             f.extend(self.remote_facts().into_iter().filter(|x| x[0] == "tailscale"));
@@ -469,8 +529,13 @@ impl App for Nova {
     /// "approve a browser" on the card (the button to press when something is waiting).
     fn card_actions(&self) -> Vec<Value> {
         let waiting = *self.waiting.lock().unwrap() > 0;
-        self.actions().into_iter().filter(|a| a["id"].as_str().map(|i| i.ends_with(":approve")).unwrap_or(false))
-            .map(|mut a| { a["primary"] = json!(waiting); a }).collect()
+        let mut out: Vec<Value> = self.actions().into_iter().filter(|a| a["id"].as_str().map(|i| i.ends_with(":approve")).unwrap_or(false))
+            .map(|mut a| { a["primary"] = json!(waiting); a }).collect();
+        if *self.setup_done.lock().unwrap() == Some(false) && !Self::windows() {
+            // not set up yet (Nova 0.9.23 and newer say so): that comes first
+            out.insert(0, json!({"id": "term:setup", "label": "set up nova", "primary": true}));
+        }
+        out
     }
     fn units(&self) -> Vec<(String, bool)> {
         UNITS.iter().map(|(u, _)| (u.to_string(), false)).collect()
@@ -536,9 +601,21 @@ impl App for Nova {
             f.push(json!(["last run failed", failed_jobs.join(", "), "warn"]));
         }
         let hl = if installed { self.health() } else { None };
+        if let Some(rows) = Self::address_facts(hl.as_ref()) {
+            f.retain(|x| x[0] != "web");
+            for r in rows.into_iter().rev() {
+                f.insert(0, r);
+            }
+        }
         if let Some(h) = &hl {
             f.extend(self.health_facts(h));
         }
+        let rows = Self::doctor_rows(hl.as_ref());
+        if !rows.is_empty() {
+            s.insert("more".into(), json!(rows));
+        }
+        let setup = hl.as_ref().and_then(|h| h["setupDone"].as_bool());
+        *self.setup_done.lock().unwrap() = setup;
         f.extend(self.remote_facts());
         let issues: Vec<String> = hl.as_ref().map(|h| h["issues"].as_array().cloned().unwrap_or_default().iter()
             .filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
@@ -550,6 +627,8 @@ impl App for Nova {
             ("down", format!("Nova isn't answering{}", if core_bad.is_empty() { String::new() } else { format!(" ({} not running)", core_bad.join(", ")) }))
         } else if !core_bad.is_empty() {
             ("warn", format!("Answering, but {} isn't running", core_bad.join(", ")))
+        } else if setup == Some(false) {
+            ("warn", "Installed, but not set up yet: set it up (a few questions)".to_string())
         } else if browsers + actions > 0 {
             ("warn", match (browsers, actions) {
                 (1, 0) => "A browser is waiting for your approval: approve it with the code it shows".to_string(),
@@ -722,6 +801,16 @@ mod tests {
         assert_eq!(h["waiting"], json!({"browsers": 1, "actions": 0}));
         write(json!(null)); // a Nova that doesn't say
         assert_eq!(nova.health().unwrap()["waiting"], json!({"browsers": 0, "actions": 0}));
+        assert_eq!(nova.health().unwrap()["setupDone"], json!(null));
+        // Nova 0.9.23: its addresses, whether it's set up, and its check-up
+        std::fs::write(dir.join("status.json"), json!({"level": "ok", "headline": "all good", "updated": now, "active": [],
+            "setup": {"done": false}, "urls": {"local": "https://127.0.0.1:9443", "home": "https://10.1.0.5:9443", "cloudflare": "https://x"},
+            "doctor": [{"level": "ok", "title": "Disk", "fix": ""}, {"level": "warn", "title": "Backups", "fix": "nova backup"}]}).to_string()).unwrap();
+        let h = nova.health().unwrap();
+        assert_eq!(h["setupDone"], json!(false));
+        let rows = Nova::address_facts(Some(&h)).unwrap();
+        assert_eq!(rows, vec![json!(["this computer", "https://127.0.0.1:9443"]), json!(["home network", "https://10.1.0.5:9443"])]);
+        assert_eq!(Nova::doctor_rows(Some(&h)), vec![json!(["! Backups", "nova backup"])]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
