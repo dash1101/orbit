@@ -1,5 +1,7 @@
 package app.novalabs.orbit
 
+import android.content.Intent
+import android.provider.Settings
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -525,7 +527,9 @@ private fun SettingsScreen(model: HubModel) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         LegendBox("theme") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                for ((id, label, tk) in THEMES) {
+                // the phone's own colours first, where it has them (Material You)
+                val choices = (deviceTokens()?.let { listOf(Triple(DEVICE_THEME, "material you", it)) } ?: emptyList()) + THEMES
+                for ((id, label, tk) in choices) {
                     val on = model.theme == id
                     Column(Modifier.width(140.dp).border(1.dp, if (on) t.accent else t.line).clickable { model.chooseTheme(id) }.padding(8.dp)) {
                         Box(Modifier.fillMaxWidth().height(46.dp).background(tk.bg).border(1.dp, tk.line)) {
@@ -543,12 +547,46 @@ private fun SettingsScreen(model: HubModel) {
                 }
             }
         }
+        LegendBox("update notifications") { NotifyBox() }
         LegendBox("github") { GitHubBox(model) }
         LegendBox("about") {
             Txt("Orbit for Android, by NovaLabs, installs and updates the Android apps of YTM Starcast and Nova, and itself. " +
                 "Orbit for desktop (Linux, Windows, macOS) manages the programs on your computer.", color = t.muted, size = 12.5.sp)
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** A notification when an app you have gets an update: one switch per app, and Android's permission where it asks. */
+@Composable
+private fun NotifyBox() {
+    val t = LocalTokens.current
+    val ctx = LocalContext.current
+    var allowed by remember { mutableStateOf(Updates.allowed(ctx)) }
+    var wants by remember { mutableStateOf(Catalog.apps.associate { it.id to Updates.wanted(ctx, it.id) }) }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { allowed = Updates.allowed(ctx) }
+    Txt("Orbit looks every few hours, in the background, and says when an app you have gets an update (once per version; " +
+        "a release that's new for other systems only doesn't count).", color = t.muted, size = 12.5.sp)
+    Spacer(Modifier.height(8.dp))
+    if (!allowed) {
+        Txt("Notifications are off for Orbit.", color = t.warn, size = 12.5.sp)
+        Spacer(Modifier.height(4.dp))
+        TuiButton("allow notifications", kind = Kind.PRIMARY) {
+            if (Build.VERSION.SDK_INT >= 33) ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            else ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+    for (a in Catalog.apps.filter { it.onAndroid }) {
+        val on = wants[a.id] ?: Updates.wanted(ctx, a.id)
+        Row(Modifier.fillMaxWidth().clickable { Updates.setWanted(ctx, a.id, !on); wants = wants + (a.id to !on) }.padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Txt(if (on) "[x] " else "[ ] ", color = if (on) t.accent else t.muted)
+            Txt(a.name, modifier = Modifier.weight(1f))
+            Txt(if (on) "on" else "off", color = t.muted, size = 12.5.sp)
+        }
     }
 }
 

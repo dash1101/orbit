@@ -69,6 +69,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-svg:2.6.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1") // the update check in the background
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // the real org.json (Android's is only a stub in unit tests)
 }

@@ -2,6 +2,8 @@
 
 **New in 0.6.1**
 
+- **Android: a notification when an app you have gets an update.** Orbit looks every few hours in the background and says so once per version; each app has its own switch in Orbit's settings (all on to begin with), where Android 13 and newer also ask whether Orbit may show notifications.
+- **Android: a theme in your phone's own colours** (*material you*, on Android 12 and newer): Orbit's look in the colours Android takes from your wallpaper, light or dark as your phone is.
 - **Android: a release that's new for other systems only no longer shows as an update.** Nova's server-only releases carry the same Android app as before: Orbit compares that app with the one you have and says it's up to date (and why), instead of offering it again. An update whose app turns out not to be newer isn't installed again either.
 
 **New in 0.6.0**, a milestone: it comes for every system, Macs and ARM computers included.
