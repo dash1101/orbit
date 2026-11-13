@@ -1,5 +1,10 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.8**
+
+- **Install Orbit on Windows without an administrator:** *install orbit* at the top moves the program out of your Downloads into `%LOCALAPPDATA%\Programs\Orbit`, adds it to the Start menu and to Windows' list of installed apps, and Orbit starts again from there. It keeps updating itself there; uninstall it from *Settings → Apps*, or with *remove* in Orbit's settings (your settings stay).
+- **`orbit --uninstall`** removes Orbit installed for you, on Linux too.
+
 **New in 0.5.7**
 
 - **A desktop notification when Nova waits for your approval** (Linux, while Orbit is open): when a browser asks Nova to be let in, or asks for something that needs your OK. Approve it on Nova's card with the code the browser shows. Needs Nova 0.9.20 or newer; turn it off in Orbit's settings. Nova's card also puts what's waiting first.
@@ -58,7 +63,7 @@
 
 | System | Download | Then |
 |---|---|---|
-| **Windows** (10 and 11, 64-bit) | `orbit-windows-x64.exe` | run it |
+| **Windows** (10 and 11, 64-bit) | `orbit-windows-x64.exe` | run it, then *install orbit* at the top puts it in the Start menu and the installed apps (no administrator) |
 | **Windows on ARM** | `orbit-windows-arm64.exe` | run it |
 | **macOS, Apple chips** (M1 and newer) | `orbit-macos-apple-silicon.dmg` | open it, drag **Orbit** onto **Applications** |
 | **macOS, Intel** | `orbit-macos-intel.dmg` | open it, drag **Orbit** onto **Applications** |
@@ -70,6 +75,6 @@
 
 **First launch on Windows and macOS.** These programs aren't code-signed (that needs a paid certificate), so Windows may show "Windows protected your PC" (choose *More info*, then *Run anyway*) and macOS may say the app can't be opened (right-click **Orbit** in Applications, choose *Open*, then *Open*).
 
-On Windows, *orbit settings → Orbit in the Start menu* adds a launcher for the copy you downloaded. Closing Orbit's window ends it.
+Closing Orbit's window ends it.
 
 Check downloads against `SHA256SUMS`. This is a pre-release.

@@ -150,7 +150,13 @@ the program out of the folder you downloaded it to, into `~/.local/share/orbit`,
 its icon, plus an `orbit` command (`~/.local/bin/orbit`). It goes on updating itself there; *remove* in Orbit's settings
 takes all of it away again and keeps your settings. The open window shows Orbit's name and icon once Orbit is in the
 apps menu this way or from the `.deb`: the window goes by Orbit's id, `app.novalabs.orbit`, and so do both menu
-entries. On Windows, *orbit settings → Orbit in the Start menu* adds a launcher for the copy you downloaded.
+entries.
+
+**On Windows, installing Orbit for you needs no administrator either.** *install orbit* moves the program to
+`%LOCALAPPDATA%\Programs\Orbit`, adds it to the Start menu and to Windows' list of installed apps, and Orbit starts
+again from there. It updates itself in place, and its entry in the installed apps shows the version. Uninstall it
+from *Settings → Apps* (or *remove* in Orbit's settings): the program, its shortcut and its entry go, its settings
+stay.
 
 **Orbit updates itself** on Linux, Windows and macOS. With *Update Orbit by itself* on (it is unless you turn it off in Orbit's settings), Orbit downloads a new release in the background when it starts, and the new version takes over the next time you open Orbit. You can also update by hand: when a new release is out, the top bar says *update orbit to …*
 (and Orbit's own card on the install page offers it). The new program is downloaded from Orbit's GitHub release,
