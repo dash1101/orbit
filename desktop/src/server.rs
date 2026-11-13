@@ -557,7 +557,7 @@ impl Hub {
         // a program that moved (a name with its version in it → the plain name): the new Orbit has Orbit's own menu
         // entry follow it once it runs (on Windows that starts PowerShell, which must not hold up the switch)
         let moved_from = if exe != before { before.to_string_lossy().into_owned() } else { String::new() };
-        start_again(&exe, &moved_from)?;
+        start_again(&exe, &moved_from, "")?;
         Ok(json!({"ok": true, "message": "restarting Orbit…"}))
     }
 
@@ -568,9 +568,9 @@ impl Hub {
             return Err(bad("Orbit's update is still being downloaded: install Orbit when it's ready"));
         }
         let mut r = desktop_entry::install(&self.ctx.runner);
-        if r["copied"] == json!(true) {
+        if r["restart"] == json!(true) {
             let program = std::path::PathBuf::from(r["program"].as_str().unwrap_or(""));
-            match start_again(&program, "") {
+            match start_again(&program, "", r["old"].as_str().unwrap_or("")) {
                 Ok(()) => r["message"] = json!(format!("{}; Orbit starts again from there…", r["message"].as_str().unwrap_or(""))),
                 Err(_) => r["message"] = json!(format!("{}; close Orbit and open it from your apps menu", r["message"].as_str().unwrap_or(""))),
             }
@@ -795,7 +795,14 @@ fn post(hub: &Arc<Hub>, url: &str, body: &Value) -> Res<Reply> {
             // {} adds a launcher for this copy; on Linux, {"install": true} installs Orbit for this user, {"remove": true} removes that
             let flag = |k: &str| body.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
             let r = &hub.ctx.runner;
-            return ok(if flag("install") { hub.install_for_user()? } else if flag("remove") { desktop_entry::remove(r) } else { desktop_entry::add(r) });
+            if flag("remove") {
+                let out = desktop_entry::remove(r);
+                if out["closing"] == json!(true) {
+                    end_soon(); // Windows: its folder goes once this Orbit has ended
+                }
+                return ok(out);
+            }
+            return ok(if flag("install") { hub.install_for_user()? } else { desktop_entry::add(r) });
         }
         "/api/hub/window" => {
             // the window's size when it closed (the Linux window build reports it here)
@@ -958,18 +965,24 @@ fn handle(hub: &Arc<Hub>, mut req: tiny_http::Request) {
 }
 
 /// Listen on 127.0.0.1 (port 0 = any free port) and answer in the background. Returns the port.
-/// Start `exe` as the new Orbit (it waits for this one to let go of the port), then close the window and end.
-fn start_again(exe: &std::path::Path, moved_from: &str) -> Res<()> {
+/// Start `exe` as the new Orbit (it waits for this one to let go of the port), then close the window and end. The new
+/// one deletes `delete_old` once this one has ended (a copy left behind by "install orbit").
+fn start_again(exe: &std::path::Path, moved_from: &str, delete_old: &str) -> Res<()> {
     let mut argv = vec![exe.to_string_lossy().into_owned()];
     argv.extend(std::env::args().skip(1));
-    crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1"), ("ORBIT_MOVED_FROM", moved_from)])
+    crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1"), ("ORBIT_MOVED_FROM", moved_from), ("ORBIT_DELETE_OLD", delete_old)])
         .map_err(|e| bad(format!("couldn't start Orbit again: {e}; close it and open it yourself")))?;
+    end_soon();
+    Ok(())
+}
+
+/// Close the window and end, in a moment (after answering the request that asked for it).
+fn end_soon() {
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(800));
         crate::window::close();
         std::process::exit(0);
     });
-    Ok(())
 }
 
 pub fn serve(hub: &Arc<Hub>, port: u16) -> std::io::Result<u16> {
