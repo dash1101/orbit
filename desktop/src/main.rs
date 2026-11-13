@@ -34,6 +34,7 @@ struct Args {
     write_version: Option<String>,
     window_of: Option<String>,
     size: (f64, f64),
+    uninstall: bool,
 }
 
 const USAGE: &str = "usage: orbit [--port N] [--no-window] [--dry-run] [--version]\n\n\
@@ -41,10 +42,11 @@ One place for all your apps.\n\n\
   --port N      local port (default 8790; 0 = any free port)\n\
   --no-window   only run the server; open the printed address yourself\n\
   --dry-run     read everything, change nothing: actions and the apps' settings are recorded instead of applied\n\
+  --uninstall   remove Orbit installed for you (\"install orbit\"); its settings stay\n\
   --version     show the version";
 
 fn parse() -> Result<Args, String> {
-    let mut a = Args { port: 8790, no_window: false, dry_run: false, write_version: None, window_of: None, size: (1180.0, 760.0) };
+    let mut a = Args { port: 8790, no_window: false, dry_run: false, write_version: None, window_of: None, size: (1180.0, 760.0), uninstall: false };
     let mut it = std::env::args().skip(1);
     while let Some(x) = it.next() {
         let (k, inline) = match x.split_once('=') {
@@ -65,6 +67,7 @@ fn parse() -> Result<Args, String> {
                 std::process::exit(0);
             }
             "--write-version" => a.write_version = Some(val("--write-version")?), // for Orbit's own updater
+            "--uninstall" => a.uninstall = true,                                  // remove Orbit installed for this user
             "--window-of" => a.window_of = Some(val("--window-of")?),           // the Linux window build
             "--size" => {
                 let v = val("--size")?;
@@ -90,6 +93,9 @@ fn run() -> i32 {
             return 2;
         }
     };
+    if a.uninstall {
+        return desktop_entry::uninstall_cli(); // Settings → Apps → Orbit → Uninstall (Windows)
+    }
     if let Some(path) = a.write_version {
         // The updater starts a downloaded Orbit this way to make sure it runs and is the version it should be. A file,
         // not the terminal: Orbit for Windows has no console to print to.
@@ -108,6 +114,20 @@ fn run() -> i32 {
     std::env::remove_var("ORBIT_RESTARTED");
     let moved_from = std::env::var("ORBIT_MOVED_FROM").unwrap_or_default();
     std::env::remove_var("ORBIT_MOVED_FROM");
+    let delete_old = std::env::var("ORBIT_DELETE_OLD").unwrap_or_default();
+    std::env::remove_var("ORBIT_DELETE_OLD");
+    if restarted && !delete_old.is_empty() {
+        // "install orbit" copied this program from where it was downloaded: that copy goes once the Orbit before ends
+        std::thread::spawn(move || {
+            for _ in 0..120 {
+                if std::fs::remove_file(&delete_old).is_ok() || !std::path::Path::new(&delete_old).exists() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        });
+    }
+    desktop_entry::installed_started();
     if restarted && !moved_from.is_empty() {
         // the Orbit before was named with its version: Orbit's own menu entry follows this one
         std::thread::spawn(move || {

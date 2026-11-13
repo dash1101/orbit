@@ -1638,7 +1638,7 @@ async function loadHub() {
   $("#dry").hidden = !S.hub.dryRun;
   const m = S.hub.menu || {}, ib = $("#orbitinst");
   ib.hidden = !(m.install && !m.installed);
-  ib.title = `Install Orbit for you: it moves to ${m.home} and goes in your apps menu, with its icon. No password needed.`;
+  ib.title = `Install Orbit for you: it moves to ${m.home} and goes in ${installWords(m).goes}. ${installWords(m).no}.`;
   ib.onclick = installOrbit;
   const u = S.hub.orbitUpdate, ub = $("#orbitupd");
   ub.hidden = !u;
@@ -1797,8 +1797,8 @@ function renderHub() {
                                                         h("button", { class: "btn small danger", onclick: removeOrbit }, "remove"))
                          : h("button", { class: "btn small", onclick: installOrbit }, "install"),
       h("div", { class: "help" }, hub.menu.installed
-        ? `Installed in ${hub.menu.home}, with its apps-menu entry, its icon and the orbit command. Remove takes them away again; your settings stay.`
-        : `Moves this program to ${hub.menu.home} and puts Orbit in your apps menu, with its icon, and the orbit command. No password needed, and it keeps updating itself there.`)) :
+        ? `Installed in ${hub.menu.home}, with ${installWords(hub.menu).has}. Remove takes them away again; your settings stay.`
+        : `Moves this program to ${hub.menu.home} and puts Orbit in ${installWords(hub.menu).goes}. ${installWords(hub.menu).no}, and it keeps updating itself there.`)) :
     hub.menu && hub.menu.supported ? h("div", { class: "row" }, h("span", {}, `Orbit in ${hub.menu.where}`),
       h("button", { class: "btn small", onclick: async () => {
         try { const r = await api("/api/hub/menu", {}); say(r.message, r.ok ? "ok" : "err"); await loadHub(); renderHub(); } catch (e) { say(e.message, "err"); } } },
@@ -1861,17 +1861,25 @@ function countdownRestart(note, job, left = 5) {
 }
 
 // After Orbit updated itself: a new Orbit starts, this one ends; the page follows it and reloads on the new version.
+// "install orbit" in words for this system: Linux (apps menu, the orbit command) or Windows (Start menu, installed apps)
+function installWords(m) {
+  return m.command
+    ? { goes: "your apps menu with its icon (and orbit starts it from a terminal)", no: "No password needed",
+        has: "its apps-menu entry, its icon and the orbit command", then: "", gone: "This window keeps working until you close it." }
+    : { goes: "the Start menu and Windows' list of installed apps", no: "No administrator needed",
+        has: "its Start-menu shortcut and its entry in the installed apps", then: " Orbit then starts again from there.", gone: "Orbit closes." };
+}
 async function installOrbit() {
-  const m = S.hub.menu || {};
+  const m = S.hub.menu || {}, w = installWords(m);
   if (!m.installed && !await confirmDlg(`Install Orbit for you? This program moves to ${m.home}, out of the folder you downloaded it to, ` +
-      "and Orbit goes in your apps menu with its icon (and orbit starts it from a terminal). No password needed; it keeps updating itself there." +
+      `and Orbit goes in ${w.goes}. ${w.no}; it keeps updating itself there.${w.then}` +
       (m.elsewhere ? " It replaces the Orbit already installed there." : ""))) return;
   try { const r = await api("/api/hub/menu", { install: true }); say(r.message, r.ok ? "ok" : "err"); } catch (e) { say(e.message, "err"); }
   await loadHub(); if (S.view === "hub") renderHub();
 }
 async function removeOrbit() {
-  if (!await confirmDlg(`Remove Orbit from this computer? Its program in ${S.hub.menu.home}, the orbit command, its apps-menu entry and icon ` +
-      "go; its settings stay. This window keeps working until you close it.", true)) return;
+  const m = S.hub.menu || {}, w = installWords(m);
+  if (!await confirmDlg(`Remove Orbit from this computer? Its program in ${m.home} and ${w.has} go; its settings stay. ${w.gone}`, true)) return;
   try { const r = await api("/api/hub/menu", { remove: true }); say(r.message, r.ok ? "ok" : "err"); } catch (e) { say(e.message, "err"); }
   await loadHub(); if (S.view === "hub") renderHub();
 }

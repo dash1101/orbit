@@ -389,6 +389,128 @@ def deb_scenario(gh):
             pass
 
 
+UNINSTALL_KEY = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\NovaLabs.Orbit"
+
+
+def registry(name):
+    """Windows: a value of Orbit's entry in the installed apps, or None."""
+    p = subprocess.run(["reg", "query", UNINSTALL_KEY, "/v", name], capture_output=True, text=True)
+    if p.returncode != 0:
+        return None
+    line = next((ln for ln in p.stdout.splitlines() if ln.strip().startswith(name)), "")
+    return line.split("REG_", 1)[1].split(None, 1)[1].strip() if "REG_" in line else ""
+
+
+def installed_scenario(gh):
+    """Orbit downloaded to Downloads installs itself for the user ("install orbit": no password or administrator),
+    then updates itself where it was installed and restarts there; "remove" (and on Windows, the uninstall command
+    Settings runs) takes it all away again. Linux: ~/.local/share/orbit/orbit, the orbit command, the apps-menu entry.
+    Windows: %LOCALAPPDATA%\\Programs\\Orbit\\orbit.exe (Orbit starts again from there), the Start-menu shortcut and
+    the entry in the installed apps. Its own home folders, so a run on a real computer never touches the real ones."""
+    win = os.name == "nt"
+    say("\n===== install for this user, then update and restart")
+    root = Path(tempfile.mkdtemp(prefix="orbit-installed-"))
+    home, data, local = root / "home", root / "data", root / "local"
+    downloads = home / "Downloads"
+    downloads.mkdir(parents=True)
+    exe = downloads / f"orbit-{suffix}"
+    target = (local / "Programs" / "Orbit" / "orbit.exe") if win else (data / "orbit" / "orbit")
+    port = free_port()
+    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), XDG_CONFIG_HOME=str(root / "config"), XDG_DATA_HOME=str(data),
+               XDG_CACHE_HOME=str(root / "cache"), APPDATA=str(root / "config"), LOCALAPPDATA=str(local),
+               ORBIT_TEST_GITHUB_API=f"http://127.0.0.1:{gh.server_address[1]}")
+    cfg = root / "config" / ("Orbit" if win else "orbit")
+    cfg.mkdir(parents=True)
+    (cfg / "config.json").write_text(json.dumps({"autoUpdate": False}))  # the update by hand only
+
+    def start(log):
+        shutil.copy2(old_exe, exe)
+        return subprocess.Popen([str(exe), "--no-window", "--port", str(port)], env=env, stdin=subprocess.DEVNULL,
+                                stdout=open(root / log, "w"), stderr=subprocess.STDOUT)
+
+    def install():
+        wait_for("Orbit to start", lambda: call(port, "/api/hub"))
+        said = call(port, "/api/hub/menu", {"install": True}, timeout=180)   # (Windows: PowerShell makes the shortcut)
+        say("install: " + said.get("message", ""))
+        if not said.get("ok") or not target.is_file():
+            fail(f"not installed: {said}")
+        # Windows: Orbit starts again from its new place (a running program there doesn't learn it moved)
+        hub = wait_for("the installed Orbit to answer", lambda: (lambda h: h if h["menu"]["installed"] else None)(call(port, "/api/hub")), 120)
+        if not wait_for("the download to be gone", lambda: not exe.exists(), 60, quiet=True):
+            fail(f"left in Downloads: {sorted(x.name for x in downloads.iterdir())}")
+        return hub
+
+    def gone(what):
+        left = [str(x) for x in [target.parent] + ([] if win else [home / ".local" / "bin" / "orbit", data / "applications" / "app.novalabs.orbit.desktop"]) if x.exists()]
+        if win and (root / "config" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Orbit.lnk").exists():
+            left.append("the Start-menu shortcut")
+        if win and registry("DisplayName") is not None:
+            left.append("the entry in the installed apps")
+        return left
+
+    first = start("first.log")
+    try:
+        install()
+        if win:
+            if not os.path.samefile(menu_target(root), target):
+                fail(f"the Start-menu shortcut starts {menu_target(root)}")
+            if target.as_posix().lower() not in (registry("UninstallString") or "").replace("\\", "/").lower():
+                fail(f"the installed apps' uninstall command is {registry('UninstallString')!r}")
+            say(f"installed apps: Orbit {registry('DisplayVersion')}, uninstall: {registry('UninstallString')}")
+        else:
+            if os.readlink(home / ".local" / "bin" / "orbit") != str(target):
+                fail("the orbit command doesn't start the installed program")
+            if f"Exec={target}" not in (data / "applications" / "app.novalabs.orbit.desktop").read_text().splitlines():
+                fail("the apps-menu entry doesn't start the installed program")
+        job = call(port, "/api/install/orbit/start", {"op": "install"})
+        snap = wait_for("the update", lambda: (lambda j: j if j["state"] != "running" else None)(
+            call(port, f"/api/install/jobs/{job['id']}")), 180)
+        if snap["state"] != "done":
+            fail(f"update {snap['state']}: {snap['error']} {snap['hint']}")
+        call(port, "/api/hub/restart", {})
+        hub = wait_for("the new Orbit on the same port",
+                       lambda: (lambda h: h if h["version"] == WANT else None)(call(port, "/api/hub")), 90)
+        say(f"Orbit {hub['version']} answers, installed: {hub['menu']['installed']}")
+        out = root / "v.txt"
+        subprocess.run([str(target), "--write-version", str(out)], timeout=120)
+        if out.read_text().strip() != f"orbit {WANT}":
+            fail(f"the installed program says {out.read_text().strip()!r}")
+        wait_for("the old program to be deleted", lambda: not beside(target, ".old").exists(), 90)
+        left = sorted(x.name for x in target.parent.iterdir())
+        if left != [target.name] or not hub["menu"]["installed"]:
+            fail(f"after the update: {left}, menu {hub['menu']}")
+        if win and not wait_for("the installed apps to show the new version", lambda: registry("DisplayVersion") == WANT, 60, quiet=True):
+            fail(f"the installed apps say {registry('DisplayVersion')}")
+        removed = call(port, "/api/hub/menu", {"remove": True}, timeout=60)
+        say("remove: " + removed.get("message", ""))
+        if not removed.get("ok") or wait_for("everything to be gone", lambda: not gone("remove"), 90, quiet=True) is None:
+            fail(f"remove left {gone('remove')}")
+        if win:
+            # the uninstall Settings → Apps runs, while Orbit is open
+            start("second.log")
+            install()
+            p = subprocess.run([str(target), "--uninstall"], env=env, capture_output=True, text=True, timeout=120)
+            say(f"--uninstall: exit {p.returncode} {p.stdout.strip()}")
+            if wait_for("everything to be gone", lambda: not gone("uninstall"), 90, quiet=True) is None:
+                fail(f"--uninstall left {gone('uninstall')}")
+            if wait_for("port to be free", lambda: not port_busy(port), 30, quiet=True) is None:
+                fail("the running Orbit is still there after --uninstall")
+        say(f"installed: installed for the user, updated to {WANT} there and removed again{' (and by --uninstall)' if win else ''}.")
+    finally:
+        if win:
+            for name in sorted({exe.name, "orbit.exe"}):
+                subprocess.run(["taskkill", "/F", "/T", "/IM", name], capture_output=True)
+            subprocess.run(["reg", "delete", UNINSTALL_KEY, "/f"], capture_output=True)
+        else:
+            stop_everything(target.parent)
+            stop_everything(downloads)
+        for log in ("first.log", "second.log"):
+            try:
+                say(f"--- {log}:\n" + (root / log).read_text(errors="replace")[-2000:])
+            except OSError:
+                pass
+
+
 def main():
     gh = None
     if DEB:
@@ -404,6 +526,8 @@ def main():
     scenario(gh, "reopen")
     if not REAL:
         scenario(gh, "auto")
+        if sys.platform.startswith("linux") or os.name == "nt":
+            installed_scenario(gh)
     say("\nSelf-update works: after a restart from the window, and after closing Orbit and opening it again.")
 
 
