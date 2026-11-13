@@ -278,7 +278,7 @@ impl Hub {
     fn install_brief(&self, id: &str) -> Value {
         let Some(r) = self.installer.get(id) else { return Value::Null };
         let (inst, sup) = (r.installed(), r.support());
-        let latest = self.installer.sources.cached(r.repo()).map(|rel| crate::util::version_of(rel["tag"].as_str().unwrap_or(""))).unwrap_or_default();
+        let latest = self.installer.sources.cached_with(r.repo(), &|x| r.wants(x)).map(|rel| crate::util::version_of(rel["tag"].as_str().unwrap_or(""))).unwrap_or_default();
         let (installed, version, pending) = (inst["installed"].as_bool().unwrap_or(false), inst["version"].as_str().unwrap_or(""),
                                              inst["pending"].as_str().unwrap_or(""));
         // "migrate": an app that replaces an older one (YTM Starcast: Pocketfader) offers to move it over even when the
@@ -568,16 +568,13 @@ impl Hub {
         if !self.ctx.config.get("checkUpdates").as_bool().unwrap_or(true) {
             return Value::Null;
         }
-        let Some(info) = self.ctx.releases.cached(ORBIT_REPO) else {
-            let h = self.clone();
-            std::thread::spawn(move || {
-                h.ctx.releases.latest(ORBIT_REPO, false);
-            });
-            return Value::Null;
-        };
-        let rel = if info["ok"].as_bool().unwrap_or(false) { info["release"].clone() } else { Value::Null };
+        // the newest release with a file for this computer (looked up in the background with the other apps'
+        // releases); ARM and Mac programs are only built at milestones, so a newer release may not be for this one
+        self.learn_latest();
+        let Some(r) = self.installer.get("orbit") else { return Value::Null };
+        let Some(rel) = self.installer.sources.cached_with(ORBIT_REPO, &|x| r.wants(x)) else { return Value::Null };
         let tag = rel["tag"].as_str().unwrap_or("");
-        if rel.is_null() || !net::is_newer(tag, crate::VERSION) {
+        if !net::is_newer(tag, crate::VERSION) {
             return Value::Null;
         }
         let here = self.installer.get("orbit").map(|r| !r.requirements("install").iter().any(|x| x["blocking"].as_bool().unwrap_or(false))).unwrap_or(false);
@@ -597,7 +594,8 @@ impl Hub {
                 return;
             }
             // the installer's own source of releases (the one the update downloads from)
-            let Ok(rel) = h.installer.sources.latest(ORBIT_REPO, true) else { return };
+            let Some(r) = h.installer.get("orbit") else { return };
+            let Ok(rel) = h.installer.sources.latest_with(ORBIT_REPO, true, &|x| r.wants(x)) else { return };
             let tag = rel["tag"].as_str().unwrap_or("").to_string();
             if !net::is_newer(&tag, crate::VERSION) {
                 return;
@@ -605,7 +603,6 @@ impl Hub {
             if crate::recipes::orbit::running_program().map(|e| crate::recipes::orbit::deb_install(&e)).unwrap_or(false) {
                 return; // the Debian package: installing needs the password, so the top bar offers it instead
             }
-            let Some(r) = h.installer.get("orbit") else { return };
             if r.requirements("install").iter().any(|x| x["blocking"].as_bool().unwrap_or(false)) || h.installer.busy("orbit").is_some() {
                 return; // can't replace itself here (a folder it can't write to): the top bar offers the download page
             }

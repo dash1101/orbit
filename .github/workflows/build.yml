@@ -12,11 +12,41 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      everything:
+        description: "Build every system (ARM and Macs too), as at a milestone"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  # What to build. Every push and release: Windows and Linux on x86-64 (and Android). Milestones (tags vX.Y.0), a tag
+  # whose message says "all systems", or a manual run with "everything": Windows and Linux on ARM and both Macs too.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: m
+        env: { EVERYTHING: "${{ inputs.everything }}" }
+        run: |
+          # Linux builds on Ubuntu 22.04: its older glibc runs on more distributions
+          x86='{"os":"ubuntu-22.04","name":"linux-x86_64","deb":"amd64"},{"os":"windows-latest","name":"windows-x64"}'
+          rest='{"os":"ubuntu-22.04-arm","name":"linux-arm64","deb":"arm64"},{"os":"windows-11-arm","name":"windows-arm64"},{"os":"macos-latest","name":"macos-apple-silicon"},{"os":"macos-15-intel","name":"macos-intel"}'
+          all=false
+          [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.0$ ]] && all=true
+          [ "$EVERYTHING" = true ] && all=true
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            git fetch -q --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+            msg=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+            grep -qi "all systems" <<<"$msg" && all=true
+          fi
+          if [ "$all" = true ]; then list="$x86,$rest"; echo "every system"; else list="$x86"; echo "Windows and Linux on x86-64"; fi
+          echo "matrix={\"include\":[$list]}" >> "$GITHUB_OUTPUT"
+
   android:
     runs-on: ubuntu-latest
     outputs:
@@ -60,16 +90,10 @@ jobs:
         with: { name: android, path: "orbit-android*.apk" }
 
   desktop:
+    needs: plan
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-22.04, name: linux-x86_64, deb: amd64 }         # older glibc: runs on more distributions
-          - { os: ubuntu-22.04-arm, name: linux-arm64, deb: arm64 }
-          - { os: windows-latest, name: windows-x64 }
-          - { os: windows-11-arm, name: windows-arm64 }
-          - { os: macos-latest, name: macos-apple-silicon }
-          - { os: macos-15-intel, name: macos-intel }
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     defaults:
@@ -235,13 +259,15 @@ jobs:
           # itself keeps its name too. (Up to 0.5.1 each file was also published under a name with the version, for
           # Orbit 0.3.4 and older; those update to 0.5.1 first.)
           sha256sum orbit-* > SHA256SUMS
+          # the notes list only the downloads this release has (Macs and ARM get builds at milestones)
+          python3 ../tools/release-notes.py ../packaging/release-notes.md . orbit-android.apk > ../notes.md
           # the release may already exist (the Android app is added later): then add or replace the files
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" -p SHA256SUMS -O old-sums 2>/dev/null || true
             cat SHA256SUMS old-sums 2>/dev/null | awk '!seen[$2]++' > merged && mv merged SHA256SUMS   # new lines win
             gh release upload "$GITHUB_REF_NAME" orbit-* SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file ../packaging/release-notes.md
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file ../notes.md
           else
             gh release create "$GITHUB_REF_NAME" orbit-* SHA256SUMS --repo "$GITHUB_REPOSITORY" \
-              --prerelease --title "Orbit $GITHUB_REF_NAME" --notes-file ../packaging/release-notes.md
+              --prerelease --title "Orbit $GITHUB_REF_NAME" --notes-file ../notes.md
           fi

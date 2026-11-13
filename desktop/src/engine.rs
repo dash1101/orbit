@@ -31,8 +31,11 @@ pub struct Sources {
     pub allow: Vec<String>,
     pub timeout: f64,
     token: Option<Arc<dyn Fn() -> String + Send + Sync>>,
-    cache: Mutex<HashMap<String, (Instant, Value)>>,
+    cache: Mutex<HashMap<String, (Instant, Vec<Value>)>>, // repo -> its recent releases, newest first
 }
+
+/// Which releases a recipe can use (Orbit's own: one with a file for this computer).
+pub type Wants<'a> = &'a dyn Fn(&Value) -> bool;
 
 impl Sources {
     pub const TTL: Duration = Duration::from_secs(600);
@@ -73,12 +76,32 @@ impl Sources {
     /// Newest non-draft release (pre-releases count): {"tag", "published", "url", "prerelease",
     /// "assets": {name: {"url", "api", "size"}}}.
     pub fn latest(&self, repo: &str, force: bool) -> Res<Value> {
+        self.latest_with(repo, force, &|_| true)
+    }
+
+    /// The newest release `wants` accepts, among the recent ones (a release can skip a system: Orbit builds every
+    /// system only at milestones).
+    pub fn latest_with(&self, repo: &str, force: bool, wants: Wants) -> Res<Value> {
+        let list = self.releases(repo, force)?;
+        list.into_iter().find(|r| wants(r)).ok_or_else(|| failed(format!("{repo} has no release for this computer yet."), ""))
+    }
+
+    pub fn cached(&self, repo: &str) -> Option<Value> {
+        self.cached_with(repo, &|_| true)
+    }
+
+    pub fn cached_with(&self, repo: &str, wants: Wants) -> Option<Value> {
+        self.cache.lock().unwrap().get(repo).and_then(|(_, l)| l.iter().find(|r| wants(r)).cloned())
+    }
+
+    /// The recent releases, newest version first.
+    fn releases(&self, repo: &str, force: bool) -> Res<Vec<Value>> {
         if let Some((at, v)) = self.cache.lock().unwrap().get(repo) {
             if !force && at.elapsed() < Self::TTL {
                 return Ok(v.clone());
             }
         }
-        let items = net::get_json(&format!("{}/repos/{repo}/releases?per_page=5", self.api),
+        let items = net::get_json(&format!("{}/repos/{repo}/releases?per_page=30", self.api),
                                   &net::Req { timeout: self.timeout, headers: self.api_headers("application/vnd.github+json"), insecure: false })
             .map_err(|e| match e.status {
                 404 => failed(format!("Couldn't find {repo} on GitHub."),
@@ -88,26 +111,28 @@ impl Sources {
                                      again. If you signed in, your sign-in may have expired: sign in again in Orbit's settings."),
                 _ => failed("Couldn't reach GitHub to find the latest release.", "Check your internet connection and try again."),
             })?;
-        let Some(rel) = net::newest_release(&items) else {
+        let mut rels: Vec<Value> = items.as_array().cloned().unwrap_or_default().into_iter()
+            .filter(|r| r.is_object() && !r["draft"].as_bool().unwrap_or(false)).collect();
+        if rels.is_empty() {
             return Err(failed(format!("{repo} has no releases to install yet."), ""));
-        };
-        let mut assets = Map::new();
-        for a in rel["assets"].as_array().cloned().unwrap_or_default() {
-            if let Some(name) = a["name"].as_str().filter(|n| !n.is_empty()) {
-                assets.insert(name.into(), json!({"url": a["browser_download_url"].as_str().unwrap_or(""),
-                                                  "api": a["url"].as_str().unwrap_or(""),
-                                                  "size": a["size"].as_u64().unwrap_or(0)}));
-            }
         }
-        let info = json!({"tag": rel["tag_name"].as_str().unwrap_or(""), "published": rel["published_at"].as_str().unwrap_or(""),
-                          "url": rel["html_url"].as_str().unwrap_or(""), "prerelease": rel["prerelease"].as_bool().unwrap_or(false),
-                          "assets": assets});
-        self.cache.lock().unwrap().insert(repo.into(), (Instant::now(), info.clone()));
-        Ok(info)
-    }
-
-    pub fn cached(&self, repo: &str) -> Option<Value> {
-        self.cache.lock().unwrap().get(repo).map(|(_, v)| v.clone())
+        let key = |r: &Value| (net::version_tuple(r["tag_name"].as_str().unwrap_or("")), r["published_at"].as_str().unwrap_or("").to_string());
+        rels.sort_by(|a, b| key(b).cmp(&key(a))); // GitHub's list isn't reliably newest-first
+        let list: Vec<Value> = rels.iter().map(|rel| {
+            let mut assets = Map::new();
+            for a in rel["assets"].as_array().cloned().unwrap_or_default() {
+                if let Some(name) = a["name"].as_str().filter(|n| !n.is_empty()) {
+                    assets.insert(name.into(), json!({"url": a["browser_download_url"].as_str().unwrap_or(""),
+                                                      "api": a["url"].as_str().unwrap_or(""),
+                                                      "size": a["size"].as_u64().unwrap_or(0)}));
+                }
+            }
+            json!({"tag": rel["tag_name"].as_str().unwrap_or(""), "published": rel["published_at"].as_str().unwrap_or(""),
+                   "url": rel["html_url"].as_str().unwrap_or(""), "prerelease": rel["prerelease"].as_bool().unwrap_or(false),
+                   "assets": assets})
+        }).collect();
+        self.cache.lock().unwrap().insert(repo.into(), (Instant::now(), list.clone()));
+        Ok(list)
     }
 
     pub fn allowed(&self, url: &str, repo: &str) -> bool {
@@ -345,8 +370,13 @@ impl Session {
 
     // ---- releases
     pub fn release(&self, repo: &str) -> Res<Value> {
+        self.release_with(repo, &|_| true)
+    }
+
+    /// The newest release the recipe can use (see Sources::latest_with).
+    pub fn release_with(&self, repo: &str, wants: Wants) -> Res<Value> {
         self.detail("asking GitHub for the latest release");
-        let rel = self.sources.latest(repo, true)?;
+        let rel = self.sources.latest_with(repo, true, wants)?;
         self.log(&format!("Latest release of {repo}: {}", rel["tag"].as_str().unwrap_or("")));
         Ok(rel)
     }

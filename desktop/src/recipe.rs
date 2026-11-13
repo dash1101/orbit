@@ -89,6 +89,10 @@ pub trait Recipe: Send + Sync {
     fn needs_admin(&self, _op: &str) -> Value {
         json!(false)
     }
+    /// Whether this recipe can use a release (Orbit's own: one with a file for this computer).
+    fn wants(&self, _rel: &Value) -> bool {
+        true
+    }
     /// A last word on what the installer window shows (a recipe's own wording).
     fn adjust_info(&self, _info: &mut Value) {}
 
@@ -143,7 +147,7 @@ pub fn platforms(r: &dyn Recipe) -> Value {
 }
 
 pub fn describe(r: &dyn Recipe) -> Value {
-    let rel = r.base().sources.cached(r.repo());
+    let rel = r.base().sources.cached_with(r.repo(), &|x| r.wants(x));
     json!({"id": r.id(), "name": r.name(), "blurb": r.blurb(), "glyph": r.glyph(), "color": r.color(), "repo": r.repo(),
            "platforms": platforms(r), "support": r.support(), "installed": r.installed(),
            "latest": rel.map(|v| version_of(v["tag"].as_str().unwrap_or(""))).unwrap_or_default()})
@@ -185,7 +189,7 @@ pub fn info(r: &Arc<dyn Recipe>, op: &str, given: &Value) -> Res<Value> {
     let (fields, opts) = options_with(r.as_ref(), op, given)?;
     let (mut rel, mut rel_err, mut hint) = (None, String::new(), String::new());
     if op == "install" && !none {
-        match r.base().sources.latest(r.repo(), false) {
+        match r.base().sources.latest_with(r.repo(), false, &|x| r.wants(x)) {
             Ok(v) => rel = Some(v),
             Err(crate::util::Error::Failed(m, h)) => {
                 rel_err = m;
