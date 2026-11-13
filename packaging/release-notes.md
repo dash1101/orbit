@@ -1,5 +1,13 @@
 **Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.5.7**
+
+- **A desktop notification when Nova waits for your approval** (Linux, while Orbit is open): when a browser asks Nova to be let in, or asks for something that needs your OK. Approve it on Nova's card with the code the browser shows. Needs Nova 0.9.20 or newer; turn it off in Orbit's settings. Nova's card also puts what's waiting first.
+- **Orbit's window keeps its side bar at any size it can have.** A small window switched to the layout meant for phones, with a tall strip of icons and their status dots out of place; that layout is now for narrow browser windows only, and fixed there too.
+- **Long buttons wrap** instead of running out of their box (Nova's *pair a phone that's away from home* and others), and a version in a page title no longer breaks in two.
+- **The paper theme is easier to read:** its quiet text, green and amber are darker (in the Android app too).
+- **Installing Orbit for you works from another drive** (a Downloads folder on another disk): Orbit then starts again from its new place. It waits while Orbit's own update is being downloaded.
+
 **New in 0.5.6**
 
 - **YTM Starcast's new icon** in Orbit's list of apps.

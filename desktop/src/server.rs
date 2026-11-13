@@ -427,7 +427,8 @@ impl Hub {
         }
         json!({"name": "Orbit", "version": crate::VERSION, "dryRun": self.dry_run(), "github": self.github.state(), "system": self.host.system,
                "orbitUpdate": self.orbit_update(), "menu": desktop_entry::state(), "themes": themes, "themeTokens": THEME_COLORS,
-               "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"]},
+               "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
+                            "notifyApprovals": c["notifyApprovals"]},
                "apps": self.apps().iter().map(|a| { let mut d = a.describe(); d["enabled"] = json!(self.enabled(&a.id())); d }).collect::<Vec<_>>()})
     }
 
@@ -471,6 +472,9 @@ impl Hub {
         if let Some(v) = b.get("autoUpdate") {
             patch.insert("autoUpdate".into(), json!(v.as_bool().ok_or_else(|| bad("autoUpdate is true or false"))?));
         }
+        if let Some(v) = b.get("notifyApprovals") {
+            patch.insert("notifyApprovals".into(), json!(v.as_bool().ok_or_else(|| bad("notifyApprovals is true or false"))?));
+        }
         if let Some(v) = b.get("checkUpdates") {
             patch.insert("checkUpdates".into(), json!(v.as_bool().ok_or_else(|| bad("checkUpdates is true or false"))?));
         }
@@ -496,7 +500,7 @@ impl Hub {
                 self.ctx.config.update_app(k, p);
             }
         }
-        if b.keys().any(|k| !["theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "order", "enabled"].contains(&k.as_str())) {
+        if b.keys().any(|k| !["theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "notifyApprovals", "order", "enabled"].contains(&k.as_str())) {
             return Err(bad("unknown hub setting"));
         }
         let reorder = patch.contains_key("order");
@@ -550,19 +554,28 @@ impl Hub {
                 Err(e) => return Err(bad(format!("couldn't switch to the new Orbit ({e}); this one keeps running"))),
             }
         }
-        let mut argv = vec![exe.to_string_lossy().into_owned()];
-        argv.extend(std::env::args().skip(1));
         // a program that moved (a name with its version in it → the plain name): the new Orbit has Orbit's own menu
         // entry follow it once it runs (on Windows that starts PowerShell, which must not hold up the switch)
         let moved_from = if exe != before { before.to_string_lossy().into_owned() } else { String::new() };
-        crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1"), ("ORBIT_MOVED_FROM", &moved_from)])
-            .map_err(|e| bad(format!("couldn't start Orbit again: {e}; close it and open it yourself")))?;
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(800));
-            crate::window::close();
-            std::process::exit(0);
-        });
+        start_again(&exe, &moved_from)?;
         Ok(json!({"ok": true, "message": "restarting Orbit…"}))
+    }
+
+    /// Install Orbit for this user (Linux, desktop_entry::install), not while its own update is being downloaded
+    /// (that would land next to the old file). Copied to another drive, it starts again from the new place.
+    pub fn install_for_user(&self) -> Res<Value> {
+        if !self.dry_run() && self.installer.busy("orbit").is_some() {
+            return Err(bad("Orbit's update is still being downloaded: install Orbit when it's ready"));
+        }
+        let mut r = desktop_entry::install(&self.ctx.runner);
+        if r["copied"] == json!(true) {
+            let program = std::path::PathBuf::from(r["program"].as_str().unwrap_or(""));
+            match start_again(&program, "") {
+                Ok(()) => r["message"] = json!(format!("{}; Orbit starts again from there…", r["message"].as_str().unwrap_or(""))),
+                Err(_) => r["message"] = json!(format!("{}; close Orbit and open it from your apps menu", r["message"].as_str().unwrap_or(""))),
+            }
+        }
+        Ok(r)
     }
 
     /// A newer Orbit on GitHub? Looked up in the background, never blocking. A newer Orbit already downloaded and
@@ -621,6 +634,37 @@ impl Hub {
             match h.installer.start("orbit", "install", &Value::Null) {
                 Ok(_) => println!("Orbit {tag} is out: downloading it in the background; it takes over at the next start"),
                 Err(e) => eprintln!("orbit: couldn't update by itself: {e}"),
+            }
+        });
+    }
+
+    /// While Orbit runs (Linux): a desktop notification when Nova has more waiting for approval than it had (a browser
+    /// to add, or something a browser asked for), so it's seen with Orbit in the background. Silent, and off with
+    /// the notifyApprovals setting. Nova 0.9.20 and newer report what's waiting (counts only).
+    pub fn watch_approvals(self: &Arc<Hub>) {
+        if !cfg!(target_os = "linux") || crate::runner::which("notify-send").is_none() {
+            return;
+        }
+        let h = self.clone();
+        std::thread::spawn(move || {
+            let mut seen = (0u64, 0u64);
+            loop {
+                let on = h.ctx.config.get("notifyApprovals").as_bool().unwrap_or(true) && h.enabled("nova");
+                let now = if on { h.app("nova").ok().map(|a| a.approvals_waiting()).unwrap_or((0, 0)) } else { (0, 0) };
+                let text = match (now.0 > seen.0, now.1 > seen.1) {
+                    (true, _) if now.0 == 1 => Some("A browser is asking to be added to Nova: approve it in Orbit with the code it shows."),
+                    (true, _) => Some("Browsers are asking to be added to Nova: approve them in Orbit with the codes they show."),
+                    (false, true) => Some("A browser is waiting for you to approve what it asked: approve it in Orbit with the code it shows."),
+                    _ => None,
+                };
+                if let Some(text) = text {
+                    let argv: Vec<String> = ["notify-send", "--app-name=Orbit", &format!("--icon={}", desktop_entry::APP_ID),
+                        "--hint=boolean:suppress-sound:true", "--hint=string:desktop-entry:app.novalabs.orbit",
+                        "Nova: approval waiting", text].iter().map(|s| s.to_string()).collect();
+                    let _ = crate::runner::run_capture(&argv, Duration::from_secs(5), true);
+                }
+                seen = now;
+                std::thread::sleep(Duration::from_secs(15)); // Nova updates what's waiting about every 15 s
             }
         });
     }
@@ -751,7 +795,7 @@ fn post(hub: &Arc<Hub>, url: &str, body: &Value) -> Res<Reply> {
             // {} adds a launcher for this copy; on Linux, {"install": true} installs Orbit for this user, {"remove": true} removes that
             let flag = |k: &str| body.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
             let r = &hub.ctx.runner;
-            return ok(if flag("install") { desktop_entry::install(r) } else if flag("remove") { desktop_entry::remove(r) } else { desktop_entry::add(r) });
+            return ok(if flag("install") { hub.install_for_user()? } else if flag("remove") { desktop_entry::remove(r) } else { desktop_entry::add(r) });
         }
         "/api/hub/window" => {
             // the window's size when it closed (the Linux window build reports it here)
@@ -914,6 +958,20 @@ fn handle(hub: &Arc<Hub>, mut req: tiny_http::Request) {
 }
 
 /// Listen on 127.0.0.1 (port 0 = any free port) and answer in the background. Returns the port.
+/// Start `exe` as the new Orbit (it waits for this one to let go of the port), then close the window and end.
+fn start_again(exe: &std::path::Path, moved_from: &str) -> Res<()> {
+    let mut argv = vec![exe.to_string_lossy().into_owned()];
+    argv.extend(std::env::args().skip(1));
+    crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1"), ("ORBIT_MOVED_FROM", moved_from)])
+        .map_err(|e| bad(format!("couldn't start Orbit again: {e}; close it and open it yourself")))?;
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(800));
+        crate::window::close();
+        std::process::exit(0);
+    });
+    Ok(())
+}
+
 pub fn serve(hub: &Arc<Hub>, port: u16) -> std::io::Result<u16> {
     let server = tiny_http::Server::http(("127.0.0.1", port)).map_err(|e| std::io::Error::new(std::io::ErrorKind::AddrInUse, e.to_string()))?;
     let actual = server.server_addr().to_ip().map(|a| a.port()).unwrap_or(port);

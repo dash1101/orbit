@@ -82,7 +82,9 @@ pub fn approval_code(typed: &str) -> Res<String> {
 
 impl Nova {
     pub fn new(ctx: Arc<Ctx>) -> Nova {
-        Nova { ctx, found: Mutex::new(None), status_file: PathBuf::from(STATUS_FILE), waiting: Mutex::new(0) }
+        // (Orbit's own tests can name another status file)
+        let status = std::env::var("ORBIT_TEST_NOVA_STATUS").ok().filter(|p| !p.is_empty()).unwrap_or_else(|| STATUS_FILE.into());
+        Nova { ctx, found: Mutex::new(None), status_file: PathBuf::from(status), waiting: Mutex::new(0) }
     }
 
     fn windows() -> bool {
@@ -459,6 +461,11 @@ impl App for Nova {
     fn open_label(&self) -> String {
         "nova web".into()
     }
+    fn approvals_waiting(&self) -> (u64, u64) {
+        self.health().filter(|h| !h["stale"].as_bool().unwrap_or(true))
+            .map(|h| (h["waiting"]["browsers"].as_u64().unwrap_or(0), h["waiting"]["actions"].as_u64().unwrap_or(0)))
+            .unwrap_or((0, 0))
+    }
     /// "approve a browser" on the card (the button to press when something is waiting).
     fn card_actions(&self) -> Vec<Value> {
         let waiting = *self.waiting.lock().unwrap() > 0;
@@ -543,8 +550,6 @@ impl App for Nova {
             ("down", format!("Nova isn't answering{}", if core_bad.is_empty() { String::new() } else { format!(" ({} not running)", core_bad.join(", ")) }))
         } else if !core_bad.is_empty() {
             ("warn", format!("Answering, but {} isn't running", core_bad.join(", ")))
-        } else if !failed_jobs.is_empty() {
-            ("warn", format!("Running · the last {} failed", failed_jobs[0]))
         } else if browsers + actions > 0 {
             ("warn", match (browsers, actions) {
                 (1, 0) => "A browser is waiting for your approval: approve it with the code it shows".to_string(),
@@ -552,6 +557,8 @@ impl App for Nova {
                 (0, 1) => "A browser is waiting for you to approve what it asked: use the code it shows".to_string(),
                 (b, a) => format!("{} things are waiting for your approval", b + a),
             })
+        } else if !failed_jobs.is_empty() {
+            ("warn", format!("Running · the last {} failed", failed_jobs[0]))
         } else if hl.is_some() && stale {
             ("warn", "Running, but its alerts have stopped checking the server".to_string())
         } else if !issues.is_empty() {
