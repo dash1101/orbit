@@ -143,12 +143,33 @@ jobs:
           texts() { "$adb" shell uiautomator dump /sdcard/ui.xml > /dev/null && "$adb" exec-out cat /sdcard/ui.xml \
                       | grep -o 'text="[^"]*"' | sed 's/text="//; s/"$//' | grep -v '^$' | tr '\n' '|'; echo; }
           echo "on screen: $(texts)"
-          # into an app's page: tap the first line that says Nova
-          b=$("$adb" exec-out cat /sdcard/ui.xml | grep -o 'text="Nova"[^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1 | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]')
-          if [ -n "$b" ]; then
-            set -- $(echo "$b" | tr '[],' '   '); "$adb" shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )); sleep 6
-            "$adb" exec-out screencap -p > shots/android-2-nova.png; echo "after tapping Nova: $(texts)"
-            "$adb" shell input keyevent KEYCODE_BACK; sleep 2
+          # install Nova: Orbit downloads it from GitHub, checks its signature, then hands it to Android, which asks
+          # (the test stops at Android's question)
+          "$adb" exec-out cat /sdcard/ui.xml > ui.xml
+          xy=$(python3 -c '
+          import re
+          seen = False
+          for n in re.findall(r"<node [^>]*>", open("ui.xml").read()):
+              t, b = re.search(r" text=\"([^\"]*)\"", n), re.search(r"bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", n)
+              if not (t and b):
+                  continue
+              if t.group(1) == "Nova":
+                  seen = True
+              elif seen and t.group(1) == "install":
+                  x1, y1, x2, y2 = map(int, b.groups()); print((x1 + x2) // 2, (y1 + y2) // 2); break
+          ')
+          if [ -n "$xy" ]; then
+            "$adb" shell input tap $xy
+            for i in $(seq 40); do
+              focus=$("$adb" shell dumpsys window | grep -m1 mCurrentFocus | tr -d '\r')
+              case "$focus" in *packageinstaller*|*PackageInstaller*|*settings*|*Settings*) break ;; esac
+              sleep 3
+            done
+            "$adb" exec-out screencap -p > shots/android-2-install-nova.png
+            echo "after install Nova ($focus): $(texts)"
+            case "$focus" in *packageinstaller*|*PackageInstaller*|*settings*|*Settings*) echo "Android asks about installing Nova: download and signature check passed" ;;
+              *) echo "::warning::Android's install question didn't come up" ;; esac
+            "$adb" shell input keyevent KEYCODE_BACK; sleep 2; "$adb" shell input keyevent KEYCODE_BACK; sleep 2
           fi
           "$adb" logcat -d > logcat.txt
           pid=$("$adb" shell pidof app.novalabs.orbit | tr -d '\r')
