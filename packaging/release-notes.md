@@ -1,5 +1,10 @@
 **Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.7.1**
+
+- **xmas-tui on Android:** its live wallpaper can be installed and updated from Orbit on your phone (Android 7 and newer). Open it and tap *Set as live wallpaper*. Orbit 0.6.0 and newer on Android already offer it.
+- **Android: an app's version sits beside its name**, so a long description no longer runs into it.
+
 **New in 0.7.0**, a milestone: it comes for every system, Macs and ARM computers included.
 
 - **YTDL-UI**: download video and audio from YouTube and 1,800+ other sites, from a page in your browser (yt-dlp and ffmpeg). On Linux, Windows and macOS, x64 and ARM. Orbit installs its ready-made app just for you, adds it to the apps menu (the Start menu on Windows), and on Linux and macOS can keep it running in the background at http://localhost:5000. Its card says what else helps: Deno or Node.js for YouTube's higher qualities, and ffmpeg from Homebrew on a Mac.

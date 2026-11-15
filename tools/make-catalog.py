@@ -37,7 +37,7 @@ APPS = [
      "blurb": "Download video and audio from YouTube and 1,800+ other sites, in your browser (yt-dlp and ffmpeg)",
      "repo": "JustAyden/YTDL-UI", "color": "#22d3ee", "icon": "apps/ytdl-ui.svg"},
     {"id": "xmas-tui", "name": "xmas-tui",
-     "blurb": "A cozy, glowing Christmas village as your desktop wallpaper: walk around, chat with the neighbours, feed the deer",
+     "blurb": "A cozy, glowing Christmas village as your wallpaper: walk around it on a computer, or set it as a live wallpaper on Android",
      "repo": "dash1101/xmas-tui", "color": "#e0483e", "icon": "apps/xmas-tui.svg",
      "android": {
          # the live wallpaper, from 1.6.0 on (Android 7 or later)

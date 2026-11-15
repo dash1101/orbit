@@ -148,10 +148,13 @@ private fun AppCard(model: HubModel, app: Listing, review: () -> Unit) {
             AppIcon(app, 40.dp, dim = !app.onAndroid)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Txt(app.name, bold = true)
+                // the installed version on the name's line, so a long blurb never runs into it
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Txt(app.name, Modifier.weight(1f), bold = true)
+                    card.installed?.let { Txt(it, Modifier.padding(start = 8.dp), color = t.muted, size = 12.5.sp, maxLines = 1) }
+                }
                 Txt(app.blurb, color = t.muted, size = 12.5.sp)
             }
-            Txt(card.installed ?: "", color = t.muted, size = 12.5.sp)
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
