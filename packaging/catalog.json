@@ -56,7 +56,18 @@
    "blurb": "A cozy, glowing Christmas village as your desktop wallpaper: walk around, chat with the neighbours, feed the deer",
    "repo": "dash1101/xmas-tui",
    "color": "#e0483e",
-   "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">\n  <rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#0f1a2e\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"1.6\" fill=\"#e8eefc\"/><circle cx=\"50\" cy=\"9\" r=\"1.3\" fill=\"#e8eefc\"/>\n  <circle cx=\"55\" cy=\"26\" r=\"1.5\" fill=\"#e8eefc\"/><circle cx=\"8\" cy=\"34\" r=\"1.2\" fill=\"#e8eefc\"/>\n  <path d=\"M4 54c9-4 18-5 28-5s19 1 28 5v10H4z\" fill=\"#e8eefc\"/>\n  <path d=\"M32 14 22 28h5l-9 11h6l-9 11h34l-9-11h6l-9-11h5z\" fill=\"#2f9a52\"/>\n  <rect x=\"29\" y=\"50\" width=\"6\" height=\"6\" rx=\"1\" fill=\"#7a4a2a\"/>\n  <path d=\"m32 6 1.9 4.1 4.4.4-3.3 3 1 4.4L32 15.6l-4 2.3 1-4.4-3.3-3 4.4-.4z\" fill=\"#ffd23f\"/>\n  <circle cx=\"29\" cy=\"27\" r=\"1.8\" fill=\"#e0483e\"/><circle cx=\"36\" cy=\"33\" r=\"1.8\" fill=\"#ffd23f\"/>\n  <circle cx=\"26\" cy=\"40\" r=\"1.8\" fill=\"#4fc3f7\"/><circle cx=\"38\" cy=\"44\" r=\"1.8\" fill=\"#e0483e\"/>\n  <circle cx=\"31\" cy=\"38\" r=\"1.6\" fill=\"#ffd23f\"/>\n</svg>"
+   "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">\n  <rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#0f1a2e\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"1.6\" fill=\"#e8eefc\"/><circle cx=\"50\" cy=\"9\" r=\"1.3\" fill=\"#e8eefc\"/>\n  <circle cx=\"55\" cy=\"26\" r=\"1.5\" fill=\"#e8eefc\"/><circle cx=\"8\" cy=\"34\" r=\"1.2\" fill=\"#e8eefc\"/>\n  <path d=\"M4 54c9-4 18-5 28-5s19 1 28 5v10H4z\" fill=\"#e8eefc\"/>\n  <path d=\"M32 14 22 28h5l-9 11h6l-9 11h34l-9-11h6l-9-11h5z\" fill=\"#2f9a52\"/>\n  <rect x=\"29\" y=\"50\" width=\"6\" height=\"6\" rx=\"1\" fill=\"#7a4a2a\"/>\n  <path d=\"m32 6 1.9 4.1 4.4.4-3.3 3 1 4.4L32 15.6l-4 2.3 1-4.4-3.3-3 4.4-.4z\" fill=\"#ffd23f\"/>\n  <circle cx=\"29\" cy=\"27\" r=\"1.8\" fill=\"#e0483e\"/><circle cx=\"36\" cy=\"33\" r=\"1.8\" fill=\"#ffd23f\"/>\n  <circle cx=\"26\" cy=\"40\" r=\"1.8\" fill=\"#4fc3f7\"/><circle cx=\"38\" cy=\"44\" r=\"1.8\" fill=\"#e0483e\"/>\n  <circle cx=\"31\" cy=\"38\" r=\"1.6\" fill=\"#ffd23f\"/>\n</svg>",
+   "android": {
+    "pkgs": [
+     "io.github.dash1101.xmastui"
+    ],
+    "apk": [
+     "xmas-tui-android.apk"
+    ],
+    "sums": "SHA256SUMS",
+    "note": "A live wallpaper: open it and tap Set as live wallpaper. Its settings fit the snowy dock to your launcher.",
+    "extra": "Needs Android 7 or later."
+   }
   },
   {
    "id": "orbit",

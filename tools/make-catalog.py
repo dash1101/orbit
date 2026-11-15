@@ -38,7 +38,12 @@ APPS = [
      "repo": "JustAyden/YTDL-UI", "color": "#22d3ee", "icon": "apps/ytdl-ui.svg"},
     {"id": "xmas-tui", "name": "xmas-tui",
      "blurb": "A cozy, glowing Christmas village as your desktop wallpaper: walk around, chat with the neighbours, feed the deer",
-     "repo": "dash1101/xmas-tui", "color": "#e0483e", "icon": "apps/xmas-tui.svg"},
+     "repo": "dash1101/xmas-tui", "color": "#e0483e", "icon": "apps/xmas-tui.svg",
+     "android": {
+         # the live wallpaper, from 1.6.0 on (Android 7 or later)
+         "pkgs": ["io.github.dash1101.xmastui"], "apk": ["xmas-tui-android.apk"], "sums": "SHA256SUMS",
+         "note": "A live wallpaper: open it and tap Set as live wallpaper. Its settings fit the snowy dock to your launcher.",
+         "extra": "Needs Android 7 or later."}},
     {"id": "orbit", "name": "Orbit", "blurb": "This app",
      "repo": "dash1101/orbit", "color": "#f0668e", "icon": "icon.svg",
      "android": {

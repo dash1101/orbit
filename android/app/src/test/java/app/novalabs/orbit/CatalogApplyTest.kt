@@ -4,6 +4,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -24,7 +25,7 @@ class CatalogApplyTest {
         // packaging/catalog.json, as published (the tests run in android/app)
         val text = File("../../packaging/catalog.json").readText()
         assertTrue(Catalog.apply(text, icons))
-        assertEquals(Catalog.builtIn.map { it.id }, Catalog.apps.map { it.id })
+        assertTrue(Catalog.apps.map { it.id }.containsAll(Catalog.builtIn.map { it.id }))
         for (b in Catalog.builtIn) {
             val a = Catalog.apps.first { it.id == b.id }
             assertEquals(b.name, a.name)
@@ -39,6 +40,13 @@ class CatalogApplyTest {
         assertEquals("ytm-starcast-android.apk", starcast.apk(listOf("ytm-starcast-android-unshrunk.apk", "ytm-starcast-android.apk")))
         val orbit = Catalog.apps.first { it.id == "orbit" }
         assertEquals("orbit-v0.6.0-android.apk", orbit.apk(listOf("orbit-v0.6.0-android.apk")))
+        // xmas-tui's live wallpaper comes from the catalog alone (no built-in listing, no signing key)
+        val xmas = Catalog.apps.first { it.id == "xmas-tui" }
+        assertEquals(listOf("io.github.dash1101.xmastui"), xmas.pkgs)
+        assertEquals("xmas-tui-android.apk", xmas.apk(listOf("xmas-tui-linux-x86_64", "xmas-tui-android.apk")))
+        assertEquals("SHA256SUMS", xmas.sums)
+        assertNull(xmas.signingKey)
+        assertTrue(File(xmas.iconFile!!).readText().startsWith("<svg"))
     }
 
     @Test
