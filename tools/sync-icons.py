@@ -16,11 +16,13 @@ ROOT = Path(__file__).resolve().parent.parent
 DESKTOP = ROOT / "orbit" / "static" / "apps"
 ANDROID = ROOT / "android" / "app" / "src" / "main" / "assets" / "icons"
 
-# file name in Orbit -> (repository, path of the icon in it, also used by the Android app?)
+# file name in Orbit -> (repository, path of the icon in it, also used by the Android app?); no repository: Orbit's own
 # Every file in Orbit's icon folders is one of these (tests/test_icons.py checks that nothing stale is left).
 ICONS = {
     "ytm-starcast.svg": ("dash1101/ytm-starcast", "starcast/static/icon.svg", True),
     "nova.svg": ("dash1101/Nova", "server/web/icon.svg", True),
+    "ytdl-ui.svg": ("JustAyden/YTDL-UI", "static/img/icon.svg", False),
+    "xmas-tui.svg": (None, None, False),   # drawn here: xmas-tui's repository has no icon of its own
 }
 
 
@@ -35,6 +37,8 @@ def main():
     check = "--check" in sys.argv
     stale = 0
     for name, (repo, path, android) in ICONS.items():
+        if repo is None:
+            continue
         data = fetch(repo, path)
         targets = [DESKTOP / name] + ([ANDROID / name] if android else [])
         for t in targets:

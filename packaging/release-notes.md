@@ -1,4 +1,10 @@
-**Orbit** by NovaLabs: one place for YTM Starcast and Nova. Each download is the program itself: nothing to unpack, and nothing else to install.
+**Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
+
+**New in 0.7.0**, a milestone: it comes for every system, Macs and ARM computers included.
+
+- **YTDL-UI**: download video and audio from YouTube and 1,800+ other sites, from a page in your browser (yt-dlp and ffmpeg). On Linux, Windows and macOS, x64 and ARM. Orbit installs its ready-made app just for you, adds it to the apps menu (the Start menu on Windows), and on Linux and macOS can keep it running in the background at http://localhost:5000. Its card says what else helps: Deno or Node.js for YouTube's higher qualities, and ffmpeg from Homebrew on a Mac.
+- **xmas-tui**: a cozy Christmas village as your desktop wallpaper, to walk around and play in. On Linux (x86-64, KDE Plasma 6, Sway, Hyprland and other Wayland desktops with layers, with kitty 0.36 or newer) and Windows 10 and 11. Orbit checks those first, then runs xmas-tui's own installer just for you, with *run at startup* as a choice on Windows.
+- Both update themselves as well, and Orbit shows the version each one is on either way. Removing them keeps their settings unless you tick the box.
 
 **New in 0.6.1**
 

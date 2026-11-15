@@ -81,7 +81,7 @@ impl Sources {
     }
 
     /// Newest non-draft release (pre-releases count): {"tag", "published", "url", "prerelease",
-    /// "assets": {name: {"url", "api", "size"}}}.
+    /// "assets": {name: {"url", "api", "size", "sha256" (GitHub's, when it gives one)}}}.
     pub fn latest(&self, repo: &str, force: bool) -> Res<Value> {
         self.latest_with(repo, force, &|_| true)
     }
@@ -95,6 +95,11 @@ impl Sources {
 
     pub fn cached(&self, repo: &str) -> Option<Value> {
         self.cached_with(repo, &|_| true)
+    }
+
+    /// Every recent release kept from the last look (none yet: empty), newest first.
+    pub fn cached_all(&self, repo: &str) -> Vec<Value> {
+        self.cache.lock().unwrap().get(repo).map(|(_, l)| l.clone()).unwrap_or_default()
     }
 
     pub fn cached_with(&self, repo: &str, wants: Wants) -> Option<Value> {
@@ -134,7 +139,8 @@ impl Sources {
                 if let Some(name) = a["name"].as_str().filter(|n| !n.is_empty()) {
                     assets.insert(name.into(), json!({"url": a["browser_download_url"].as_str().unwrap_or(""),
                                                       "api": a["url"].as_str().unwrap_or(""),
-                                                      "size": a["size"].as_u64().unwrap_or(0)}));
+                                                      "size": a["size"].as_u64().unwrap_or(0),
+                                                      "sha256": a["digest"].as_str().and_then(|d| d.strip_prefix("sha256:")).unwrap_or("")}));
                 }
             }
             json!({"tag": rel["tag_name"].as_str().unwrap_or(""), "published": rel["published_at"].as_str().unwrap_or(""),
@@ -767,6 +773,29 @@ impl Session {
             util::remove_any(p).map_err(|e| failed(format!("Couldn't remove {}: {e}", p.display()), ""))?;
             self.log(&format!("Removed {}", p.display()));
         }
+        Ok(())
+    }
+
+    /// Put a downloaded program where it goes: written next to it first, then renamed over it (a running copy keeps
+    /// going on the old file), and runnable.
+    pub fn place(&self, src: &Path, dest: &Path) -> Res<()> {
+        if self.dry_run {
+            self.log(&format!("dry run: would put the program at {}", dest.display()));
+            return Ok(());
+        }
+        let err = |e: std::io::Error| failed(format!("Couldn't put the program at {}: {e}", dest.display()), "");
+        if let Some(d) = dest.parent() {
+            std::fs::create_dir_all(d).map_err(err)?;
+        }
+        let tmp = dest.with_file_name(format!("{}.orbit-new", dest.file_name().unwrap_or_default().to_string_lossy()));
+        std::fs::copy(src, &tmp).map_err(err)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).map_err(err)?;
+        }
+        std::fs::rename(&tmp, dest).map_err(err)?;
+        self.log(&format!("Put the program at {}", dest.display()));
         Ok(())
     }
 

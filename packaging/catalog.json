@@ -43,6 +43,22 @@
    }
   },
   {
+   "id": "ytdl-ui",
+   "name": "YTDL-UI",
+   "blurb": "Download video and audio from YouTube and 1,800+ other sites, in your browser (yt-dlp and ffmpeg)",
+   "repo": "JustAyden/YTDL-UI",
+   "color": "#22d3ee",
+   "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">\n  <defs>\n    <linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n      <stop offset=\"0\" stop-color=\"#22d3ee\"/>\n      <stop offset=\"1\" stop-color=\"#67e8f9\"/>\n    </linearGradient>\n  </defs>\n  <rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#0d1117\"/>\n  <rect x=\"1.5\" y=\"1.5\" width=\"61\" height=\"61\" rx=\"12.5\" fill=\"none\" stroke=\"#30363d\" stroke-width=\"3\"/>\n  <path d=\"M32 14v24m0 0-10-10m10 10 10-10\" fill=\"none\" stroke=\"url(#g)\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n  <path d=\"M18 48h28\" stroke=\"url(#g)\" stroke-width=\"6\" stroke-linecap=\"round\"/>\n</svg>"
+  },
+  {
+   "id": "xmas-tui",
+   "name": "xmas-tui",
+   "blurb": "A cozy, glowing Christmas village as your desktop wallpaper: walk around, chat with the neighbours, feed the deer",
+   "repo": "dash1101/xmas-tui",
+   "color": "#e0483e",
+   "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">\n  <rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#0f1a2e\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"1.6\" fill=\"#e8eefc\"/><circle cx=\"50\" cy=\"9\" r=\"1.3\" fill=\"#e8eefc\"/>\n  <circle cx=\"55\" cy=\"26\" r=\"1.5\" fill=\"#e8eefc\"/><circle cx=\"8\" cy=\"34\" r=\"1.2\" fill=\"#e8eefc\"/>\n  <path d=\"M4 54c9-4 18-5 28-5s19 1 28 5v10H4z\" fill=\"#e8eefc\"/>\n  <path d=\"M32 14 22 28h5l-9 11h6l-9 11h34l-9-11h6l-9-11h5z\" fill=\"#2f9a52\"/>\n  <rect x=\"29\" y=\"50\" width=\"6\" height=\"6\" rx=\"1\" fill=\"#7a4a2a\"/>\n  <path d=\"m32 6 1.9 4.1 4.4.4-3.3 3 1 4.4L32 15.6l-4 2.3 1-4.4-3.3-3 4.4-.4z\" fill=\"#ffd23f\"/>\n  <circle cx=\"29\" cy=\"27\" r=\"1.8\" fill=\"#e0483e\"/><circle cx=\"36\" cy=\"33\" r=\"1.8\" fill=\"#ffd23f\"/>\n  <circle cx=\"26\" cy=\"40\" r=\"1.8\" fill=\"#4fc3f7\"/><circle cx=\"38\" cy=\"44\" r=\"1.8\" fill=\"#e0483e\"/>\n  <circle cx=\"31\" cy=\"38\" r=\"1.6\" fill=\"#ffd23f\"/>\n</svg>"
+  },
+  {
    "id": "orbit",
    "name": "Orbit",
    "blurb": "This app",

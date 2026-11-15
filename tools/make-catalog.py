@@ -33,6 +33,12 @@ APPS = [
          "pkgs": ["app.novalabs.nova"], "apk": ["nova-universal.apk", "re:.*-universal\\.apk"], "sums": "SHA256SUMS",
          "note": "The Nova app pairs with a Nova server on Linux or Windows: Nova Server on that computer (or sudo nova add) shows the code.",
          "extra": "Comes with five home-screen widgets: status, live stats, quick actions, inbox and storage. In Nova: Menu → Home-screen widgets."}},
+    {"id": "ytdl-ui", "name": "YTDL-UI",
+     "blurb": "Download video and audio from YouTube and 1,800+ other sites, in your browser (yt-dlp and ffmpeg)",
+     "repo": "JustAyden/YTDL-UI", "color": "#22d3ee", "icon": "apps/ytdl-ui.svg"},
+    {"id": "xmas-tui", "name": "xmas-tui",
+     "blurb": "A cozy, glowing Christmas village as your desktop wallpaper: walk around, chat with the neighbours, feed the deer",
+     "repo": "dash1101/xmas-tui", "color": "#e0483e", "icon": "apps/xmas-tui.svg"},
     {"id": "orbit", "name": "Orbit", "blurb": "This app",
      "repo": "dash1101/orbit", "color": "#f0668e", "icon": "icon.svg",
      "android": {

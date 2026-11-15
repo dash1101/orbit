@@ -6,7 +6,7 @@ grant without a prompt), checks that Nova answers and that Orbit's Nova page see
 itself (an update), then removes it with its settings and makes sure nothing is left.
 
     python tools/ci-nova-windows.py                   through Orbit's Python code
-    python tools/ci-nova-windows.py --exe orbit.exe [nova,ytm-starcast]
+    python tools/ci-nova-windows.py --exe orbit.exe [nova,ytm-starcast,ytdl-ui,xmas-tui]
                                                       through a built standalone Orbit, the way its window does it
     python tools/ci-nova-windows.py --exe orbit.exe ytm-starcast --migrate
                                                       the move to YTM Starcast: first puts Pocketfader and YTM Beacon
@@ -132,7 +132,11 @@ def main():
 
 # What each app is installed with, and removed with, through the program (the window's own choices).
 APPS = {"nova": ({"firewall": True}, {"purge": True}),
-        "ytm-starcast": ({}, {"purge": True})}
+        "ytm-starcast": ({}, {"purge": True}),
+        "ytdl-ui": ({}, {"purge": True}),
+        "xmas-tui": ({"startup": True}, {"purge": True})}
+# installed from Orbit, with no page of their own in it: checked by the version Orbit sees instead
+NO_PAGE = {"ytdl-ui", "xmas-tui"}
 
 # The apps YTM Starcast replaces, at fixed releases: Pocketfader's last one (in YTM Starcast's repository, its new
 # name) and YTM Beacon's (its repository stays readable). (repository, tag, Windows file, checksum list)
@@ -491,6 +495,16 @@ def through_the_program(exe, apps, migrate=False):
                 after = listing(app)["installed"]
                 if after.get("migrate") or after.get("how") != "standalone program":
                     fail(f"after the move Orbit still sees something to move: {after}")
+            if app in NO_PAGE:
+                want = listing(app)["latest"]
+                found = until(f"Orbit to see {app} {want} installed",
+                              lambda: (lambda i: i if i["installed"] and i["version"] == want else None)(listing(app)["installed"]), 60)
+                say(f"Orbit sees {app} {found['version']} installed in {found['where']} ({found['how']})")
+                job(app, "install", install)   # again, over itself (an update)
+                job(app, "uninstall", remove)
+                until(f"{app} to be gone", lambda: not installed(app), 120)
+                say(f"{app}: installed, installed again over itself and removed through the standalone Orbit.")
+                continue
             page = until(f"{app} to answer on its page",
                          lambda: (lambda d: d if d["status"].get("version") and d["status"]["state"] != "down" else None)(
                              call(f"/api/apps/{app}")), 180)

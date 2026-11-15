@@ -4,7 +4,8 @@ By NovaLabs. Standalone downloads for Linux, Windows, macOS and Android are on t
 
 One place for all your apps: install them, see at a glance whether each one is running, start and stop it, change its
 settings, read its log and update it when a new release is out. It comes with support for
-[YTM Starcast](https://github.com/dash1101/ytm-starcast) and [Nova](https://github.com/dash1101/Nova), and you can add
+[YTM Starcast](https://github.com/dash1101/ytm-starcast), [Nova](https://github.com/dash1101/Nova),
+[YTDL-UI](https://github.com/JustAyden/YTDL-UI) and [xmas-tui](https://github.com/dash1101/xmas-tui), and you can add
 any other app from Orbit's settings.
 
 Orbit is one small program with its own window, drawn by the web engine that comes with your system (WebView2 on
@@ -55,10 +56,14 @@ here. Installing, updating and removing all go through the same five steps:
 |---|---|---|---|
 | **YTM Starcast** | its own Python environment in `~/.local/share/ytm-starcast`, `ytm-starcast` and `ytm-starcast-gui` commands, apps-menu entry, systemd user service (`ytm-starcast.service`) | the standalone program in `%LOCALAPPDATA%\Programs\YTM Starcast`, Start-menu entry, starts at logon (scheduled task `YTM Starcast`) | experimental, as YTM Starcast isn't tested on macOS yet: its own Python environment in `~/Library/Application Support/YTM Starcast` and a LaunchAgent. The YouTube Music remote and the Discord status are meant to work; controlling the Mac's volume and other players isn't available on macOS |
 | **Nova** | the `.deb` on Debian/Ubuntu (so apt keeps it updated), Nova's one-file installer elsewhere; needs systemd | a preview: Nova's Windows installer (`nova-windows.zip`) puts it in `C:\Program Files\Nova` with three background tasks that start with Windows, and its own uninstaller removes it. Pairing, devices, approvals, live graphs, alerts, the task manager, power and Docker Desktop work; programs and updates, files, the terminal and backups aren't there yet | not available |
+| **YTDL-UI** | its ready-made app (x64 or ARM64) in `~/.local/share/ytdl-ui`, apps-menu entry, and, if you like, a systemd user service (`ytdl-ui.service`) that keeps it at `http://localhost:5000`. It downloads ffmpeg itself | its ready-made app (x64 or ARM64) in `%LOCALAPPDATA%\Programs\YTDL-UI` and a Start-menu entry; it runs in its console window while open and finds or downloads ffmpeg itself | its ready-made app (Apple Silicon or Intel) in `~/Library/Application Support/YTDL-UI` and, if you like, a LaunchAgent that keeps it running; converting needs `brew install ffmpeg` |
+| **xmas-tui** | x86-64 only: its own no-sudo installer (`~/.local/share/xmas-tui`, systemd user service `xmas-tui.service`). Needs kitty 0.36 or newer and a Wayland desktop with layers (KDE Plasma 6, Sway, Hyprland; not GNOME): Orbit checks for them first | its own per-user setup, run silently: `%LOCALAPPDATA%\Programs\xmas-tui`, Start-menu entries, run at startup if you like, and its own uninstaller | not available |
 
 Only Nova needs the administrator password, and Orbit never sees it: on Linux your desktop's password window asks for
 it (`pkexec`), or a terminal with `sudo` when there's no such window; on Windows, Windows asks for permission once and
 Nova's installer runs without a window of its own, its output in Orbit's progress log.
+
+YTDL-UI and xmas-tui also update themselves; Orbit shows the version they're on either way.
 
 **What Orbit checks.** Downloads only come from the app's own GitHub releases. Each file is checked against the
 SHA-256 checksums published with the release before it is unpacked or run. Nova's checksums are also checked against

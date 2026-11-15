@@ -2,6 +2,8 @@
 pub mod nova;
 pub mod orbit;
 pub mod starcast;
+pub mod xmas_tui;
+pub mod ytdl_ui;
 
 use crate::engine::Sources;
 use crate::host::Host;
@@ -12,6 +14,8 @@ pub fn load(host: &Host, sources: &Arc<Sources>) -> Vec<Arc<dyn Recipe>> {
     vec![
         Arc::new(starcast::StarcastRecipe::new(host.clone(), sources.clone())),
         Arc::new(nova::NovaRecipe::new(host.clone(), sources.clone())),
+        Arc::new(ytdl_ui::YtdlUiRecipe::new(host.clone(), sources.clone())),
+        Arc::new(xmas_tui::XmasTuiRecipe::new(host.clone(), sources.clone())),
         Arc::new(orbit::OrbitRecipe::new(host.clone(), sources.clone(), None)),
     ]
 }

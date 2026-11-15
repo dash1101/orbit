@@ -1,5 +1,5 @@
 """Orbit's catalog (packaging/catalog.json), which every Orbit reads from this repository: it's up to date with
-tools/make-catalog.py and the icons, and names the apps Orbit has built in."""
+tools/make-catalog.py and the icons, and names the apps Orbit has built in (on Android, and on computers)."""
 import importlib.util
 import json
 import re
@@ -21,7 +21,12 @@ class CatalogTests(unittest.TestCase):
         apps = {a["id"]: a for a in json.loads(mc.build())["apps"]}
         kt = (ROOT / "android/app/src/main/java/app/novalabs/orbit/Catalog.kt").read_text()
         built_in = dict(re.findall(r'id = "([\w-]+)", name = "([^"]+)"', kt))
-        self.assertEqual(set(built_in), set(apps))
+        self.assertLessEqual(set(built_in), set(apps))
+        # the others: an app the desktop Orbit installs, or one the catalog brings to Android
+        recipes = "\n".join(f.read_text() for f in (ROOT / "desktop/src/recipes").glob("*.rs"))
+        for app_id in set(apps) - set(built_in):
+            self.assertTrue(f'"{app_id}"' in recipes or "android" in apps[app_id],
+                            f"{app_id} is in the catalog, but nothing installs it")
         for app_id, name in built_in.items():
             self.assertEqual(apps[app_id]["name"], name)
             self.assertTrue(apps[app_id]["icon"].startswith("<svg"))

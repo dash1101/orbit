@@ -364,6 +364,12 @@ impl Hub {
             } else if r.self_app() {
                 d["icon"] = json!("/icon.svg");
                 d["self"] = json!(true);
+            } else if !d["icon"].as_str().unwrap_or("").starts_with("data:") {
+                // an app with no page in Orbit (only installed from here): its built-in icon, until the catalog says
+                let file = format!("{}.svg", r.id());
+                if APP_ICONS.iter().any(|(n, _)| *n == file) {
+                    d["icon"] = json!(format!("/apps/{file}"));
+                }
             }
             if let (Some(m), Value::Object(b)) = (d.as_object_mut(), self.install_brief(r.id())) {
                 m.extend(b);
