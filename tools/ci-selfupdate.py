@@ -57,6 +57,12 @@ def fail(text):
     sys.exit(1)
 
 
+class Server(ThreadingHTTPServer):
+    # Orbit looks up every app's releases at once when it starts: Python's default queue of 5 waiting connections is
+    # too short for that on Windows, which turns the rest away (Linux holds them)
+    request_queue_size = 64
+
+
 class GitHub(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -519,13 +525,13 @@ def installed_scenario(gh):
 def main():
     gh = None
     if DEB:
-        gh = ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
+        gh = Server(("127.0.0.1", 0), GitHub)
         threading.Thread(target=gh.serve_forever, daemon=True).start()
         deb_scenario(gh)
         say("\nThe Debian package updates itself through apt and restarts on the new version.")
         return
     if not REAL:
-        gh = ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
+        gh = Server(("127.0.0.1", 0), GitHub)
         threading.Thread(target=gh.serve_forever, daemon=True).start()
     scenario(gh, "restart")
     scenario(gh, "reopen")
