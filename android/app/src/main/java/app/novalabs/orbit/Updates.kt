@@ -55,6 +55,7 @@ object Updates {
 
     /** Look for updates and say so: one notification per app and version. */
     fun check(ctx: Context) {
+        I18n.load(ctx)
         // the catalog kept from last time (the names and release files may have changed since this version)
         val kept = File(ctx.filesDir, "catalog.json")
         runCatching { if (kept.exists() && Catalog.apps === Catalog.builtIn) Catalog.apply(kept.readText(), File(ctx.filesDir, "catalog-icons")) }
@@ -76,8 +77,8 @@ object Updates {
         if (Build.VERSION.SDK_INT >= 26) {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             if (nm.getNotificationChannel(CHANNEL) == null) {
-                nm.createNotificationChannel(NotificationChannel(CHANNEL, "Updates", NotificationManager.IMPORTANCE_DEFAULT)
-                    .apply { description = "When an app you have from Orbit gets an update" })
+                nm.createNotificationChannel(NotificationChannel(CHANNEL, tr("Updates"), NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = tr("When an app you have from Orbit gets an update") })
             }
         }
         val open = PendingIntent.getActivity(ctx, a.id.hashCode(),
@@ -85,8 +86,8 @@ object Updates {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0))
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle("${a.name} $version is out")
-            .setContentText(if (a.self) "You have $have. Tap to update Orbit." else "You have $have. Tap to update it in Orbit.")
+            .setContentTitle(tr("${a.name} $version is out"))
+            .setContentText(tr(if (a.self) "You have $have. Tap to update Orbit." else "You have $have. Tap to update it in Orbit."))
             .setContentIntent(open)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)

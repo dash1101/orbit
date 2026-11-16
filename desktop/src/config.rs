@@ -7,6 +7,7 @@ use std::sync::Mutex;
 pub fn defaults() -> Map<String, Value> {
     let v = json!({
         "theme": "tui",
+        "language": "auto",     // "auto" (the system's) or a code from i18n::LANGS
         "refreshSec": 3,
         "checkUpdates": true,   // ask GitHub (at most every 12 hours) whether a newer release exists
         "autoUpdate": true,     // a newer Orbit is downloaded and checked by itself, and takes over at the next start

@@ -244,7 +244,7 @@ pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--
 .plat { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); }
 .plat > span { white-space: nowrap; }
 .plat .here { color: var(--text); }
-.plat .here::after { content: " ◂ this computer"; color: var(--accent); font-size: 11.5px; }
+.plat .here::after { content: " ◂ " attr(data-here); color: var(--accent); font-size: 11.5px; }
 .ic { display: inline-block; width: 7px; height: 7px; margin-right: 6px; vertical-align: 1px; background: var(--off); }
 .ic.full { background: var(--ok); } .ic.limited { background: var(--warn); }
 .ic.none { background: transparent; box-shadow: inset 0 0 0 1px var(--off); }
@@ -510,11 +510,108 @@ input[type=range] { accent-color: var(--accent); }
   </div></div>
 </div>
 <div id="wiz"><div class="scrim"></div></div>
-<div id="term"></div>
+<div id="term" data-no-tr></div>
 <div id="dlg" role="dialog" aria-modal="true"><div class="box"><span class="lg" id="dlgt">confirm</span><div id="dlgb"></div></div></div>
 
 <script>
 "use strict";
+// ------------------------------------------------------------------ languages
+// Orbit is written in English. Another language is a file, /i18n/<code>.json: {"English text": "translation"}, where {}
+// marks a part that changes ("Download {} from GitHub"; {1} {2} put the parts in another order). Text is translated as it
+// appears in the window (the apps' install steps and messages too), so nothing else has to know about languages.
+const LANGS = [["en", "English"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["pt-BR", "Português (Brasil)"],
+  ["it", "Italiano"], ["ru", "Русский"], ["ja", "日本語"], ["zh-CN", "简体中文"], ["ko", "한국어"]];
+const L = { code: "en", map: null, tpl: [], memo: new Map(), done: new WeakMap(), attrs: new WeakMap() };
+const TR_ATTRS = ["title", "placeholder", "aria-label", "alt"];
+// "auto": the first of the system's languages Orbit has (Chinese: Simplified only)
+function pickLang(setting) {
+  if (setting && setting !== "auto" && LANGS.some(l => l[0] === setting)) return setting;
+  for (const l of (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || "en"])) {
+    const s = String(l).toLowerCase();
+    if (s.startsWith("zh")) { if (/hant|-tw|-hk|-mo/.test(s)) continue; return "zh-CN"; }
+    if (s.startsWith("pt")) return "pt-BR";
+    const c = LANGS.find(x => x[0] === s.slice(0, 2));
+    if (c) return c[0];
+  }
+  return "en";
+}
+async function setLang(setting) {
+  const code = pickLang(setting);
+  if (code === L.code && (code === "en" || L.map)) return;
+  let map = null;
+  if (code !== "en") { try { map = await (await fetch(`/i18n/${code}.json`)).json(); } catch (e) { map = null; } }
+  L.code = map ? code : "en"; L.map = map; L.memo.clear();
+  L.tpl = map ? Object.keys(map).filter(k => k.includes("{}")).sort((a, b) => b.replace(/\{\}/g, "").length - a.replace(/\{\}/g, "").length)
+    .map(k => [new RegExp("^" + k.split("{}").map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("([\\s\\S]*?)") + "$"), map[k]]) : [];
+  document.documentElement.lang = L.code;
+  trNode(document.body);
+  const ttl = document.querySelector("title");
+  if (ttl && ttl.firstChild) trText(ttl.firstChild);
+}
+function fillIn(t, vals) {
+  let i = 0;
+  return t.replace(/\{(\d*)\}/g, (m, n) => { const v = n ? vals[+n - 1] : vals[i++]; return v === undefined ? m : v; });
+}
+function trCore(s) {
+  const t = L.map[s];
+  if (t !== undefined) return t;
+  for (const [re, out] of L.tpl) { const m = re.exec(s); if (m) return fillIn(out, m.slice(1).map(tr)); }
+  return null;
+}
+// A text in the language chosen (as it is when there's no translation). Tries the whole text, then without what's
+// around the words ("── settings", "> ready", "(•) paper"), then each part of "a · b".
+function tr(s) {
+  if (!L.map || typeof s !== "string" || !/[A-Za-z]{2}/.test(s)) return s;
+  let r = L.memo.get(s);
+  if (r !== undefined) return r;
+  const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(s), core = m[2];
+  let t = trCore(core);
+  if (t == null) {
+    const d = /^([^A-Za-z0-9]*)([\s\S]*?)([^A-Za-z0-9.!?)”'"]*)$/.exec(core);
+    if (d && (d[1] || d[3]) && d[2]) { const x = trCore(d[2]); if (x != null) t = d[1] + x + d[3]; }
+  }
+  if (t == null && core.includes(" · ")) { const parts = core.split(" · "), out = parts.map(tr); if (out.some((p, i) => p !== parts[i])) t = out.join(" · "); }
+  r = t == null ? s : m[1] + t + m[3];
+  if (L.memo.size > 5000) L.memo.clear();
+  L.memo.set(s, r);
+  return r;
+}
+const NO_TR = "[data-no-tr],script,style,pre,textarea,kbd,code";
+function trText(n) {
+  if (L.done.get(n) === n.data) return;
+  const p = n.parentElement;
+  if (!p || p.closest(NO_TR)) return;
+  const t = tr(n.data);
+  L.done.set(n, t);
+  if (t !== n.data) n.data = t;
+}
+function trAttr(el, a) {
+  const v = el.getAttribute(a);
+  if (!v) return;
+  const seen = L.attrs.get(el) || {};
+  if (seen[a] === v) return;
+  const t = tr(v);
+  seen[a] = t; L.attrs.set(el, seen);
+  if (t !== v) el.setAttribute(a, t);
+}
+function trNode(n) {
+  if (!L.map || !n) return;
+  if (n.nodeType === 3) return trText(n);
+  if (n.nodeType !== 1 || n.closest(NO_TR)) return;
+  for (const a of TR_ATTRS) trAttr(n, a);
+  for (const el of n.querySelectorAll("[title],[placeholder],[aria-label],[alt]")) if (!el.closest(NO_TR)) for (const a of TR_ATTRS) trAttr(el, a);
+  const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+  for (let x = w.nextNode(); x; x = w.nextNode()) trText(x);
+}
+new MutationObserver(recs => {
+  if (!L.map) return;
+  for (const r of recs) {
+    if (r.type === "characterData") trText(r.target);
+    else if (r.type === "attributes") { if (!r.target.closest(NO_TR)) trAttr(r.target, r.attributeName); }
+    else r.addedNodes.forEach(trNode);
+  }
+}).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: TR_ATTRS });
+
 // ------------------------------------------------------------------ tiny helpers
 const $ = (s, r = document) => r.querySelector(s);
 function h(tag, attrs, ...kids) {
@@ -616,7 +713,7 @@ function renderNav() {
       const n = S.apps.filter(a => a.install && a.install.update).length;
       const b = t.querySelector(".badge");
       b.hidden = !n; b.textContent = n > 1 ? n + " UPD" : "UPD";
-      t.title = n ? `install apps — ${n} update${n > 1 ? "s" : ""} ready` : "install apps";
+      t.title = n ? (n > 1 ? `install apps — ${n} updates ready` : "install apps — 1 update ready") : "install apps";
     }
   }
   S.navIdx = Math.max(0, items.findIndex(x => x.id === S.view));
@@ -686,11 +783,11 @@ function renderSummary() {
   const n = k => shown.filter(a => a.state === k).length;
   const parts = [`${shown.length} apps`];
   if (n("ok")) parts.push(`${n("ok")} ok`);
-  if (n("warn")) parts.push(`${n("warn")} need${n("warn") === 1 ? "s" : ""} attention`);
+  if (n("warn")) parts.push(n("warn") === 1 ? "1 needs attention" : `${n("warn")} need attention`);
   if (n("down")) parts.push(`${n("down")} down`);
   if (n("off")) parts.push(`${n("off")} off`);
   const upd = shown.filter(a => a.update).length;
-  if (upd) parts.push(`${upd} update${upd > 1 ? "s" : ""}`);
+  if (upd) parts.push(upd > 1 ? `${upd} updates` : "1 update");
   $("#sum").textContent = "── " + parts.join(" · ");
 }
 
@@ -742,7 +839,7 @@ function renderOverview() {
 // A card's buttons: open the app while it runs, install or update it when that's possible.
 function cardButtons(a) {
   const b = [];
-  if (a.open) b.push(h("button", { class: "btn small", title: "open " + a.name, onclick: e => {
+  if (a.open) b.push(h("button", { class: "btn small", title: `open ${a.name}`, onclick: e => {
     e.stopPropagation(); runAction(a, { id: "open", label: a.open }); } }, a.open + " ↗"));
   // an app's own buttons for the card (Nova: approve a browser; YTM Starcast: YouTube Music, settings)
   for (const act of a.cardActions || []) b.push(h("button", { class: "btn small" + (act.primary ? " primary" : ""), onclick: e => {
@@ -794,7 +891,7 @@ function phoneBox(c) {
       ? "Scan the code with your phone's camera, or open one of these there, then add it to the home screen."
       : "No address a phone can reach yet: switch on Tailscale, or “Also reach it on my home Wi-Fi” (install YTM Starcast again to change it)."),
     h("div", { class: "kv" }, c.addresses.flatMap(a => [h("span", { class: "k" }, a.label),
-      h("span", { class: "v" }, h("button", { class: "lnk", title: "copy " + a.url, onclick: () => copy(a.url) }, a.url))])))));
+      h("span", { class: "v" }, h("button", { class: "lnk", title: `copy ${a.url}`, onclick: () => copy(a.url) }, a.url))])))));
 }
 function renderDetail(full) {
   const d = S.detail, s = d.status, main = $("#main");
@@ -806,7 +903,7 @@ function renderDetail(full) {
     h("div", { class: "kv" }, (s.facts || []).flatMap(([k, v, tone]) => [h("span", { class: "k" }, k), h("span", { class: "v " + (tone || ""), title: v }, v)]),
       s.update ? [h("span", { class: "k" }, "release"), h("span", { class: "v " + (s.update.available ? "" : "muted") },
         s.update.error ? "can't check: " + s.update.error :
-        s.update.available ? h("span", {}, h("span", { class: "upd" }, "NEW"), " ", pv(s.update.latest), " is out") : "up to date (" + (pv(s.update.latest) || "?") + ")")] : null));
+        s.update.available ? h("span", {}, h("span", { class: "upd" }, "NEW"), " ", pv(s.update.latest), " is out") : `up to date (${pv(s.update.latest) || "?"})`)] : null));
 
   const groups = {};
   for (const a of d.actions) (groups[a.group || "actions"] ||= []).push(a);
@@ -999,7 +1096,7 @@ function ago(iso) {
 function platBadges(p, here) {
   const word = { full: "runs here", limited: "runs here, with limits", none: "doesn't run here" };
   return h("span", { class: "plat" }, ["linux", "darwin", "windows"].map(k =>
-    h("span", { class: k === here ? "here" : "", title: (p[k] && p[k].note) || word[(p[k] || {}).level] || "" },
+    h("span", { class: k === here ? "here" : "", "data-here": k === here ? tr("this computer") : null, title: (p[k] && p[k].note) || word[(p[k] || {}).level] || "" },
       h("i", { class: "ic " + ((p[k] || {}).level || "none") }), SYS[k])));
 }
 
@@ -1199,7 +1296,7 @@ function stageCheck(dir) {
         ` · ${ago(i.release.published)}${i.release.sizeText ? " · " + i.release.sizeText : ""}`))] : null),
     i.support.level === "limited" ? h("div", { class: "callout warn" }, rt(i.support.note)) : null,
     i.support.level === "none" ? h("div", { class: "callout bad" }, rt(i.support.note)) : null,
-    reqs.length ? [h("h4", {}, "── what " + W.meta.name + " needs"), h("div", {}, reqs)] : null,
+    reqs.length ? [h("h4", {}, `── what ${W.meta.name} needs`), h("div", {}, reqs)] : null,
     i.blocked && i.support.level !== "none" ? h("div", { class: "callout bad", style: `animation-delay:${200 + reqs.length * 70}ms` },
       rt(i.blocked), i.blockedHint ? h("div", { class: "hint" }, rt(i.blockedHint)) : null) : null);
   const buttons = [btn("cancel", () => closeWizard()), sp()];
@@ -1257,7 +1354,7 @@ async function stageReview(dir) {
     i.needsAdmin ? h("div", { class: "callout", style: `animation-delay:${i.summary.length * 60 + 80}ms` },
       `🔑 Your computer will ask for the administrator password once (${i.needsAdmin === true ? "the system will ask" : i.needsAdmin}). Orbit never sees it.`) : null,
     i.blocked ? h("div", { class: "callout bad" }, rt(i.blocked)) : null);
-  const label = del ? "remove " + W.meta.name : /^Update/.test(i.title) ? "update" : /^Reinstall/.test(i.title) ? "reinstall" : "install";
+  const label = del ? `remove ${W.meta.name}` : /^Update/.test(i.title) ? "update" : /^Reinstall/.test(i.title) ? "reinstall" : "install";
   setStage(2, 0, body, [btn("← back", back), sp(),
     btn(label, startJob, (del ? "danger" : "primary") + " go")]);
 }
@@ -1809,7 +1906,15 @@ function renderHub() {
         h("button", { class: "btn", onclick: () => startEdit(null) }, "+ new theme"),
         h("span", { class: "t-muted", style: "font-size:12.5px;align-self:center" }, "start from the current one and change any colour")));
 
+  const langName = (LANGS.find(l => l[0] === pickLang("auto")) || LANGS[0])[1];
+  const langSel = h("select", { class: "inp", "data-no-tr": "", "aria-label": tr("Language"),
+      onchange: async e => { const v = e.currentTarget.value; await setHub({ language: v }, "language · " + v); location.reload(); } },
+    h("option", { value: "auto" }, `${tr("Same as the system")} (${langName})`),
+    LANGS.map(([c, n]) => h("option", { value: c }, n)));
+  langSel.value = hub.settings.language || "auto";
   const general = h("div", { class: "fset" },
+    h("div", { class: "row" }, h("span", {}, "Language"), langSel,
+      h("div", { class: "help" }, "Orbit's own words: its window, the apps' install steps and messages, and its notifications. What an app reports itself stays in that app's language.")),
     h("div", { class: "row" }, h("span", {}, "Refresh every (seconds)"),
       (() => { const i = h("input", { class: "inp num", type: "number", min: 1, max: 60,
         onchange: e => setHub({ refreshSec: Math.round(+e.currentTarget.value) || 3 }, "refresh · " + e.currentTarget.value + " s") }); i.value = hub.settings.refreshSec; return i; })()),
@@ -2083,7 +2188,7 @@ function showHelp() {
 // ------------------------------------------------------------------ start
 (async () => {
   enableNavDrag();
-  try { await loadHub(); } catch (e) { say("can't reach Orbit's server: " + e.message, "err"); }
+  try { await loadHub(); await setLang(S.hub.settings.language); } catch (e) { say("can't reach Orbit's server: " + e.message, "err"); }
   await poll();
   render(true);
   restoreTerms();

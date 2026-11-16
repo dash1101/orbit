@@ -89,7 +89,7 @@ fun OrbitApp(model: HubModel) {
             Spacer(Modifier.width(10.dp))
             val n = Catalog.apps.count { it.onAndroid && !it.self }
             val upd = Catalog.apps.count { model.cards[it.id]?.update == true }
-            Txt("── $n apps for android" + if (upd > 0) " · $upd update${if (upd > 1) "s" else ""}" else "",
+            Txt("── $n apps for android" + when { upd > 1 -> " · $upd updates"; upd == 1 -> " · 1 update"; else -> "" },
                 Modifier.weight(1f), color = t.muted, maxLines = 1)
             TuiButton(if (screen == "home") "⚙" else "×") { screen = if (screen == "home") "settings" else "home" }
         }
@@ -528,6 +528,7 @@ private fun Outcome(job: InstallJob) {
 private fun SettingsScreen(model: HubModel) {
     val t = LocalTokens.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        LegendBox("language") { LanguageBox() }
         LegendBox("theme") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // the phone's own colours first, where it has them (Material You)
@@ -553,11 +554,33 @@ private fun SettingsScreen(model: HubModel) {
         LegendBox("update notifications") { NotifyBox() }
         LegendBox("github") { GitHubBox(model) }
         LegendBox("about") {
-            Txt("Orbit for Android, by NovaLabs, installs and updates the Android apps of YTM Starcast and Nova, and itself. " +
+            Txt("Orbit for Android, by NovaLabs, installs and updates the Android apps of YTM Starcast, Nova and xmas-tui, and itself. " +
                 "Orbit for desktop (Linux, Windows, macOS) manages the programs on your computer.", color = t.muted, size = 12.5.sp)
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** Orbit's language: the phone's (when Orbit has it), or one chosen here. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LanguageBox() {
+    val t = LocalTokens.current
+    val ctx = LocalContext.current
+    var setting by remember { mutableStateOf(I18n.setting(ctx)) }
+    val phone = I18n.LANGS.first { it.first == I18n.pick("auto") }.second
+    val choices = listOf("auto" to "${tr("Same as the phone")} ($phone)") + I18n.LANGS
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for ((c, name) in choices) {
+            val on = setting == c
+            Row(Modifier.clickable { setting = c; I18n.choose(ctx, c) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Txt(if (on) "(•) " else "( ) ", color = if (on) t.accent else t.muted)
+                Txt(name, maxLines = 1)
+            }
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    Txt("Orbit's own words. What an app or GitHub reports itself stays in its own language.", color = t.muted, size = 12.5.sp)
 }
 
 /** A notification when an app you have gets an update: one switch per app, and Android's permission where it asks. */

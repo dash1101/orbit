@@ -16,6 +16,7 @@ fn main() {
         println!("cargo:rerun-if-changed=../orbit/static/{f}");
     }
     println!("cargo:rerun-if-changed=../orbit/static/apps");
+    println!("cargo:rerun-if-changed=../orbit/static/i18n");
     // The apps' icons, built into the program: one entry per file in orbit/static/apps.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../orbit/static/apps");
     let mut rows = String::from("pub static APP_ICONS: &[(&str, &[u8])] = &[\n");

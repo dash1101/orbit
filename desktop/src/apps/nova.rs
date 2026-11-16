@@ -642,7 +642,7 @@ impl App for Nova {
             ("warn", "Running, but its alerts have stopped checking the server".to_string())
         } else if !issues.is_empty() {
             let n = issues.len();
-            ("warn", format!("Running · {n} need{} attention: {}", if n == 1 { "s" } else { "" }, issues[0]))
+            ("warn", if n == 1 { format!("Running · 1 needs attention: {}", issues[0]) } else { format!("Running · {n} need attention: {}", issues[0]) })
         } else if hl.is_some() {
             ("ok", "Running · all systems normal".to_string())
         } else {

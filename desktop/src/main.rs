@@ -9,6 +9,7 @@ mod desktop_entry;
 mod engine;
 mod github_login;
 mod host;
+mod i18n;
 mod net;
 mod recipe;
 mod recipes;

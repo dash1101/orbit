@@ -468,7 +468,7 @@ impl Hub {
         }
         json!({"name": "Orbit", "version": crate::VERSION, "dryRun": self.dry_run(), "github": self.github.state(), "system": self.host.system,
                "orbitUpdate": self.orbit_update(), "menu": self.menu_state(), "themes": themes, "themeTokens": THEME_COLORS,
-               "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
+               "settings": {"theme": c["theme"], "language": c["language"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
                             "notifyApprovals": c["notifyApprovals"], "port": c["port"].as_u64().unwrap_or(8790),
                             "portNow": self.port.load(Ordering::Relaxed)},
                "apps": self.apps().iter().map(|a| { let mut d = a.describe(); self.catalog.apply(&mut d); d["enabled"] = json!(self.enabled(&a.id())); d }).collect::<Vec<_>>()})
@@ -502,6 +502,11 @@ impl Hub {
             if !(builtin(&cur) || custom_ids(themes).contains(&cur)) {
                 patch.insert("theme".into(), json!("tui")); // the theme in use was deleted
             }
+        }
+        if let Some(v) = b.get("language") {
+            let l = v.as_str().filter(|l| *l == "auto" || crate::i18n::LANGS.iter().any(|(c, _)| c == l))
+                .ok_or_else(|| bad("unknown language"))?;
+            patch.insert("language".into(), json!(l));
         }
         if let Some(v) = b.get("refreshSec") {
             match v.as_i64().filter(|n| v.is_i64() && (1..=60).contains(n)) {
@@ -550,7 +555,7 @@ impl Hub {
                 self.ctx.config.update_app(k, p);
             }
         }
-        if b.keys().any(|k| !["theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "notifyApprovals", "port", "order", "enabled"].contains(&k.as_str())) {
+        if b.keys().any(|k| !["theme", "language", "themes", "refreshSec", "checkUpdates", "autoUpdate", "notifyApprovals", "port", "order", "enabled"].contains(&k.as_str())) {
             return Err(bad("unknown hub setting"));
         }
         let reorder = patch.contains_key("order");
@@ -744,9 +749,11 @@ impl Hub {
                     _ => None,
                 };
                 if let Some(text) = text {
+                    let lang = crate::i18n::chosen(h.ctx.config.get("language").as_str().unwrap_or("auto"));
+                    let (title, text) = (crate::i18n::tr(&lang, "Nova: approval waiting"), crate::i18n::tr(&lang, text));
                     let argv: Vec<String> = ["notify-send", "--app-name=Orbit", &format!("--icon={}", desktop_entry::APP_ID),
                         "--hint=boolean:suppress-sound:true", "--hint=string:desktop-entry:app.novalabs.orbit",
-                        "Nova: approval waiting", text].iter().map(|s| s.to_string()).collect();
+                        &title, &text].iter().map(|s| s.to_string()).collect();
                     let _ = crate::runner::run_capture(&argv, Duration::from_secs(5), true);
                 }
                 seen = now;
@@ -834,6 +841,12 @@ fn get(hub: &Arc<Hub>, url: &str) -> Res<Reply> {
     match path {
         "/" | "/index.html" => return Ok(Reply { code: 200, body: INDEX.to_vec(), ctype: "text/html; charset=utf-8", csp: true }),
         "/icon.svg" => return Ok(Reply { code: 200, body: ICON.to_vec(), ctype: "image/svg+xml", csp: false }),
+        p if p.starts_with("/i18n/") && p.ends_with(".json") => {
+            return match crate::i18n::file(&p[6..p.len() - 5]) {
+                Some(b) => Ok(Reply { code: 200, body: b.to_vec(), ctype: "application/json; charset=utf-8", csp: false }),
+                None => Ok(Reply { code: 404, body: b"{}".to_vec(), ctype: "application/json", csp: false }),
+            };
+        }
         "/api/hub" => return Ok(json_reply(200, &hub.hub_info())),
         "/api/github" => return Ok(json_reply(200, &hub.github.state())),
         "/api/github/access" => return Ok(json_reply(200, &hub.github_access())),

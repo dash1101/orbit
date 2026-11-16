@@ -1,5 +1,9 @@
 **Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.8.0**, a milestone: it comes for every system, Macs and ARM computers included.
+
+- **Orbit in your language:** Spanish, French, German, Portuguese (Brazil), Italian, Russian, Japanese, Chinese (Simplified) and Korean, besides English. Orbit follows your system's language; choose another under *Language* in orbit settings (on Android: settings → language). Its window, the apps' install steps, checks and messages, and its notifications are all translated.
+
 **New in 0.7.1**
 
 - **xmas-tui on Android:** its live wallpaper can be installed and updated from Orbit on your phone (Android 7 and newer). Open it and tap *Set as live wallpaper*. Orbit 0.6.0 and newer on Android already offer it.

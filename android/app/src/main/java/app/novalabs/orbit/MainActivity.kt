@@ -15,6 +15,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        I18n.load(this)
         setContent {
             // the phone's own colours when chosen (and the phone has them), else one of Orbit's themes
             val device = if (model.theme == DEVICE_THEME) deviceTokens() else null

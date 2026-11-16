@@ -100,7 +100,8 @@ val Mono = FontFamily.Monospace
 @Composable
 fun Txt(text: String, modifier: Modifier = Modifier, color: Color = LocalTokens.current.text, size: TextUnit = 14.sp,
         bold: Boolean = false, maxLines: Int = Int.MAX_VALUE) {
-    Text(text, modifier, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+    val shown = if (I18n.code == "en") text else remember(text, I18n.code) { tr(text) }   // (I18n)
+    Text(shown, modifier, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         style = TextStyle(fontFamily = Mono, fontSize = size, lineHeight = size * 1.45f,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal))
 }

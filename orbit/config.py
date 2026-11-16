@@ -7,6 +7,7 @@ from pathlib import Path
 
 DEFAULTS = {
     "theme": "tui",
+    "language": "auto",       # "auto" (the system's) or a language code (orbit/static/i18n)
     "refreshSec": 3,
     "checkUpdates": True,     # ask GitHub (at most every 12 hours) whether a newer release exists
     "autoUpdate": True,       # the program downloads a newer Orbit by itself; it takes over at the next start

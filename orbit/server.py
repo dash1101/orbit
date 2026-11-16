@@ -362,7 +362,7 @@ class Hub:
                 "system": self.host.system,
                 "orbitUpdate": self.orbit_update(), "menu": desktop_entry.state(),
                 "themes": THEMES + [dict(t, custom=True) for t in c.get("themes", [])], "themeTokens": THEME_COLORS,
-                "settings": {"theme": c["theme"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"],
+                "settings": {"theme": c["theme"], "language": c.get("language", "auto"), "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"],
                              "autoUpdate": c["autoUpdate"]},
                 "apps": [dict(a.describe(), enabled=self.enabled(i)) for i, a in self.apps.items()]}
 
@@ -383,6 +383,11 @@ class Hub:
             patch["theme"] = body["theme"]
         elif "themes" in patch and self.ctx.config.get("theme") not in THEME_IDS | {t["id"] for t in patch["themes"]}:
             patch["theme"] = "tui"   # the theme in use was deleted
+        if "language" in body:
+            v = body["language"]
+            if not isinstance(v, str) or not (v == "auto" or (v != "en" and (STATIC / "i18n" / f"{v}.json").is_file()) or v == "en"):
+                raise BadRequest("unknown language")
+            patch["language"] = v
         if "refreshSec" in body:
             v = body["refreshSec"]
             if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= 60:
@@ -407,7 +412,7 @@ class Hub:
                 raise BadRequest("enabled is {app id: true/false}")
             for k, v in en.items():
                 self.ctx.config.update_app(k, {"enabled": v})
-        if set(body) - {"theme", "themes", "refreshSec", "checkUpdates", "autoUpdate", "order", "enabled"}:
+        if set(body) - {"theme", "language", "themes", "refreshSec", "checkUpdates", "autoUpdate", "order", "enabled"}:
             raise BadRequest("unknown hub setting")
         if patch:
             self.ctx.config.update(patch)
@@ -570,6 +575,9 @@ def make_handler(hub, port_ref):
                     self.end_headers()
                     self.wfile.write(html)
                     return
+                m = re.match(r"^/i18n/([A-Za-z-]{2,5})\.json$", path)
+                if m and (STATIC / "i18n" / f"{m.group(1)}.json").is_file():
+                    return self._send(200, (STATIC / "i18n" / f"{m.group(1)}.json").read_bytes(), "application/json; charset=utf-8")
                 if path == "/icon.svg":
                     return self._send(200, (STATIC / "icon.svg").read_bytes(), "image/svg+xml")
                 m = _ICON_RE.match(path)

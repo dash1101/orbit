@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2021"
 description = "Orbit by NovaLabs: one place for your apps"
 license = "MIT"

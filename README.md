@@ -226,6 +226,17 @@ settings.
 A theme is a block of colour and shape tokens in `orbit/static/index.html` (`[data-theme="…"]`), plus an entry in
 `THEMES` in `orbit/server.py`.
 
+## Languages
+
+Orbit speaks English, Spanish, French, German, Portuguese (Brazil), Italian, Russian, Japanese, Chinese (Simplified)
+and Korean. It follows your system's language when it has it; pick another under **Language** in orbit settings (on
+Android: settings → language). Everything Orbit says itself is translated: its window, every app's install steps,
+checks and messages, and its notifications. What an app reports about itself (Nova's check-up, YTM Starcast's outputs)
+stays as that app says it.
+
+The translations are files in `orbit/static/i18n/`, one per language, mapping each English text to its translation
+(`{}` marks a part that changes, such as a version). `python3 tools/i18n.py check` lists anything missing.
+
 ## Keys
 
 `j`/`k` or `↓`/`↑` move · `1`–`9` jump to an app · `o` overview · `i` install · `,` settings · `r` refresh · `t` next theme · `?` the list of keys
