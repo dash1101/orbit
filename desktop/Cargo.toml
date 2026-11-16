@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 description = "Orbit by NovaLabs: one place for your apps"
 license = "MIT"
@@ -28,6 +28,7 @@ hex = "0.4"
 ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
 regex = "1"
+toml_edit = { version = "0.22", default-features = false, features = ["parse", "display"] }
 getrandom = "0.2"
 url = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

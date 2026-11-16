@@ -1,5 +1,12 @@
 **Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.8.1**
+
+- **xmas-tui gets a page in Orbit** once it's installed: whether the wallpaper runs, start, stop and *start at login* (Linux), buttons for its own settings and for playing in a window, and its general settings (frame rate, size, snow, wind, time of day, your villager, clock, widgets, weather, sound). xmas-tui applies them at once; Orbit changes only those, so everything else in its settings file stays as it is.
+- **Installing xmas-tui on Linux installs what it needs, if you like:** kitty (from your system's packages, or kitty's own build just for you when those are too old) and ffmpeg for its moving lock screen. Anything that needs the administrator waits for the system to ask for your password; nothing is installed without it.
+- **The xmas-tui command** works after Orbit installs it (a link in `~/.local/bin`).
+- Choices with many options are a list.
+
 **New in 0.8.0**, a milestone: it comes for every system, Macs and ARM computers included.
 
 - **Orbit in your language:** Spanish, French, German, Portuguese (Brazil), Italian, Russian, Japanese, Chinese (Simplified) and Korean, besides English. Orbit follows your system's language; choose another under *Language* in orbit settings (on Android: settings → language). Its window, the apps' install steps, checks and messages, and its notifications are all translated.

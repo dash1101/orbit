@@ -122,3 +122,30 @@ pre-release
 reload
 start at login
 new theme
+wallpaper
+village
+clock
+widgets
+weather
+sound
+Snow
+Wind
+Critters
+Zoom
+Weather
+Map
+City
+Units
+normal
+auto
+night
+dawn
+morning
+noon
+afternoon
+dusk
+a little
+a lot
+fahrenheit
+celsius
+none

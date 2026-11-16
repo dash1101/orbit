@@ -997,6 +997,12 @@ function fieldRow(appId, f) {
       f.value ? "on" : "off");
     return h("div", { class: "row" }, h("span", {}, f.label), c, help);
   }
+  if (f.type === "choice" && f.options.length > 5) {   // many choices: a list, so the label keeps its room
+    const sel = h("select", { class: "inp", "aria-label": f.label, onchange: e => save(e.currentTarget.value) },
+      f.options.map(([v, label]) => h("option", { value: v }, label)));
+    sel.value = f.value;
+    return h("div", { class: "row" }, h("span", {}, f.label), sel, help);
+  }
   if (f.type === "choice") {
     const seg = h("div", { class: "seg" }, f.options.map(([v, label]) => h("button", { class: v === f.value ? "on" : "",
       onclick: e => { seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === e.currentTarget)); save(v); } }, label)));
