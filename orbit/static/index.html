@@ -2010,7 +2010,7 @@ function renderHub() {
     h("div", { class: "grid g2" }, box("general", general), box("apps", appsList)),
     githubBox(),
     box("add an app", add),
-    box("about", h("div", { class: "t-muted" }, `Orbit ${hub.version} by NovaLabs · MIT license · local only (127.0.0.1)`),
+    box("about", h("div", { class: "t-muted" }, `Orbit ${hub.version} by NovaLabs · source-available license · local only (127.0.0.1)`),
       h("div", { class: "btns", style: "margin-top:8px" },
         h("button", { class: "btn small", onclick: () => openLink("project") }, "project page"),
         h("button", { class: "btn small", onclick: () => openLink("releases") }, "releases"),

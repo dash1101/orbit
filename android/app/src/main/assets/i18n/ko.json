@@ -445,7 +445,7 @@
 "Orbit wasn't allowed to install apps.": "Orbit이 앱을 설치하도록 허용되지 않았습니다.",
 "Orbit will install {}:": "Orbit이 {}을(를) 설치합니다:",
 "Orbit will:": "Orbit이 할 일:",
-"Orbit {} by NovaLabs · MIT license · local only (127.0.0.1)": "Orbit {} · NovaLabs · MIT 라이선스 · 로컬 전용 (127.0.0.1)",
+"Orbit {} by NovaLabs · source-available license · local only (127.0.0.1)": "Orbit {} · NovaLabs · 소스 공개 라이선스 · 로컬 전용 (127.0.0.1)",
 "Orbit {} is already ready next to this one; it takes over when Orbit restarts.": "Orbit {}이(가) 이미 이 버전 옆에 준비되어 있습니다. Orbit을 다시 시작하면 넘겨받습니다.",
 "Orbit {} is installed; it takes over when Orbit restarts.": "Orbit {}이(가) 설치되었습니다. Orbit을 다시 시작하면 넘겨받습니다.",
 "Orbit {} is out: downloading it in the background; it takes over at the next start": "Orbit {}이(가) 나왔습니다: 백그라운드에서 다운로드 중이며, 다음에 시작할 때 넘겨받습니다",

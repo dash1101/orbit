@@ -1,9 +1,9 @@
 [package]
 name = "orbit"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 description = "Orbit by NovaLabs: one place for your apps"
-license = "MIT"
+license-file = "../LICENSE"
 publish = false
 build = "build.rs"
 

@@ -1,5 +1,9 @@
 **Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.8.2**
+
+- **Orbit has a new license.** From this version on, Orbit is source-available: anyone may read its code, build it for themselves and use it, but not redistribute it, publish a modified version or pass it off as their own. Versions up to 0.8.1 stay under the MIT License they came with. Nothing changes in how Orbit works.
+
 **New in 0.8.1**
 
 - **xmas-tui gets a page in Orbit** once it's installed: whether the wallpaper runs, start, stop and *start at login* (Linux), buttons for its own settings and for playing in a window, and its general settings (frame rate, size, snow, wind, time of day, your villager, clock, widgets, weather, sound). xmas-tui applies them at once; Orbit changes only those, so everything else in its settings file stays as it is.

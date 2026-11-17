@@ -445,7 +445,7 @@
 "Orbit wasn't allowed to install apps.": "Orbit durfte keine Apps installieren.",
 "Orbit will install {}:": "Orbit installiert {}:",
 "Orbit will:": "Orbit wird:",
-"Orbit {} by NovaLabs · MIT license · local only (127.0.0.1)": "Orbit {} von NovaLabs · MIT-Lizenz · nur lokal (127.0.0.1)",
+"Orbit {} by NovaLabs · source-available license · local only (127.0.0.1)": "Orbit {} von NovaLabs · Source-Available-Lizenz · nur lokal (127.0.0.1)",
 "Orbit {} is already ready next to this one; it takes over when Orbit restarts.": "Orbit {} liegt schon bereit neben diesem; es übernimmt, wenn Orbit neu startet.",
 "Orbit {} is installed; it takes over when Orbit restarts.": "Orbit {} ist installiert; es übernimmt, wenn Orbit neu startet.",
 "Orbit {} is out: downloading it in the background; it takes over at the next start": "Orbit {} ist da: wird im Hintergrund heruntergeladen; übernimmt beim nächsten Start",

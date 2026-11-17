@@ -27,7 +27,7 @@ StartupWMClass=app.novalabs.orbit
 EOF
 install -D -m 0644 /dev/stdin "$root/usr/share/doc/orbit/copyright" <<EOF
 Orbit by NovaLabs: https://github.com/dash1101/orbit
-License: MIT
+License: Orbit Source-Available License (see https://github.com/dash1101/orbit/blob/main/LICENSE)
 EOF
 size=$(du -sk "$root/usr" | cut -f1)
 mkdir -p "$root/DEBIAN"

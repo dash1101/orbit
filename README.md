@@ -286,3 +286,9 @@ the built `orbit.exe` on GitHub's Windows machines, checks each one
 answers, and removes them again (and installs Nova over itself through Orbit's Python code, and moves a machine with
 Pocketfader and YTM Beacon over to YTM Starcast the way a person's PC would be moved); and `tools/ci-selfupdate.py`
 has a real standalone Orbit update itself to a newer build and restart on it, on Linux, Windows and both kinds of Mac.
+
+## License
+
+Orbit is **source-available**, not open source: you may read the code, build it for yourself and use it, but not
+redistribute it, publish a modified version or present it as your own. See [LICENSE](LICENSE) for the full terms.
+Versions up to 0.8.1 were released under the MIT License, and copies of those stay under it.

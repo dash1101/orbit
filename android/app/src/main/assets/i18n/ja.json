@@ -445,7 +445,7 @@
 "Orbit wasn't allowed to install apps.": "Orbit にアプリのインストールが許可されませんでした。",
 "Orbit will install {}:": "Orbit は {} をインストールします：",
 "Orbit will:": "Orbit が行うこと：",
-"Orbit {} by NovaLabs · MIT license · local only (127.0.0.1)": "Orbit {} by NovaLabs · MIT ライセンス · ローカルのみ (127.0.0.1)",
+"Orbit {} by NovaLabs · source-available license · local only (127.0.0.1)": "Orbit {} by NovaLabs · ソース公開ライセンス · ローカルのみ (127.0.0.1)",
 "Orbit {} is already ready next to this one; it takes over when Orbit restarts.": "Orbit {} はすでにこれと並んで準備できています。Orbit の再起動時に引き継ぎます。",
 "Orbit {} is installed; it takes over when Orbit restarts.": "Orbit {} をインストールしました。Orbit の再起動時に引き継ぎます。",
 "Orbit {} is out: downloading it in the background; it takes over at the next start": "Orbit {} が出ました：バックグラウンドでダウンロード中です。次の起動時に引き継ぎます",

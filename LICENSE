@@ -1,21 +1,81 @@
-MIT License
+Orbit Source-Available License
 
-Copyright (c) 2026 dash1101
+Copyright (c) 2026 dash1101 (NovaLabs). All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license covers Orbit: its source code, icons, text, translations and
+everything else in this repository that is not listed under "Other people's
+work" below (together, "the Software").
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The Software is source-available, not open source. It is published so that
+people can see how it works and use it, not so that they can take it.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. What you may do
+
+   a. Read and study the source code.
+   b. Download, install, update and use the official releases published by
+      the copyright holder (on this repository's Releases page, and the
+      updates Orbit installs itself).
+   c. Build the Software from this source code and run that build on your
+      own devices.
+   d. Fork this repository on GitHub, as GitHub's Terms of Service allow,
+      in order to propose changes back to it (issues and pull requests).
+      A contribution you send is licensed to the copyright holder under the
+      same terms as the Software, with the right to use and relicense it.
+   e. Quote short excerpts of the source code (a few lines) when discussing
+      or reporting on the Software, with a link back to this repository.
+
+2. What you may not do
+
+   a. Copy, publish, share, sell, rent, sublicense or otherwise distribute
+      the Software or any part of it, in source or compiled form, modified
+      or not (apart from what section 1 allows).
+   b. Publish, distribute or offer a modified version, a derivative work, or
+      any software, app, installer or website built from the Software or
+      substantial parts of it.
+   c. Present the Software, or any part or modified version of it, as your
+      own work, or remove, hide or change the copyright notices, the author
+      credits or this license.
+   d. Offer the Software, or any part of it, as part of a paid product or
+      service.
+   e. Use the names "Orbit" or "NovaLabs", their icons or the Software's look
+      in a way that suggests your work is the Software or comes from its
+      author.
+   f. Use the Software's source code or text to train, fine-tune or evaluate
+      machine-learning models.
+
+   Anything not expressly allowed in section 1 is not allowed. For anything
+   else (a redistribution, a port, a commercial use), ask the copyright
+   holder for written permission first.
+
+3. Other people's work
+
+   Parts of the Software that belong to others stay under their own
+   licenses, which this license does not change:
+   - the icons and names of the apps Orbit installs, which belong to those
+     apps (YTDL-UI's belong to its authors);
+   - the third-party libraries the Software is built with (see
+     desktop/Cargo.lock, the Android build files and each library's own
+     license).
+
+4. Earlier versions
+
+   Versions of the Software released before this license was adopted (up to
+   and including 0.8.1) were published under the MIT License, and copies of
+   those versions that were already obtained remain under that license. This
+   license applies to the Software from version 0.8.2 on and to everything in
+   this repository from the commit that adopted it.
+
+5. Ending
+
+   If you break this license, your permission to use the Software ends at
+   once, without notice.
+
+6. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.

@@ -445,7 +445,7 @@
 "Orbit wasn't allowed to install apps.": "Orbit 未获准安装应用。",
 "Orbit will install {}:": "Orbit 将安装 {}：",
 "Orbit will:": "Orbit 将：",
-"Orbit {} by NovaLabs · MIT license · local only (127.0.0.1)": "Orbit {} · NovaLabs 出品 · MIT 许可证 · 仅限本地（127.0.0.1）",
+"Orbit {} by NovaLabs · source-available license · local only (127.0.0.1)": "Orbit {} · NovaLabs 出品 · 源代码可见许可 · 仅限本地（127.0.0.1）",
 "Orbit {} is already ready next to this one; it takes over when Orbit restarts.": "Orbit {} 已在当前版本旁准备就绪；Orbit 重启时接管。",
 "Orbit {} is installed; it takes over when Orbit restarts.": "Orbit {} 已安装；Orbit 重启时接管。",
 "Orbit {} is out: downloading it in the background; it takes over at the next start": "Orbit {} 已发布：正在后台下载；下次启动时接管",
