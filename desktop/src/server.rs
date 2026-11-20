@@ -157,7 +157,8 @@ impl Hub {
     fn apps(&self) -> Vec<Arc<dyn App>> {
         let list = self.apps.read().unwrap().clone();
         // xmas-tui has a page while it's installed: look again when that changed
-        if list.iter().any(|a| a.id() == "xmas-tui") != apps::xmas_tui::installed() {
+        if list.iter().any(|a| a.id() == "xmas-tui") != apps::xmas_tui::installed()
+            || list.iter().any(|a| a.id() == "ytdl-ui") != apps::ytdl_ui::installed() {
             self.reload();
             return self.apps.read().unwrap().clone();
         }
@@ -264,6 +265,7 @@ impl Hub {
                         d["open"] = json!(a.open_label());
                     }
                     d["cardActions"] = json!(a.card_actions());
+                    d["ownSettings"] = a.own_settings().unwrap_or(Value::Null);
                 }
             } else {
                 d["state"] = json!("off");
@@ -298,6 +300,9 @@ impl Hub {
         }
         d["actions"] = json!(actions);
         d["settings"] = json!(a.settings());
+        d["ownSettings"] = if d["actions"].as_array().map(|l| l.is_empty()).unwrap_or(true) { Value::Null } else {
+            a.own_settings().filter(|o| d["actions"].as_array().unwrap().iter().any(|x| x["id"] == o["id"])).unwrap_or(Value::Null)
+        };
         d["enabled"] = json!(self.enabled(id));
         Ok(d)
     }
@@ -474,7 +479,7 @@ impl Hub {
         }
         json!({"name": "Orbit", "version": crate::VERSION, "dryRun": self.dry_run(), "github": self.github.state(), "system": self.host.system,
                "orbitUpdate": self.orbit_update(), "menu": self.menu_state(), "themes": themes, "themeTokens": THEME_COLORS,
-               "settings": {"theme": c["theme"], "language": c["language"], "refreshSec": c["refreshSec"], "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
+               "settings": {"theme": c["theme"], "language": c["language"], "refreshSec": c["refreshSec"], "navAll": c["navAll"].as_bool().unwrap_or(false), "checkUpdates": c["checkUpdates"], "autoUpdate": c["autoUpdate"],
                             "notifyApprovals": c["notifyApprovals"], "port": c["port"].as_u64().unwrap_or(8790),
                             "portNow": self.port.load(Ordering::Relaxed)},
                "apps": self.apps().iter().map(|a| { let mut d = a.describe(); self.catalog.apply(&mut d); d["enabled"] = json!(self.enabled(&a.id())); d }).collect::<Vec<_>>()})
@@ -536,6 +541,9 @@ impl Hub {
         if let Some(v) = b.get("notifyApprovals") {
             patch.insert("notifyApprovals".into(), json!(v.as_bool().ok_or_else(|| bad("notifyApprovals is true or false"))?));
         }
+        if let Some(v) = b.get("navAll") {
+            patch.insert("navAll".into(), json!(v.as_bool().ok_or_else(|| bad("navAll is true or false"))?));
+        }
         if let Some(v) = b.get("checkUpdates") {
             patch.insert("checkUpdates".into(), json!(v.as_bool().ok_or_else(|| bad("checkUpdates is true or false"))?));
         }
@@ -561,7 +569,7 @@ impl Hub {
                 self.ctx.config.update_app(k, p);
             }
         }
-        if b.keys().any(|k| !["theme", "language", "themes", "refreshSec", "checkUpdates", "autoUpdate", "notifyApprovals", "port", "order", "enabled"].contains(&k.as_str())) {
+        if b.keys().any(|k| !["theme", "language", "themes", "refreshSec", "navAll", "checkUpdates", "autoUpdate", "notifyApprovals", "port", "order", "enabled"].contains(&k.as_str())) {
             return Err(bad("unknown hub setting"));
         }
         let reorder = patch.contains_key("order");
@@ -836,7 +844,7 @@ fn caps(re: &str, path: &str) -> Option<Vec<String>> {
 const APP_RE: &str = r"^/api/apps/([a-z0-9][a-z0-9-]{0,39})(/[a-z]+)?$";
 const ICON_RE: &str = r"^/apps/([a-z0-9][a-z0-9-]{0,39}\.(?:svg|png))$";
 const TERM_RE: &str = r"^/api/term/([0-9a-f]{12})(/input|/interrupt|/resize|/close)?$";
-const INST_RE: &str = r"^/api/install/([a-z0-9][a-z0-9-]{0,39})(/plan|/start)?$";
+const INST_RE: &str = r"^/api/install/([a-z0-9][a-z0-9-]{0,39})(/plan|/start|/notes-page)?$";
 const JOB_RE: &str = r"^/api/install/jobs/([0-9a-f]{12})(/cancel|/next)?$";
 
 fn get(hub: &Arc<Hub>, url: &str) -> Res<Reply> {
@@ -986,6 +994,21 @@ fn post(hub: &Arc<Hub>, url: &str, body: &Value) -> Res<Reply> {
             let nid = s("id").ok_or_else(|| bad("which next step?"))?;
             return ok(hub.install_next(&c[1], &nid)?);
         }
+    }
+    if let Some(c) = caps(INST_RE, path).filter(|c| c[2] == "/notes-page") {
+        // a release's page on GitHub (its full notes): only one Orbit already knows about, from that app's repository
+        let r = hub.installer.recipe(&c[1])?;
+        let v = s("version").ok_or_else(|| bad("which version?"))?;
+        let want = format!("https://github.com/{}/releases/", r.repo());
+        let url = hub.installer.sources.cached_all(r.repo()).into_iter()
+            .find(|x| crate::util::version_of(x["tag"].as_str().unwrap_or("")) == v)
+            .and_then(|x| x["url"].as_str().map(String::from))
+            .filter(|u| u.starts_with(&want))
+            .ok_or_else(|| bad("Orbit doesn't know that release"))?;
+        if !hub.ctx.runner.open_url(&url) {
+            return Err(bad(format!("couldn't open a browser; the address is {url}")));
+        }
+        return ok(json!({"ok": true, "message": format!("opened {url}")}));
     }
     if let Some(c) = caps(INST_RE, path).filter(|c| c[2] == "/plan" || c[2] == "/start") {
         let op = match body.get("op") {

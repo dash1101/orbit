@@ -9,6 +9,7 @@ DEFAULTS = {
     "theme": "tui",
     "language": "auto",       # "auto" (the system's) or a language code (orbit/static/i18n)
     "refreshSec": 3,
+    "navAll": False,          # the side bar shows apps that aren't installed here too (else only installed ones)
     "checkUpdates": True,     # ask GitHub (at most every 12 hours) whether a newer release exists
     "autoUpdate": True,       # the program downloads a newer Orbit by itself; it takes over at the next start
     "apps": {},               # per-app hub settings: {"<id>": {"enabled": true, ...}}

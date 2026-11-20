@@ -1,5 +1,14 @@
 **Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.8.3**
+
+- **Every app has a settings button**, on its card and its page. It shows the settings Orbit can see (and change, where the app allows it), and a button that opens the app's own settings in the app itself.
+- **Short notes before an update:** what's new in each version since the one you have, a few lines each from the app's release notes, with a link to the full notes. On Android too.
+- **The side bar shows only the apps installed on this computer.** Every app keeps its card on the overview; *Show apps that aren't installed in the side bar* in orbit settings brings the others back.
+- **YTDL-UI gets a page in Orbit** once it's installed: whether it answers, start, stop and *start at login* (Linux), its settings, and a way into its admin console.
+- **The apps' own icons:** xmas-tui now shows its own icon, and Orbit checks every icon against the app's repository.
+- **Easier to read on dark themes:** lists such as *Language* and links are drawn in the theme's colours instead of the system's light ones.
+
 **New in 0.8.2**
 
 - **Orbit has a new license.** From this version on, Orbit is source-available: anyone may read its code, build it for themselves and use it, but not redistribute it, publish a modified version or pass it off as their own. Versions up to 0.8.1 stay under the MIT License they came with. Nothing changes in how Orbit works.

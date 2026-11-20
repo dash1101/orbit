@@ -9,6 +9,7 @@ pub fn defaults() -> Map<String, Value> {
         "theme": "tui",
         "language": "auto",     // "auto" (the system's) or a code from i18n::LANGS
         "refreshSec": 3,
+        "navAll": false,        // the side bar shows apps that aren't installed here too (else only installed ones)
         "checkUpdates": true,   // ask GitHub (at most every 12 hours) whether a newer release exists
         "autoUpdate": true,     // a newer Orbit is downloaded and checked by itself, and takes over at the next start
         "notifyApprovals": true, // a desktop notification when Nova has something waiting for approval (Linux)

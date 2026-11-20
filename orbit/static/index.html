@@ -191,7 +191,13 @@ table.units td.m { color: var(--muted); }
 .inp:focus { border-color: var(--accent); outline: none; }
 .inp.num { width: 82px; text-align: right; }
 .inp.wide { width: 100%; }
-select.inp { padding: 3px 4px; }
+/* lists drawn by Orbit, not the system: a system list keeps its own (often light) background under the theme's text */
+select.inp { -webkit-appearance: none; appearance: none; background-color: var(--raise); color: var(--text);
+  padding: 3px 24px 3px 7px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+select.inp:disabled { opacity: .55; cursor: default; }
+select.inp option, select.inp optgroup { background: var(--raise); color: var(--text); }
 .seg { display: flex; flex-wrap: wrap; gap: 0; }
 .seg button { background: none; border: 1px solid var(--line); margin-left: -1px; padding: 2px 9px; cursor: pointer; color: var(--muted); }
 .seg button.on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); text-shadow: none; position: relative; }
@@ -201,7 +207,10 @@ code { font: inherit; color: var(--text); background: var(--raise); border: 1px 
 .callout code, .req code, .result code { background: var(--bg); }
 pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--font); color: var(--muted); white-space: pre-wrap;
           word-break: break-all; }
-.lg .lnk { color: var(--muted); cursor: pointer; background: var(--bg); border: 0; padding: 0; }
+/* a button that looks like a link: no system button look anywhere (that showed light grey under the theme's text) */
+.lnk { color: var(--accent); cursor: pointer; background: none; border: 0; padding: 0; font: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.lnk:hover, .lnk:focus-visible { color: var(--text); outline: none; }
+.lg .lnk { color: var(--muted); background: var(--bg); text-decoration: none; }
 .lg .lnk:hover { color: var(--accent); }
 
 /* theme picker */
@@ -395,6 +404,18 @@ pre.log { margin: 0; max-height: 300px; overflow: auto; font: 12.5px/1.45 var(--
 .mini.img img, .tile .sq.img img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .tile.dim .sq.img { filter: grayscale(.9) brightness(.55); }
 
+#dlgb > .btns:last-child { position: sticky; bottom: -4px; background: var(--bg); padding: 8px 0 4px; margin-top: 4px; }
+/* settings: the way into an app's own, and values Orbit only shows */
+.own { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 10px; font-size: 12.5px; }
+.ro { color: var(--text); text-align: right; overflow-wrap: anywhere; }
+.setdlg { margin-bottom: 12px; }
+/* patch notes in the update window */
+.notes { display: grid; gap: 8px; margin: 2px 0 6px; }
+.notes .nvh { font-size: 12.5px; color: var(--fg); }
+.notes .nvh .lnk { font-size: 12px; }
+.notes ul { margin: 3px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--fg); }
+.notes li { margin: 1px 0; }
+.notes .more { font-size: 12px; margin-top: 2px; color: var(--muted); }
 /* dragging tiles in the nav */
 .tile[data-app] { touch-action: none; }
 #navlist.dragging .tile { transition: transform .22s cubic-bezier(.2,.8,.2,1); }
@@ -669,14 +690,26 @@ const S = { hub: null, apps: [], view: store.get("view", "overview"), detail: nu
 function setTheme(id) {
   document.documentElement.dataset.theme = id;
   store.set("theme", id);
+  matchScheme();
+}
+// The system's own parts (lists, scroll bars, text fields' menus) follow the theme: dark on a dark background.
+function matchScheme() {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(bg);
+  const lum = m ? [m[1], m[2], m[3]].map(x => parseInt(x, 16) / 255).reduce((t, c, k) => t + c * [.2126, .7152, .0722][k], 0) : 0;
+  document.documentElement.style.colorScheme = lum > .5 ? "light" : "dark";
 }
 // paint the last theme at once (custom ones too); the server's copy wins after load
 document.head.append(h("style", { id: "ctheme" }, store.get("ctheme", "")));
 setTheme(store.get("theme", "tui"));
 
 // ------------------------------------------------------------------ nav
+// An app is in the side bar when it's installed on this computer, or answers from elsewhere (or when the setting
+// "Show apps that aren't installed" is on). Every app shown in orbit settings still has its card on the overview.
+const installedHere = a => !a.install || a.install.installed || a.state === "ok" || a.state === "warn";
 function navItems() {
-  return [{ id: "overview", glyph: "◎", name: "overview" }, ...S.apps.filter(a => a.enabled),
+  const all = S.hub && S.hub.settings.navAll;
+  return [{ id: "overview", glyph: "◎", name: "overview" }, ...S.apps.filter(a => a.enabled && (all || installedHere(a))),
           { id: "install", glyph: "+", name: "install apps" }, { id: "hub", glyph: "⚙", name: "orbit settings" }];
 }
 function renderNav() {
@@ -812,7 +845,7 @@ async function poll() {
   S.timer = setTimeout(poll, 1000 * ((S.hub && S.hub.settings.refreshSec) || 3));
 }
 function render(full) {
-  if (!navItems().some(x => x.id === S.view)) S.view = "overview";
+  if (!navItems().some(x => x.id === S.view) && !S.apps.some(a => a.enabled && a.id === S.view)) S.view = "overview";
   if (S.view === "overview") return renderOverview();
   if (S.view === "hub") return renderHub();
   if (S.view === "install") return renderInstall(full);
@@ -844,6 +877,9 @@ function cardButtons(a) {
   // an app's own buttons for the card (Nova: approve a browser; YTM Starcast: YouTube Music, settings)
   for (const act of a.cardActions || []) b.push(h("button", { class: "btn small" + (act.primary ? " primary" : ""), onclick: e => {
     e.stopPropagation(); runAction(a, act); } }, act.label + (act.ext ? " ↗" : "")));
+  // every app here has a settings button: what Orbit can see of its settings, and a way into the app's own
+  if (installedHere(a) && !a.unavailable) b.push(h("button", { class: "btn small", title: `${a.name}: settings`, onclick: e => {
+    e.stopPropagation(); settingsDlg(a.id); } }, "settings"));
   const i = a.install;
   if (i && i.supported !== "none" && (!i.installed || i.update || i.busy)) {
     const label = i.busy ? "installing…" : !i.installed ? "install" : "update to " + pv(i.latest);
@@ -968,6 +1004,8 @@ async function loadLog() {
 // ------------------------------------------------------------------ settings form (generic: drawn from the app's schema)
 function settingsBox(d) {
   const b = box("settings");
+  const own = ownSettingsRow(d);
+  if (own) b.append(own);
   const f = h("div", { class: "fset" });
   if (!d.settings.length) f.append(h("div", { class: "note" }, "nothing to set"));
   for (const g of d.settings) {
@@ -976,6 +1014,29 @@ function settingsBox(d) {
   }
   b.append(f);
   return b;
+}
+// The button into an app's own settings (its window or page), with a line on where they are.
+function ownSettingsRow(d, after) {
+  const o = d.ownSettings;
+  if (!o) return null;
+  return h("div", { class: "own" },
+    h("button", { class: "btn small primary", onclick: () => { if (after) after(); runAction(d, { id: o.id, label: o.label }); } }, o.label + " ↗"),
+    o.help ? h("span", { class: "t-muted" }, o.help) : null);
+}
+// An app's settings in a window, from its card: what Orbit can see and change, and the way to the app's own.
+async function settingsDlg(id) {
+  let d;
+  try { d = await api("/api/apps/" + encodeURIComponent(id)); } catch (e) { return say(e.message, "err"); }
+  const close = () => $("#dlg").classList.remove("open");
+  const f = h("div", { class: "fset" });
+  if (!d.settings.length) f.append(h("div", { class: "note" }, "nothing to set"));
+  for (const g of d.settings) {
+    if (d.settings.length > 1) f.append(h("div", { class: "sec" }, "── " + g.title));
+    for (const fld of g.fields) f.append(fieldRow(d.id, fld));
+  }
+  const body = h("div", { class: "setdlg" }, ownSettingsRow(d, close), f);
+  const r = await showDlg(`${d.name} · settings`, body, [["open its page", "page"], ["close", false, "primary"]]);
+  if (r === "page") go(d.id);
 }
 function fieldRow(appId, f) {
   const save = async (v, el) => {
@@ -991,6 +1052,7 @@ function fieldRow(appId, f) {
   };
   const help = f.help ? h("div", { class: "help" }, f.help) : null;
   if (f.type === "note") return h("div", { class: "note" }, f.value);
+  if (f.readonly) return h("div", { class: "row" }, h("span", {}, f.label), h("span", { class: "ro" }, String(f.value)), help);
   if (f.type === "bool") {
     const c = h("button", { class: "chk" + (f.value ? " on" : ""), role: "switch", "aria-checked": String(!!f.value),
       onclick: () => { const v = !f.value; c.classList.toggle("on", v); c.setAttribute("aria-checked", String(v)); c.textContent = v ? "on" : "off"; save(v).then(() => { if (f.value !== v) { c.classList.toggle("on", f.value); c.textContent = f.value ? "on" : "off"; } }); } },
@@ -1063,7 +1125,8 @@ function showDlg(title, body, buttons) {
     $("#dlgb").replaceChildren(typeof body === "string" ? h("div", { class: "body" }, body) : body, btns);
     $("#dlg").classList.add("open");
     document.addEventListener("keydown", key, true);
-    if (btns.lastChild) btns.lastChild.focus();   // (a dialog that's still working has no buttons yet)
+    $("#dlgb").scrollTop = 0;
+    if (btns.lastChild) btns.lastChild.focus({ preventScroll: true });   // (a dialog that's still working has no buttons yet)
   });
 }
 const confirmDlg = (text, danger) => showDlg("confirm", text, [["cancel", false], ["yes", true, danger ? "danger" : "primary"]]);
@@ -1282,6 +1345,18 @@ async function loadInfo(opts) {
   if (W.stage <= 0) stageCheck(1);
 }
 
+// Short patch notes for an update (from each release's notes on GitHub, newest first), with a link to the full ones.
+function notesList(appId, notes) {
+  return h("div", { class: "notes" }, notes.map(n => h("div", { class: "nv" },
+    h("div", { class: "nvh" }, h("b", {}, pv(n.version)), " ",
+      h("button", { class: "lnk", title: "open the release on GitHub", onclick: async () => {
+        try { const r = await api(`/api/install/${encodeURIComponent(appId)}/notes-page`, { version: n.version }); say(r.message, "ok"); }
+        catch (e) { say(e.message, "err"); } } }, "full notes ↗")),
+    n.lines.length ? h("ul", { "data-no-tr": "" }, n.lines.map(l => h("li", {}, l)))
+      : h("div", { class: "t-muted" }, "No notes for this release."),
+    n.more ? h("div", { class: "more" }, n.more === 1 ? "and 1 more change" : `and ${n.more} more changes`) : null)));
+}
+
 function stageCheck(dir) {
   const i = W.info, sys = i.host.system, plat = i.platforms;
   const inst = i.installed;
@@ -1300,6 +1375,7 @@ function stageCheck(dir) {
       inst.installed && inst.where ? [h("span", { class: "k" }, "where"), h("span", { class: "v t-muted", title: inst.where }, inst.where)] : null,
       i.release ? [h("span", { class: "k" }, "latest"), h("span", { class: "v" }, pv(i.release.tag), h("span", { class: "t-muted" },
         ` · ${ago(i.release.published)}${i.release.sizeText ? " · " + i.release.sizeText : ""}`))] : null),
+    (i.notes || []).length ? [h("h4", {}, "── what's new"), notesList(W.app, i.notes)] : null,
     i.support.level === "limited" ? h("div", { class: "callout warn" }, rt(i.support.note)) : null,
     i.support.level === "none" ? h("div", { class: "callout bad" }, rt(i.support.note)) : null,
     reqs.length ? [h("h4", {}, `── what ${W.meta.name} needs`), h("div", {}, reqs)] : null,
@@ -1806,6 +1882,7 @@ function applyCustomThemes() {
   if (!st) { st = h("style", { id: "ctheme" }); document.head.append(st); }
   st.textContent = css;
   store.set("ctheme", css);
+  matchScheme();
 }
 function themeTokens(id) {
   const t = S.hub.themes.find(x => x.id === id);
@@ -1824,6 +1901,7 @@ function previewTheme(draft) {
   if (!st) { st = h("style", { id: "tpreview" }); document.head.append(st); }
   st.textContent = themeCss("custom-preview", draft.tokens, S.hub.themeTokens);
   document.documentElement.dataset.theme = "custom-preview";
+  matchScheme();
 }
 function endThemeEdit() {
   S.themeEdit = null;
@@ -1921,6 +1999,12 @@ function renderHub() {
   const general = h("div", { class: "fset" },
     h("div", { class: "row" }, h("span", {}, "Language"), langSel,
       h("div", { class: "help" }, "Orbit's own words: its window, the apps' install steps and messages, and its notifications. What an app reports itself stays in that app's language.")),
+    h("div", { class: "row" }, h("span", {}, "Show apps that aren't installed in the side bar"),
+      (() => { const c = h("button", { class: "chk" + (hub.settings.navAll ? " on" : ""), role: "switch",
+        "aria-checked": String(!!hub.settings.navAll), onclick: async () => {
+        const v = !hub.settings.navAll; await setHub({ navAll: v }, "side bar · " + (v ? "every app" : "installed apps")); renderHub(); renderNav(); } },
+        hub.settings.navAll ? "on" : "off"); return c; })(),
+      h("div", { class: "help" }, "Off: the side bar has only the apps installed on this computer (or that answer from elsewhere). Every app still has its card on the overview.")),
     h("div", { class: "row" }, h("span", {}, "Refresh every (seconds)"),
       (() => { const i = h("input", { class: "inp num", type: "number", min: 1, max: 60,
         onchange: e => setHub({ refreshSec: Math.round(+e.currentTarget.value) || 3 }, "refresh · " + e.currentTarget.value + " s") }); i.value = hub.settings.refreshSec; return i; })()),

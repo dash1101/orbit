@@ -168,6 +168,9 @@ impl App for CustomApp {
         Ok(())
     }
 
+    fn own_settings(&self) -> Option<Value> {
+        if self.s("openUrl").is_empty() { None } else { Some(json!({"id": "open", "label": "its own page"})) }
+    }
     fn actions(&self) -> Vec<Value> {
         let mut acts = vec![];
         if !self.s("openUrl").is_empty() {

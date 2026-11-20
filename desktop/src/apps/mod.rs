@@ -9,6 +9,7 @@ pub mod discord;
 pub mod nova;
 pub mod starcast;
 pub mod xmas_tui;
+pub mod ytdl_ui;
 
 use crate::config::Config;
 use crate::net::{self, Releases};
@@ -121,6 +122,12 @@ pub trait App: Send + Sync {
     /// Its "open" action's name, for a button on the overview card while it runs.
     fn open_label(&self) -> String {
         String::new()
+    }
+    /// The action (one of actions()) that opens the app's own settings, in the app itself (its window or page):
+    /// {"id", "label", "help"?}. Every app's settings button shows what Orbit can see of its settings, with this as a
+    /// button to the rest. None: the app has no settings of its own that Orbit can open.
+    fn own_settings(&self) -> Option<Value> {
+        None
     }
     /// More of its actions as buttons on the overview card while it runs (after "open"; each one from actions()).
     fn card_actions(&self) -> Vec<Value> {
@@ -340,6 +347,9 @@ pub fn load(ctx: &Arc<Ctx>) -> Vec<Arc<dyn App>> {
     let mut apps: Vec<Arc<dyn App>> = vec![Arc::new(starcast::Starcast::new(ctx.clone())), Arc::new(nova::Nova::new(ctx.clone()))];
     if xmas_tui::installed() {
         apps.push(Arc::new(xmas_tui::XmasTui::new(ctx.clone()))); // a page once it's installed (Orbit or its own installer)
+    }
+    if ytdl_ui::installed() {
+        apps.push(Arc::new(ytdl_ui::YtdlUi::new(ctx.clone()))); // a page once Orbit has installed it
     }
     for spec in ctx.config.get("custom").as_array().cloned().unwrap_or_default() {
         let id = spec["id"].as_str().unwrap_or("").to_string();

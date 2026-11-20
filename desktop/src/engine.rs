@@ -145,6 +145,7 @@ impl Sources {
             }
             json!({"tag": rel["tag_name"].as_str().unwrap_or(""), "published": rel["published_at"].as_str().unwrap_or(""),
                    "url": rel["html_url"].as_str().unwrap_or(""), "prerelease": rel["prerelease"].as_bool().unwrap_or(false),
+                   "notes": rel["body"].as_str().map(|b| b.chars().take(20000).collect::<String>()).unwrap_or_default(),
                    "assets": assets})
         }).collect();
         self.cache.lock().unwrap().insert(repo.into(), (Instant::now(), list.clone()));

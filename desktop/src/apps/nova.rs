@@ -526,6 +526,17 @@ impl App for Nova {
             .map(|h| (h["waiting"]["browsers"].as_u64().unwrap_or(0), h["waiting"]["actions"].as_u64().unwrap_or(0)))
             .unwrap_or((0, 0))
     }
+    /// Nova's settings are in Nova web (risky ones are approved on a phone).
+    fn own_settings(&self) -> Option<Value> {
+        let acts = self.actions();
+        if acts.iter().any(|a| a["id"] == "open") {
+            Some(json!({"id": "open", "label": "Nova's own settings", "help": "In Nova web: Settings. Risky changes are approved on your phone."}))
+        } else if acts.iter().any(|a| a["id"] == "gui") {
+            Some(json!({"id": "gui", "label": "Nova's own settings", "help": "In Nova Server, on this computer."}))
+        } else {
+            None
+        }
+    }
     /// "approve a browser" on the card (the button to press when something is waiting).
     fn card_actions(&self) -> Vec<Value> {
         let waiting = *self.waiting.lock().unwrap() > 0;

@@ -11,7 +11,9 @@ import java.security.MessageDigest
 data class Asset(val name: String, val url: String, val api: String, val size: Long)
 /** A release. [newer]: a newer release that has no file for this app (its tag), when the newest one doesn't. */
 data class Release(val tag: String, val published: String, val prerelease: Boolean, val page: String,
-                   val assets: Map<String, Asset>, val newer: String = "") {
+                   val assets: Map<String, Asset>, val newer: String = "",
+                   /** (tag, release notes) of the releases with this app's file, newest first, up to this one (for [Notes]). */
+                   val notes: List<Pair<String, String>> = emptyList()) {
     val version get() = Versions.clean(tag)
 }
 
@@ -76,7 +78,9 @@ object GitHub {
                 it.optString("url"), it.optLong("size"))
         }
         return Release(best.optString("tag_name"), best.optString("published_at"), best.optBoolean("prerelease"),
-            best.optString("html_url"), map, newer = if (best !== newest) newest.optString("tag_name") else "")
+            best.optString("html_url"), map, newer = if (best !== newest) newest.optString("tag_name") else "",
+            notes = sorted.dropWhile { it !== best }.filter { wants(names(it)) }
+                .map { it.optString("tag_name") to it.optString("body").take(20000) })
     }
 
     /** A file from [repo]'s default branch, through api.github.com (Orbit's catalog), up to 512 KB. */

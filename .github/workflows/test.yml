@@ -21,6 +21,10 @@ jobs:
         with: { python-version: "${{ matrix.python }}" }
       - name: Tests (fakes and stub servers only)
         run: python -W error::ResourceWarning -m unittest discover -s tests -t . -v
+      - name: The apps' icons match their own repositories
+        if: matrix.python == '3.13'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: python tools/sync-icons.py --check && python tools/make-catalog.py --check
       - name: Page script parses
         run: |
           python - <<'PY'

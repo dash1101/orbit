@@ -11,6 +11,7 @@ mod github_login;
 mod host;
 mod i18n;
 mod net;
+mod notes;
 mod recipe;
 mod recipes;
 mod runner;

@@ -359,6 +359,20 @@ private fun Review(model: HubModel, app: Listing) {
     )
     lines.forEachIndexed { i, line -> Bullet(line, i) }
     if (apk == null) Callout("This release has no Android app.", "", t.down)
+    val news = Notes.between(rel.notes, card.installed, rel.version)
+    if (news.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Txt("What's new:")
+        news.forEach { n ->
+            Spacer(Modifier.height(6.dp))
+            Txt(n.version, bold = true, size = 13.sp)
+            if (n.lines.isEmpty()) Txt("No notes for this release.", color = t.muted, size = 12.5.sp)
+            n.lines.forEach { line ->
+                Row(Modifier.padding(vertical = 1.dp)) { Txt("· ", color = t.accent, size = 12.5.sp); Txt(line, size = 12.5.sp, raw = true) }
+            }
+            if (n.more > 0) Txt(if (n.more == 1) "and 1 more change" else "and ${n.more} more changes", color = t.muted, size = 12.sp)
+        }
+    }
     if (app.note.isNotEmpty()) { Spacer(Modifier.height(10.dp)); Txt(app.note, color = t.muted, size = 12.5.sp) }
 }
 

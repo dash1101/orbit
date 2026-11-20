@@ -23,6 +23,10 @@ I18N = ROOT / "orbit" / "static" / "i18n"
 ANDROID = ROOT / "android" / "app" / "src" / "main" / "assets" / "i18n"
 KT = ROOT / "android" / "app" / "src" / "main" / "java" / "app" / "novalabs" / "orbit"
 
+# Source files with no text of their own to show: their strings are what they look for in other text (the release-note
+# shortener looks for words like "new" and "updating from" in an app's release notes).
+NO_TEXT = {"notes.rs", "Notes.kt"}
+
 # code, name in that language (English first; it has no file)
 LANGUAGES = [("en", "English"), ("es", "Español"), ("fr", "Français"), ("de", "Deutsch"), ("pt-BR", "Português (Brasil)"),
              ("it", "Italiano"), ("ru", "Русский"), ("ja", "日本語"), ("zh-CN", "简体中文"), ("ko", "한국어")]
@@ -259,6 +263,8 @@ def keys():
             keep(out, text)
     # Orbit for desktop (Rust): every text a recipe, app or the server can show
     for f in sorted((ROOT / "desktop" / "src").rglob("*.rs")):
+        if f.name in NO_TEXT:
+            continue
         src = f.read_text(encoding="utf-8").split("#[cfg(test)]")[0]
         for text, s, e, kind in joined(src, "rs"):
             if FORMAT_MACRO.search(src[max(0, s - 80):s]):
@@ -268,6 +274,8 @@ def keys():
             keep(out, text)
     # Orbit for Android
     for f in sorted(KT.glob("*.kt")):
+        if f.name in NO_TEXT:
+            continue
         src = f.read_text(encoding="utf-8")
         for text, s, e, kind in joined(src, "kt"):
             keep(out, text)

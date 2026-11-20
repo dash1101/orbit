@@ -220,8 +220,18 @@ pub fn info(r: &Arc<dyn Recipe>, op: &str, given: &Value) -> Res<Value> {
     let release = rel.as_ref().map(|rv| json!({
         "version": version_of(rv["tag"].as_str().unwrap_or("")), "tag": rv["tag"], "published": rv["published"],
         "prerelease": rv["prerelease"], "size": size, "sizeText": if size > 0 { fmt_size(size) } else { String::new() }, "url": rv["url"]}));
+    // what's new for an update: the releases after the one installed, a few lines each (nothing for a first install)
+    let notes = match rel.as_ref() {
+        Some(rv) if op == "install" => {
+            let list: Vec<Value> = r.base().sources.cached_all(r.repo()).into_iter().filter(|x| r.wants(x)).collect();
+            let cur = if installed { inst["version"].as_str().unwrap_or("").to_string() } else { String::new() };
+            let latest = version_of(rv["tag"].as_str().unwrap_or(""));
+            if !installed || cur.is_empty() || !net::is_newer(&latest, &cur) { json!([]) } else { crate::notes::between(&list, &cur, &latest) }
+        }
+        _ => json!([]),
+    };
     let mut out = json!({
-        "app": r.id(), "name": r.name(), "op": op, "title": r.title(op, rel.as_ref()), "host": r.base().host.describe(),
+        "app": r.id(), "name": r.name(), "op": op, "title": r.title(op, rel.as_ref()), "host": r.base().host.describe(), "notes": notes,
         "support": sup, "installed": inst, "platforms": platforms(r.as_ref()), "release": release,
         "requirements": reqs, "options": fields,
         "summary": if none { vec![] } else { r.summary(op, &opts, rel.as_ref()) },

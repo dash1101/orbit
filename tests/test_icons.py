@@ -12,7 +12,7 @@ spec.loader.exec_module(sync)
 
 class IconTests(unittest.TestCase):
     def test_android_copies_match_desktop(self):
-        for name, (_repo, _path, android) in sync.ICONS.items():
+        for name, (_repo, _paths, android) in sync.ICONS.items():
             self.assertTrue((sync.DESKTOP / name).is_file(), name)
             if android:
                 self.assertEqual((sync.ANDROID / name).read_bytes(), (sync.DESKTOP / name).read_bytes(),

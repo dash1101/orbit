@@ -184,7 +184,18 @@ follows it.
 |---|---|---|---|
 | **YTM Starcast** | running or not, output device, volume, what's playing, the browser extension, EQ, sleep timer, your Discord status (what Discord shows and why, the Discord connection), release; details: Discord user, application ID, album, browser extension, the last Discord error, the old YTM Beacon app | *Pause other players*; YTM Starcast's parts (YouTube Music remote, Discord status, Refine, this computer's audio); the Discord card: private mode, name in member list, album art, progress, badge, button, when paused, words never to show; address and access token | open web app, desktop window, hide your Discord status for 30 min / 1 h / 3 h, show now, move over from YTM Beacon, remove YTM Beacon, start/stop/restart, start at login |
 | **Nova** | answering or not, version and API level; how the server itself is doing: what needs attention, containers, websites, the fullest drive, the last backup, uptime; every Nova service and timer (the assistant and lighting when set up), failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web and the Nova Server window (Nova 0.9.16 and newer); status, doctor, recent actions, the API's log; pair a phone, a view-only device or a phone that's away from home, paired devices, what's waiting for approval, approve a browser, remove a device; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API; linked servers, plugins |
+| **YTDL-UI** | answering or not, version, yt-dlp ready, its folder, release | shown (it changes them in its own admin console): address, password for visitors, allowed sites, where downloads are processed, downloads at the same time, how long finished files are kept, speed limit, update checks | open, its own settings, start/stop/restart, start at login (Linux) |
+| **xmas-tui** | running as your wallpaper or not, its settings file | frame rate, size, zoom, snow, wind, critters, time of day, your villager, clock, widgets, weather, sound | its own settings, play in a window, start/stop/restart, start at login (Linux) |
 | **Your own apps** | the service's state and/or a health address | name, service, health address, web page | open, start/stop/restart, start at login, remove |
+
+**Every app has a settings button**, on its card and its page: it shows the settings Orbit can see (and change, where
+the app allows it), with a button that opens the app's own settings in the app itself.
+
+**Updates come with short notes.** Before an update, Orbit shows what's new in each version since the one you have
+(a few lines each, from the app's release notes on GitHub), with a link to the full notes.
+
+**The side bar shows the apps installed on this computer** (and any that answer from elsewhere); every app keeps its
+card on the overview. *Show apps that aren't installed in the side bar* in orbit settings shows all of them.
 
 **Nova on Windows** (a preview) shows whether Nova answers, its version and API level; its health file and logs are only readable by the administrator there, so *api log* and Nova's commands open in an administrator PowerShell window, and *nova server* opens the Nova Server window from the Start menu.
 
@@ -250,12 +261,8 @@ list, marked "not available on … yet".
 
 - **Without code:** orbit settings → *add an app*, with a systemd service, a health address (any page that answers
   while the app is up) and/or a web page.
-- **Built in:** write a subclass of `orbit.apps.base.App` (see `starcast.py` or `nova.py`) and list it in
-  `BUILTIN` in `orbit/apps/__init__.py`. An app answers four things: `status()`, `settings()` (fields the window draws
-  for you), `actions()` and `logs()`.
-- **Installable:** add a recipe in `orbit/install/recipes/` (see `starcast.py` or `nova.py`) with the same `id` and list
-  it in `ALL`. A recipe says which systems the app runs on, how to tell it's installed, what the computer needs, the
-  choices to offer, and the steps; the engine does the downloading, checking, progress and dry run.
+- **Built in:** [AGENTS.md](AGENTS.md) is the step-by-step guide: the catalog entry, the icon, the install recipe and
+  the app's page (`desktop/src/recipes/` and `desktop/src/apps/`), Android, translations, tests and releasing.
 
 ## Privacy and safety
 

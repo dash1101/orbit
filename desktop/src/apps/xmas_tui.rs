@@ -264,8 +264,8 @@ impl App for XmasTui {
     fn units(&self) -> Vec<(String, bool)> {
         if cfg!(target_os = "linux") { vec![(UNIT.into(), true)] } else { vec![] }
     }
-    fn open_label(&self) -> String {
-        "settings".into()
+    fn own_settings(&self) -> Option<Value> {
+        Some(json!({"id": "open", "label": "xmas-tui's own settings", "help": "Its own settings window: keys, villagers, updates and the rest."}))
     }
 
     fn status(&self) -> Value {
@@ -292,7 +292,7 @@ impl App for XmasTui {
     fn settings(&self) -> Vec<Value> {
         let doc = self.doc();
         let mut out: Vec<Value> = SETTINGS.iter().map(|(title, list)| json!({"title": title, "fields": list.iter().map(|s| field_for(&doc, s)).collect::<Vec<_>>()})).collect();
-        out.push(json!({"title": "more", "fields": [field("more", "more", "note", json!("Everything else (keys, villagers, updates…) is in xmas-tui's own settings: “settings” above. Changes here apply at once."), "app")]}));
+        out.push(json!({"title": "more", "fields": [field("more", "more", "note", json!("Everything else (keys, villagers, updates…) is in xmas-tui's own settings: “xmas-tui's own settings” above. Changes here apply at once."), "app")]}));
         out
     }
 
@@ -314,7 +314,7 @@ impl App for XmasTui {
 
     fn actions(&self) -> Vec<Value> {
         let mut acts = vec![
-            json!({"id": "open", "label": "settings", "group": "open", "primary": true}),
+            json!({"id": "open", "label": "xmas-tui's own settings", "group": "open", "primary": true}),
             json!({"id": "window", "label": "play in a window", "group": "open"}),
         ];
         acts.extend(unit_actions(self));

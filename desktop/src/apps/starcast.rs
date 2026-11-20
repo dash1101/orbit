@@ -287,7 +287,18 @@ impl App for Starcast {
     }
     /// YouTube Music itself, and YTM Starcast's settings in it, instead of the web app (when YTM Starcast can).
     fn card_actions(&self) -> Vec<Value> {
-        self.actions().into_iter().filter(|a| a["id"] == "ytm" || a["id"] == "ytm-settings").collect()
+        self.actions().into_iter().filter(|a| a["id"] == "ytm").collect()
+    }
+    /// Its settings inside YouTube Music (Refine's panel) when it can show them there, else its web app.
+    fn own_settings(&self) -> Option<Value> {
+        let acts = self.actions();
+        if acts.iter().any(|a| a["id"] == "ytm-settings") {
+            Some(json!({"id": "ytm-settings", "label": "YTM Starcast's own settings", "help": "They open in YouTube Music, in YTM Starcast's panel."}))
+        } else if acts.iter().any(|a| a["id"] == "open") {
+            Some(json!({"id": "open", "label": "YTM Starcast's own settings", "help": "In its web app: Settings."}))
+        } else {
+            None
+        }
     }
     fn forget_found(&self) {
         *self.found.lock().unwrap() = None;
