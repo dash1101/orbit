@@ -81,8 +81,7 @@
      "app.novalabs.orbit"
     ],
     "apk": [
-     "orbit-android.apk",
-     "re:orbit-v[^/]*-android\\.apk"
+     "orbit-android.apk"
     ],
     "sums": "SHA256SUMS",
     "note": "Orbit updates itself from its GitHub releases."

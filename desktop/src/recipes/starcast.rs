@@ -1,4 +1,4 @@
-//! YTM Starcast on Linux, Windows and macOS, and the move to it from Pocketfader and YTM Beacon.
+//! YTM Starcast on Linux, Windows and macOS.
 //!
 //! * Linux: the same layout as YTM Starcast's own install.sh: its own Python environment in ~/.local/share/ytm-starcast
 //!   (from the release's Python package), `ytm-starcast` and `ytm-starcast-gui` in ~/.local/bin, an apps-menu entry,
@@ -6,17 +6,11 @@
 //! * Windows: the release's standalone programs in "%LOCALAPPDATA%\Programs\YTM Starcast", a Start-menu entry for the
 //!   window, and the release's own install-exe.ps1 to start it at logon (a per-user scheduled task; no administrator).
 //! * macOS: the Python package in "~/Library/Application Support/YTM Starcast" and a LaunchAgent (experimental).
-//!
-//! The move: when this computer still has Pocketfader (the same places under the old name) or the YTM Beacon
-//! program, installing YTM Starcast also moves it over: the new program is put in place first, then the old one is
-//! stopped (both use the same port and both would set the Discord status), YTM Beacon is removed with its own
-//! uninstaller (which keeps its settings), YTM Starcast is started, and only once it answers are Pocketfader's old
-//! files removed. Settings are never copied or deleted here: YTM Starcast takes them over itself when it first starts.
 use crate::apps::with;
 use crate::engine::{Session, Sources};
 use crate::host::Host;
 use crate::recipe::{need, option, step, Recipe, RecipeBase, StepDef};
-use crate::util::{self, failed, Error, Res};
+use crate::util::{failed, Error, Res};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -25,10 +19,9 @@ pub const PORT: u16 = 8777;
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"; // a desktop window's "start at login"
 /// The desktop window's id (its GTK application id and window class): the apps-menu entry's StartupWMClass.
 const WINDOW_ID: &str = "app.novalabs.starcast";
-const MOVED: &str = "Pocketfader (its old name)"; // how detect() describes a Pocketfader that is still the install here
 const OTHER_WAY: &str = "installed another way";
 
-/// Where one name of the app lives: YTM Starcast's, or Pocketfader's from before the move.
+/// Where YTM Starcast lives, by name.
 #[derive(Clone, Copy)]
 pub struct Names {
     pub slug: &'static str,          // commands, settings folder, Linux folder, menu entry, icon and service
@@ -48,8 +41,6 @@ impl Names {
 
 pub const NEW: Names = Names { slug: "ytm-starcast", module: "starcast", dists: &["ytm_starcast", "ytm-starcast"], win_dir: "YTM Starcast",
                                task: "YTM Starcast", label: "app.novalabs.starcast.server", display: "YTM Starcast" };
-pub const OLD: Names = Names { slug: "pocketfader", module: "pocketfader", dists: &["pocketfader"], win_dir: "Pocketfader",
-                               task: "Pocketfader", label: "app.pocketfader.server", display: "Pocketfader" };
 
 /// Options of the server that an update keeps from the install before it (as YTM Starcast's own install.sh does);
 /// `--lan` isn't one of them: it follows the installer's "home Wi-Fi" choice.
@@ -147,14 +138,13 @@ pub struct StarcastRecipe {
     base: RecipeBase,
     pub port: u16,
     pub wait_seconds: f64,
-    pub beacon_wait: f64, // seconds YTM Beacon's program gets to go away after its uninstaller ends
     pub stop_wait: f64,   // seconds a server started without a service manager gets to end once asked
     pub proc: PathBuf,    // Linux: where a running program's command line is read before it is stopped
 }
 
 impl StarcastRecipe {
     pub fn new(host: Host, sources: Arc<Sources>) -> StarcastRecipe {
-        StarcastRecipe { base: RecipeBase::new(host, sources), port: PORT, wait_seconds: 30.0, beacon_wait: 15.0, stop_wait: 5.0, proc: "/proc".into() }
+        StarcastRecipe { base: RecipeBase::new(host, sources), port: PORT, wait_seconds: 30.0, stop_wait: 5.0, proc: "/proc".into() }
     }
 
     fn h(&self) -> &Host {
@@ -205,21 +195,6 @@ impl StarcastRecipe {
     fn autostart_path(&self, n: Names) -> PathBuf {
         self.h().config_home().join("autostart").join(format!("{}.desktop", n.slug))
     }
-    /// YTM Beacon, where its own installer put it.
-    fn beacon_exe(&self) -> PathBuf {
-        if self.h().system == "windows" {
-            return self.h().local_app_data().join("ytm-beacon").join("ytm-beacon.exe");
-        }
-        self.h().bin_dir().join("ytm-beacon")
-    }
-    fn beacon_found(&self) -> String {
-        let exe = self.beacon_exe();
-        if exe.exists() { sv(&exe) } else { self.h().which("ytm-beacon").unwrap_or_default() }
-    }
-    /// YTM Beacon's settings folder and its data folder.
-    fn beacon_dirs(&self) -> Vec<PathBuf> {
-        vec![self.h().config_home().join("ytm-beacon"), self.h().local_app_data().join("ytm-beacon")]
-    }
     fn wheel_name(&self, rel: &Value) -> Res<String> {
         let names: Vec<String> = rel["assets"].as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default();
         names.into_iter().find(|n| NEW.dists.iter().any(|d| n.starts_with(&format!("{d}-"))) && n.ends_with("-py3-none-any.whl"))
@@ -242,20 +217,15 @@ impl StarcastRecipe {
                 .and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|j| j["version"].as_str().map(String::from)).unwrap_or_default();
             return Some((sv(&self.app_dir(n)), v));
         }
-        if ![n.slug, NEW.slug].iter().any(|x| self.venv_bin(x, n).exists()) {
+        if !self.venv_bin(n.slug, n).exists() {
             return None;
         }
         Some((sv(&self.app_dir(n)), self.venv_version(n)))
     }
 
-    /// YTM Starcast's version in that environment, else Pocketfader's (a Pocketfader that updated itself has both).
+    /// YTM Starcast's version in its environment.
     fn venv_version(&self, n: Names) -> String {
-        let mut dists: Vec<&str> = NEW.dists.to_vec();
-        for d in n.dists {
-            if !dists.contains(d) {
-                dists.push(d);
-            }
-        }
+        let dists: Vec<&str> = n.dists.to_vec();
         let lib = self.venv(n).join("lib");
         let pys: Vec<PathBuf> = std::fs::read_dir(&lib).map(|r| r.flatten().map(|e| e.path())
             .filter(|p| p.file_name().map(|x| x.to_string_lossy().starts_with("python")).unwrap_or(false)).collect()).unwrap_or_default();
@@ -292,18 +262,13 @@ impl StarcastRecipe {
     fn existing_lan(&self) -> bool {
         let h = self.h();
         if h.system == "windows" {
-            for n in [NEW, OLD] {
-                let (rc, out) = h.probe(&[h.tool("schtasks"), "/Query".into(), "/TN".into(), n.task.into(), "/XML".into()]);
-                if rc == 0 {
-                    return out.contains("--lan");
-                }
-            }
-            return false;
+            let (rc, out) = h.probe(&[h.tool("schtasks"), "/Query".into(), "/TN".into(), NEW.task.into(), "/XML".into()]);
+            return rc == 0 && out.contains("--lan");
         }
         let places = if h.system == "linux" {
-            vec![self.unit_path(NEW), self.unit_path(OLD), self.autostart_path(NEW), self.autostart_path(OLD)]
+            vec![self.unit_path(NEW), self.autostart_path(NEW)]
         } else {
-            vec![self.plist_path(NEW), self.plist_path(OLD)]
+            vec![self.plist_path(NEW)]
         };
         for p in places {
             if let Ok(text) = std::fs::read_to_string(&p) {
@@ -331,48 +296,12 @@ impl StarcastRecipe {
         (None, "not found".into())
     }
 
-    fn beacon_version(&self, exe: &str) -> String {
-        let (rc, out) = self.h().probe(&[exe.into(), "version".into()]);
-        let re = regex::Regex::new(r"v?(\d+\.\d+\.\d+[^\s]*)").unwrap();
-        if rc != 0 {
-            return String::new();
-        }
-        re.captures(&out).map(|c| c[1].to_string()).unwrap_or_default()
-    }
-
-    /// Pocketfader's commands in ~/.local/bin, but only links into its own folder (never someone else's file).
-    fn old_links(&self) -> Vec<PathBuf> {
-        self.links(OLD).into_iter().filter(|l| links_into(l, &self.app_dir(OLD))).collect()
-    }
-
-    /// What is left of Pocketfader here once YTM Starcast has replaced it (never its settings).
-    fn leftovers(&self) -> Vec<PathBuf> {
-        let mut paths = vec![self.app_dir(OLD)];
-        match self.h().system.as_str() {
-            "windows" => paths.push(self.shortcut_path(OLD)),
-            "linux" => {
-                paths.extend(self.old_links());
-                paths.extend([self.desktop_path(OLD), self.icon_path(OLD), self.autostart_path(OLD)]);
-            }
-            _ => {}
-        }
-        paths.into_iter().filter(|p| util::exists(p)).collect()
-    }
-
-    fn kept_settings(&self) -> PathBuf {
-        [self.settings_dir(NEW), self.settings_dir(OLD)].into_iter().find(|d| d.exists()).unwrap_or_else(|| self.settings_dir(NEW))
-    }
-
     fn tailscale_app(&self) -> bool {
         match self.h().system.as_str() {
             "darwin" => Path::new("/Applications/Tailscale.app").exists(),
             "windows" => self.h().program_files().join("Tailscale").join("tailscale.exe").exists(),
             _ => false,
         }
-    }
-
-    fn legacy(&self) -> Value {
-        self.installed()["legacy"].clone()
     }
 
     // ---- shared steps ----------------------------------------------------------------------------
@@ -406,14 +335,13 @@ impl StarcastRecipe {
         Ok(true)
     }
 
-    /// The server's command line as the install here has it (the service, the login entry or the LaunchAgent;
-    /// YTM Starcast's first, else Pocketfader's), split into words.
+    /// The server's command line as the install here has it (the service, the login entry or the LaunchAgent), split
+    /// into words.
     fn existing_command(&self) -> Vec<String> {
         let h = self.h();
         let words = |line: &str| line.split_whitespace().map(String::from).collect::<Vec<_>>();
         if h.system == "linux" {
-            for (path, key) in [(self.unit_path(NEW), "ExecStart="), (self.unit_path(OLD), "ExecStart="),
-                                (self.autostart_path(NEW), "Exec="), (self.autostart_path(OLD), "Exec=")] {
+            for (path, key) in [(self.unit_path(NEW), "ExecStart="), (self.autostart_path(NEW), "Exec=")] {
                 if let Ok(text) = std::fs::read_to_string(&path) {
                     if let Some(line) = text.lines().find_map(|l| l.strip_prefix(key)) {
                         return words(line);
@@ -422,19 +350,17 @@ impl StarcastRecipe {
             }
         } else if h.system == "windows" {
             // the scheduled task's program and arguments
-            for n in [NEW, OLD] {
-                let (rc, out) = h.probe(&[h.tool("schtasks"), "/Query".into(), "/TN".into(), n.task.into(), "/XML".into()]);
-                let xml = out.replace('\0', "");
-                if rc == 0 {
-                    let args = xml.split("<Arguments>").nth(1).and_then(|t| t.split("</Arguments>").next()).unwrap_or("");
-                    let unesc = |x: &str| x.replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
-                    let mut w = vec![format!("{}.exe", n.slug)];
-                    w.extend(words(&unesc(args)));
-                    return w;
-                }
+            let (rc, out) = h.probe(&[h.tool("schtasks"), "/Query".into(), "/TN".into(), NEW.task.into(), "/XML".into()]);
+            let xml = out.replace('\0', "");
+            if rc == 0 {
+                let args = xml.split("<Arguments>").nth(1).and_then(|t| t.split("</Arguments>").next()).unwrap_or("");
+                let unesc = |x: &str| x.replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+                let mut w = vec![format!("{}.exe", NEW.slug)];
+                w.extend(words(&unesc(args)));
+                return w;
             }
         } else if h.system == "darwin" {
-            for path in [self.plist_path(NEW), self.plist_path(OLD)] {
+            for path in [self.plist_path(NEW)] {
                 if let Ok(text) = std::fs::read_to_string(&path) {
                     let Some(arr) = text.split("<key>ProgramArguments</key>").nth(1).and_then(|t| t.split("</array>").next()) else { continue };
                     let unesc = |x: &str| x.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
@@ -480,108 +406,20 @@ impl StarcastRecipe {
         Ok(true)
     }
 
-    /// YTM Beacon's own uninstaller: it stops Beacon and removes its program and start-at-login, and keeps its
-    /// settings unless asked. Never fails the job: YTM Starcast copes while Beacon is still there.
-    fn beacon(&self, s: &mut Session, purge: bool) -> Res<bool> {
-        let exe = self.beacon_found();
-        if exe.is_empty() {
-            s.detail("already gone");
-            self.beacon_leftovers(s)?;
-            return Ok(false);
-        }
-        s.detail("with its own uninstaller");
-        let mut argv = vec![exe.clone(), "uninstall".into()];
-        if purge {
-            argv.push("--purge".into());
-        }
-        let rc = match s.run(&argv, &any(), false, None, "") {
-            Ok((rc, _)) => rc,
-            Err(Error::Cancelled) => return Err(Error::Cancelled),
-            Err(e) => {
-                s.log(&format!("YTM Beacon's uninstaller didn't run: {e}"));
-                -1
-            }
-        };
-        if rc != 0 {
-            s.log(&format!("YTM Beacon's uninstaller stopped with an error (code {rc})."));
-        }
-        if !s.dry_run {
-            // On Windows a program can't delete itself while it runs: Beacon has it deleted a moment after it ends.
-            for _ in 0..(self.beacon_wait * 2.0) as i64 {
-                if !Path::new(&exe).exists() {
-                    break;
-                }
-                s.sleep(0.5)?;
-            }
-            if Path::new(&exe).exists() {
-                s.vars.insert("beacon_left".into(), json!(exe));
-                s.log(&format!("Note: YTM Beacon is still at {exe}. YTM Starcast shows your Discord status once it is gone: remove it with \
-                                `ytm-beacon uninstall`, or from YTM Starcast's page in Orbit."));
-                s.detail("still there: see the log");
-                return Ok(true);
-            }
-        }
-        s.vars.insert("beacon_removed".into(), json!(true));
-        self.beacon_leftovers(s)?;
-        Ok(true)
-    }
-
-    /// Start-at-login entries YTM Beacon's uninstaller didn't take with it (its program is gone).
-    fn beacon_leftovers(&self, s: &mut Session) -> Res<()> {
-        if self.h().system != "linux" || s.dry_run {
-            return Ok(());
-        }
-        s.remove(&[self.h().config_home().join("autostart").join("ytm-beacon.desktop")])?; // without systemd it used this
-        let unit = self.h().config_home().join("systemd/user/ytm-beacon.service");
-        if !self.h().has_systemd() || !unit.exists() {
-            return Ok(());
-        }
-        let sc = self.h().tool("systemctl");
-        s.run(&[sc.clone(), "--user".into(), "disable".into(), "--now".into(), "ytm-beacon.service".into()], &any(), true, None, "")?;
-        s.remove(&[unit])?;
-        s.run(&[sc, "--user".into(), "daemon-reload".into()], &any(), true, None, "")?;
-        Ok(())
-    }
-
-    fn cleanup(&self, s: &mut Session) -> Res<bool> {
-        let left = self.leftovers();
-        if left.is_empty() {
-            s.detail("already gone"); // on Windows, the release's install-exe.ps1 removes them while it sets up start at logon
-            return Ok(false);
-        }
-        if s.vars.contains_key("slow") {
-            s.log("Pocketfader's old files stay until YTM Starcast answers: the next install or update removes them.");
-            s.detail("later: YTM Starcast hasn't answered yet");
-            return Ok(false);
-        }
-        if s.vars.contains_key("still_running") {
-            s.log("Pocketfader's old files stay while it still runs: the next install or update removes them.");
-            s.detail("later: Pocketfader is still running");
-            return Ok(false);
-        }
-        s.remove(&left)?;
-        Ok(true)
-    }
-
     fn remove_files(&self, s: &mut Session) -> Res<bool> {
         let h = self.h();
-        let mut paths = vec![self.app_dir(NEW), self.app_dir(OLD)];
+        let mut paths = vec![self.app_dir(NEW)];
         if h.system == "linux" {
-            for n in [NEW, OLD] {
-                paths.extend(self.links(n).into_iter().filter(|l| links_into(l, &self.app_dir(n))));
-                paths.extend([self.desktop_path(n), self.icon_path(n), self.autostart_path(n)]);
-            }
+            paths.extend(self.links(NEW).into_iter().filter(|l| links_into(l, &self.app_dir(NEW))));
+            paths.extend([self.desktop_path(NEW), self.icon_path(NEW), self.autostart_path(NEW)]);
         }
         if h.system == "windows" {
-            paths.extend([self.shortcut_path(NEW), self.shortcut_path(OLD)]);
+            paths.push(self.shortcut_path(NEW));
             // the browser extension's folder (on Linux and macOS it's inside the program's folder)
             paths.push(h.local_app_data().join(NEW.slug).join("extension"));
         }
         if s.opt_bool("purge", false) {
-            paths.extend([self.settings_dir(NEW), self.settings_dir(OLD)]);
-            if self.beacon_found().is_empty() {
-                paths.extend(self.beacon_dirs()); // YTM Beacon itself is gone: what it left behind goes too
-            }
+            paths.push(self.settings_dir(NEW));
         }
         s.remove(&paths)?;
         Ok(true)
@@ -657,13 +495,13 @@ impl StarcastRecipe {
         let entry = ["[Desktop Entry]".to_string(), "Type=Application".into(), format!("Name={}", NEW.display), "GenericName=YouTube Music companion".into(),
                      "Comment=A remote for your phone, your music as your Discord status, and a better YouTube Music".into(),
                      format!("Exec={}", sv(&h.bin_dir().join(format!("{}-gui", NEW.slug)))), format!("Icon={}", NEW.slug), "Terminal=false".into(),
-                     "Categories=AudioVideo;Audio;Utility;".into(), "Keywords=YouTube Music;Discord;remote;Pocketfader;YTM Beacon;".into(),
+                     "Categories=AudioVideo;Audio;Utility;".into(), "Keywords=YouTube Music;Discord;remote;".into(),
                      format!("StartupWMClass={WINDOW_ID}"), String::new()].join("\n");
         s.write_file(&self.desktop_path(NEW), &entry, None)?;
         Ok(true)
     }
 
-    /// No systemd here, and Pocketfader started at login through a login entry: YTM Starcast gets one the same way.
+    /// No systemd here, and YTM Starcast already started at login through a login entry: it keeps one.
     fn xdg_autostart(&self, s: &mut Session) -> Res<bool> {
         let exe = std::iter::once(sv(&self.venv_bin(NEW.slug, NEW))).chain(self.args(s)).collect::<Vec<_>>().join(" ");
         let entry = ["[Desktop Entry]".to_string(), "Type=Application".into(), format!("Name={}", NEW.display), format!("Exec={exe}"),
@@ -699,46 +537,20 @@ impl StarcastRecipe {
         Ok(true)
     }
 
-    /// Stop Pocketfader and its start at login (its files go once YTM Starcast answers).
-    fn retire(&self, s: &mut Session) -> Res<bool> {
-        if self.h().system == "linux" {
-            if self.h().has_systemd() {
-                let sc = self.h().tool("systemctl");
-                s.run(&[sc.clone(), "--user".into(), "disable".into(), "--now".into(), OLD.unit()], &any(), false, None, "")?;
-                s.remove(&[self.unit_path(OLD)])?;
-                s.run(&[sc, "--user".into(), "daemon-reload".into()], &any(), false, None, "")?;
-            } else {
-                s.remove(&[self.autostart_path(OLD)])?; // its login entry (YTM Starcast gets its own)
-            }
-            // one its desktop window or its login entry started: no service manager stops that
-            if self.stop_running(s, &[OLD])?.is_empty() && !self.h().has_systemd() {
-                s.detail("it wasn't running");
-            }
-        } else {
-            s.run(&[self.h().tool("launchctl"), "bootout".into(), format!("gui/{}", self.h().uid()), sv(&self.plist_path(OLD))], &any(), true, None, "")?;
-            s.remove(&[self.plist_path(OLD)])?;
-        }
-        Ok(true)
-    }
-
     fn unix_unservice(&self, s: &mut Session) -> Res<bool> {
         if self.h().system == "linux" {
             if self.h().has_systemd() {
                 let sc = self.h().tool("systemctl");
-                for n in [NEW, OLD] {
-                    s.run(&[sc.clone(), "--user".into(), "disable".into(), "--now".into(), n.unit()], &any(), false, None, "")?;
-                    s.remove(&[self.unit_path(n)])?;
-                }
+                s.run(&[sc.clone(), "--user".into(), "disable".into(), "--now".into(), NEW.unit()], &any(), false, None, "")?;
+                s.remove(&[self.unit_path(NEW)])?;
                 s.run(&[sc, "--user".into(), "daemon-reload".into()], &any(), false, None, "")?;
             }
-            if self.stop_running(s, &[NEW, OLD])?.is_empty() && !self.h().has_systemd() {
+            if self.stop_running(s, &[NEW])?.is_empty() && !self.h().has_systemd() {
                 return Ok(false);
             }
         } else {
-            for n in [NEW, OLD] {
-                s.run(&[self.h().tool("launchctl"), "bootout".into(), format!("gui/{}", self.h().uid()), sv(&self.plist_path(n))], &any(), true, None, "")?;
-                s.remove(&[self.plist_path(n)])?;
-            }
+            s.run(&[self.h().tool("launchctl"), "bootout".into(), format!("gui/{}", self.h().uid()), sv(&self.plist_path(NEW))], &any(), true, None, "")?;
+            s.remove(&[self.plist_path(NEW)])?;
         }
         Ok(true)
     }
@@ -764,7 +576,7 @@ impl StarcastRecipe {
             return vec![];
         }
         let mut found: std::collections::BTreeMap<i64, (Option<PathBuf>, Vec<u8>)> = Default::default();
-        for n in [NEW, OLD] {
+        for n in [NEW] {
             let pidfile = self.settings_dir(n).join("server.pid");
             let Ok(text) = std::fs::read(&pidfile) else { continue };
             let digits: String = String::from_utf8_lossy(&text).chars().filter(|c| c.is_ascii_digit()).take(9).collect();
@@ -774,9 +586,9 @@ impl StarcastRecipe {
                 found.insert(pid, (Some(pidfile), cmd));
             }
         }
-        // the program in its folder (a Pocketfader that updated itself to YTM Starcast also has YTM Starcast's)
+        // the program in its folder
         let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        let programs: Vec<PathBuf> = names.iter().flat_map(|n| [n.slug, NEW.slug].map(|x| real(&self.venv_bin(x, *n)))).collect();
+        let programs: Vec<PathBuf> = names.iter().map(|n| real(&self.venv_bin(n.slug, *n))).collect();
         let uid = self.h().uid();
         for d in std::fs::read_dir(&self.proc).map(|r| r.flatten().collect::<Vec<_>>()).unwrap_or_default() {
             let name = d.file_name().to_string_lossy().into_owned();
@@ -849,31 +661,13 @@ impl StarcastRecipe {
         Ok(true)
     }
 
-    /// Stop YTM Starcast, and Pocketfader by every name it had, wherever it was installed.
-    fn win_stop(&self, s: &mut Session, retire: bool) -> Res<bool> {
-        for n in [NEW, OLD] {
-            s.run(&[self.h().tool("schtasks"), "/End".into(), "/TN".into(), n.task.into()], &any(), true, None, "")?;
-        }
-        for exe in [format!("{}.exe", NEW.slug), format!("{}-gui.exe", NEW.slug), "pocketfader.exe".into(), "pocketfader-gui.exe".into()] {
+    /// Stop YTM Starcast wherever it was installed.
+    fn win_stop(&self, s: &mut Session) -> Res<bool> {
+        s.run(&[self.h().tool("schtasks"), "/End".into(), "/TN".into(), NEW.task.into()], &any(), true, None, "")?;
+        for exe in [format!("{}.exe", NEW.slug), format!("{}-gui.exe", NEW.slug)] {
             s.run(&[self.h().tool("taskkill"), "/IM".into(), exe, "/F".into()], &any(), true, None, "")?;
         }
-        if retire {
-            self.win_retire(s)?;
-        }
         s.sleep(0.5)?;
-        Ok(true)
-    }
-
-    /// Pocketfader no longer starts at logon: its scheduled task and its window's start-at-login value go.
-    fn win_retire(&self, s: &mut Session) -> Res<bool> {
-        let script = self.app_dir(OLD).join("install-exe.ps1");
-        if script.exists() {
-            s.run(&[self.h().tool("powershell"), "-NoProfile".into(), "-NonInteractive".into(), "-ExecutionPolicy".into(), "Bypass".into(),
-                    "-File".into(), sv(&script), "-Uninstall".into()], &any(), true, None, "")?;
-        } else {
-            s.run(&[self.h().tool("schtasks"), "/Delete".into(), "/TN".into(), OLD.task.into(), "/F".into()], &any(), true, None, "")?;
-        }
-        s.run(&[self.h().tool("reg"), "delete".into(), RUN_KEY.into(), "/v".into(), OLD.task.into(), "/f".into()], &any(), true, None, "")?;
         Ok(true)
     }
 
@@ -952,16 +746,14 @@ impl StarcastRecipe {
     }
 
     fn win_untask(&self, s: &mut Session) -> Res<bool> {
-        for n in [NEW, OLD] {
-            let script = self.app_dir(n).join("install-exe.ps1");
-            if script.exists() {
-                s.run(&[self.h().tool("powershell"), "-NoProfile".into(), "-NonInteractive".into(), "-ExecutionPolicy".into(), "Bypass".into(),
-                        "-File".into(), sv(&script), "-Uninstall".into()], &any(), false, None, "")?;
-            } else {
-                s.run(&[self.h().tool("schtasks"), "/Delete".into(), "/TN".into(), n.task.into(), "/F".into()], &any(), true, None, "")?;
-            }
-            s.run(&[self.h().tool("reg"), "delete".into(), RUN_KEY.into(), "/v".into(), n.task.into(), "/f".into()], &any(), true, None, "")?;
+        let script = self.app_dir(NEW).join("install-exe.ps1");
+        if script.exists() {
+            s.run(&[self.h().tool("powershell"), "-NoProfile".into(), "-NonInteractive".into(), "-ExecutionPolicy".into(), "Bypass".into(),
+                    "-File".into(), sv(&script), "-Uninstall".into()], &any(), false, None, "")?;
+        } else {
+            s.run(&[self.h().tool("schtasks"), "/Delete".into(), "/TN".into(), NEW.task.into(), "/F".into()], &any(), true, None, "")?;
         }
+        s.run(&[self.h().tool("reg"), "delete".into(), RUN_KEY.into(), "/v".into(), NEW.task.into(), "/f".into()], &any(), true, None, "")?;
         Ok(true)
     }
 }
@@ -998,22 +790,14 @@ impl Recipe for StarcastRecipe {
     }
 
     fn detect(&self) -> Value {
-        let (new, old, beacon) = (self.layout(NEW), self.layout(OLD), self.beacon_found());
-        let mut d = if let Some((w, v)) = &new {
-            json!({"installed": true, "version": v, "where": w,
-                   "how": if self.h().system == "windows" { "standalone program" } else { "its own Python environment" }})
-        } else if let Some((w, v)) = &old {
-            json!({"installed": true, "version": v, "where": w, "how": MOVED})
-        } else {
-            match self.h().which(NEW.slug).or_else(|| self.h().which(OLD.slug)) {
-                Some(other) => json!({"installed": true, "version": "", "where": other, "how": OTHER_WAY}),
-                None => json!({"installed": false, "version": "", "where": "", "how": ""}),
-            }
-        };
-        d["legacy"] = json!({"pocketfader": old.as_ref().map(|o| o.0.clone()).unwrap_or_default(), "beacon": beacon});
-        // a move is due: Pocketfader is still the install here, or YTM Beacon is and YTM Starcast isn't yet
-        d["migrate"] = json!(d["how"] != OTHER_WAY && new.is_none() && (old.is_some() || !beacon.is_empty()));
-        d
+        if let Some((w, v)) = self.layout(NEW) {
+            return json!({"installed": true, "version": v, "where": w,
+                          "how": if self.h().system == "windows" { "standalone program" } else { "its own Python environment" }});
+        }
+        match self.h().which(NEW.slug) {
+            Some(other) => json!({"installed": true, "version": "", "where": other, "how": OTHER_WAY}),
+            None => json!({"installed": false, "version": "", "where": "", "how": ""}),
+        }
     }
 
     fn can_uninstall(&self) -> (bool, String) {
@@ -1023,38 +807,6 @@ impl Recipe for StarcastRecipe {
                                     alone. Remove it the way it was installed.", inst["where"].as_str().unwrap_or("")));
         }
         (true, String::new())
-    }
-
-    fn title(&self, op: &str, rel: Option<&Value>) -> String {
-        let inst = self.installed();
-        let installed = inst["installed"].as_bool().unwrap_or(false);
-        if op == "install" && installed && inst["how"] == MOVED {
-            return format!("Move Pocketfader to YTM Starcast {}", rel.map(|r| util::version_of(r["tag"].as_str().unwrap_or(""))).unwrap_or_default())
-                .trim_end().to_string();
-        }
-        if op == "install" && !installed && !inst["legacy"]["beacon"].as_str().unwrap_or("").is_empty() {
-            return "Install YTM Starcast (replaces YTM Beacon)".into();
-        }
-        // the shared wording
-        if op == "uninstall" {
-            return "Remove YTM Starcast".into();
-        }
-        let new = rel.map(|r| util::version_of(r["tag"].as_str().unwrap_or(""))).unwrap_or_default();
-        if !installed {
-            return "Install YTM Starcast".into();
-        }
-        let cur = inst["version"].as_str().unwrap_or("");
-        if !new.is_empty() && !cur.is_empty() && crate::net::is_newer(&new, cur) {
-            return format!("Update YTM Starcast to {new}");
-        }
-        "Reinstall YTM Starcast".into()
-    }
-
-    fn adjust_info(&self, d: &mut Value) {
-        let keeps_beacon = !d["options"].as_array().map(|o| o.iter().any(|f| f["key"] == "beacon" && f["value"] == json!(true))).unwrap_or(false);
-        if d["title"].as_str().unwrap_or("").ends_with("(replaces YTM Beacon)") && keeps_beacon {
-            d["title"] = json!("Install YTM Starcast"); // YTM Beacon is kept
-        }
     }
 
     fn requirements(&self, op: &str) -> Vec<Value> {
@@ -1097,7 +849,7 @@ impl Recipe for StarcastRecipe {
         let h = self.h();
         if op == "uninstall" {
             return vec![option("purge", "Also delete YTM Starcast's settings", "bool", json!(false),
-                               &format!("Your settings are in {}. This also deletes any that Pocketfader and YTM Beacon left. Leave it off to keep them.",
+                               &format!("Your settings are in {}. Leave it off to keep them.",
                                         self.settings_dir(NEW).display()))];
         }
         let mut opts = vec![];
@@ -1116,15 +868,6 @@ impl Recipe for StarcastRecipe {
             opts.push(option("ytdlp", "Let this computer fetch songs for the phone", "bool", json!(true),
                              "Installs yt-dlp into YTM Starcast's own environment, used when the phone can't load a song by itself."));
         }
-        let inst = self.installed();
-        if !inst["legacy"]["beacon"].as_str().unwrap_or("").is_empty() {
-            // On by default when this install is the move; off when YTM Starcast is already installed next to YTM Beacon, and on a Mac.
-            let on = (inst["how"] == "" || inst["how"] == MOVED) && h.system != "darwin";
-            let mac = if h.system == "darwin" { " Off by default on a Mac, where YTM Starcast isn't tested yet." } else { "" };
-            opts.push(option("beacon", "Remove the old YTM Beacon app", "bool", json!(on),
-                             &format!("YTM Starcast shows your Discord status itself. YTM Beacon's own uninstaller removes it and keeps its settings for YTM \
-                                       Starcast to take over. Leave this off to keep YTM Beacon: YTM Starcast's Discord status then waits while it runs.{mac}")));
-        }
         opts
     }
 
@@ -1134,17 +877,12 @@ impl Recipe for StarcastRecipe {
     }
 
     fn summary(&self, op: &str, opts: &Map<String, Value>, rel: Option<&Value>) -> Vec<String> {
-        let (h, inst) = (self.h(), self.installed());
-        let legacy = &inst["legacy"];
-        let lb = legacy["beacon"].as_str().unwrap_or("");
-        let lp = legacy["pocketfader"].as_str().unwrap_or("");
+        let h = self.h();
         let opt = |k: &str| opts.get(k).and_then(|v| v.as_bool());
         if op == "uninstall" {
             let mut lines = vec!["Stop YTM Starcast and stop it starting at login".to_string()];
-            for n in [NEW, OLD] {
-                if let Some((w, _)) = self.layout(n) {
-                    lines.push(format!("Remove {w}"));
-                }
+            if let Some((w, _)) = self.layout(NEW) {
+                lines.push(format!("Remove {w}"));
             }
             if h.system == "linux" {
                 lines.push("Remove its apps-menu entry and the ytm-starcast commands".into());
@@ -1152,32 +890,13 @@ impl Recipe for StarcastRecipe {
             if h.system == "windows" {
                 lines.push("Remove its Start-menu entry".into());
             }
-            if !lb.is_empty() {
-                lines.push(format!("Remove YTM Beacon ({lb}) with its own uninstaller"));
-            }
-            lines.push(if opt("purge").unwrap_or(false) { "Delete your settings too (YTM Starcast's, and any Pocketfader and YTM Beacon left)".to_string() }
-                       else { format!("Keep your settings ({})", self.kept_settings().display()) });
+            lines.push(if opt("purge").unwrap_or(false) { "Delete your settings too".to_string() }
+                       else { format!("Keep your settings ({})", self.settings_dir(NEW).display()) });
             lines.push("Remove YTM Starcast's browser extension yourself afterwards, if you added it (browsers only allow that by hand)".into());
             return lines;
         }
-        let mut lines = vec![];
-        if !lp.is_empty() {
-            if inst["how"] == MOVED {
-                let v = inst["version"].as_str().filter(|v| !v.is_empty()).map(|v| format!(" {v}")).unwrap_or_default();
-                lines.push(format!("Replace Pocketfader{v} (YTM Starcast's old name): stop it and remove its program from {lp}. Your settings and paired phones carry over."));
-            } else {
-                lines.push(format!("Remove what is left of Pocketfader (YTM Starcast's old name) in {lp}"));
-            }
-        }
-        if !lb.is_empty() && opt("beacon").unwrap_or(false) {
-            let v = self.beacon_version(lb);
-            let v = if v.is_empty() { String::new() } else { format!(" {v}") };
-            lines.push(format!("Remove YTM Beacon{v} ({lb}): YTM Starcast shows your Discord status itself. Beacon's settings are kept for YTM Starcast to \
-                                take over. Remove Beacon's browser extension yourself afterwards."));
-        } else if !lb.is_empty() {
-            lines.push(format!("Keep YTM Beacon ({lb}): YTM Starcast's Discord status waits while it runs. YTM Starcast's page in Orbit can remove it later."));
-        }
         let v = rel.and_then(|r| r["tag"].as_str()).unwrap_or("the latest release");
+        let mut lines = vec![];
         lines.push(format!("Download YTM Starcast {v} from GitHub and check its checksum"));
         let window = opt("desktop_app").unwrap_or(false);
         if h.system == "windows" {
@@ -1194,8 +913,8 @@ impl Recipe for StarcastRecipe {
         }
         if opt("autostart").unwrap_or(h.system == "linux" && h.has_systemd()) {
             lines.push("Start it now and whenever you log in".into());
-        } else if h.system == "linux" && !h.has_systemd() && self.autostart_path(OLD).exists() {
-            lines.push("Start it when you log in, as Pocketfader did".into());
+        } else if h.system == "linux" && !h.has_systemd() && self.autostart_path(NEW).exists() {
+            lines.push("Start it when you log in, as before".into());
         } else if h.system == "linux" && !h.has_systemd() {
             lines.push("You start it yourself with `ytm-starcast` (no systemd here)".into());
         } else {
@@ -1213,51 +932,29 @@ impl Recipe for StarcastRecipe {
             move |s: &mut Session| f(&r, s)
         };
         let sysname = self.h().system.clone();
-        let legacy = self.legacy();
         let opt = |k: &str| opts.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
-        // removing YTM Starcast removes YTM Beacon too; installing it does when asked (the "beacon" option)
-        let beacon_due = !legacy["beacon"].as_str().unwrap_or("").is_empty() && (op == "uninstall" || opt("beacon"));
-        let purge = opt("purge");
-        let beacon = || -> Vec<StepDef> {
-            if !beacon_due {
-                return vec![];
-            }
-            let r = self.clone();
-            vec![step("beacon", "Remove YTM Beacon", 2.0, move |s: &mut Session| r.beacon(s, purge))]
-        };
         if op == "uninstall" {
             let mut v = if sysname == "windows" {
-                let r = self.clone();
-                vec![step("stop", "Stop YTM Starcast", 1.0, move |s: &mut Session| r.win_stop(s, false)),
+                vec![step("stop", "Stop YTM Starcast", 1.0, me(Self::win_stop)),
                      step("task", "Stop it starting at logon", 1.0, me(Self::win_untask))]
             } else {
                 vec![step("stop", "Stop YTM Starcast and its start-at-login", 1.0, me(Self::unix_unservice))]
             };
-            v.extend(beacon());
             v.push(step("files", "Remove the program", 1.0, me(Self::remove_files)));
             return v;
         }
-        let cleanup = || if self.leftovers().is_empty() { vec![] } else { vec![step("cleanup", "Remove Pocketfader's old files", 0.5, me(Self::cleanup))] };
         let mut steps = vec![step("find", "Find the latest release", 0.5, me(Self::find))];
         if sysname == "windows" {
-            let moved = !legacy["pocketfader"].as_str().unwrap_or("").is_empty();
-            let r = self.clone();
             steps.extend([
                 step("download", "Download", 5.0, me(Self::download)),
                 step("verify", "Check the download", 0.5, me(Self::verify)),
                 step("unpack", "Unpack", 1.0, me(Self::unpack)),
-                // also an old Pocketfader in a folder Orbit doesn't know: both use the same port
-                step("stop", "Stop the running copy", 0.5, move |s: &mut Session| r.win_stop(s, !moved)),
+                step("stop", "Stop the running copy", 0.5, me(Self::win_stop)),
                 step("copy", "Install the program", 1.0, me(Self::win_copy)),
                 step("shortcut", "Its own window in the Start menu (if chosen)", 0.5, me(Self::win_shortcut)),
             ]);
-            if moved {
-                steps.push(step("retire", "Stop Pocketfader starting at logon (its old name)", 0.5, me(Self::win_retire)));
-            }
-            steps.extend(beacon());
             steps.push(step("task", if opt("autostart") { "Start at logon" } else { "Turn off start at logon" }, 1.0, me(Self::win_task)));
             steps.push(step("start", "Start YTM Starcast", 1.5, me(Self::win_start)));
-            steps.extend(cleanup());
             return steps;
         }
         steps.extend([
@@ -1269,66 +966,38 @@ impl Recipe for StarcastRecipe {
         if opt("ytdlp") {
             steps.push(step("ytdlp", "Add yt-dlp", 3.0, me(Self::ytdlp)));
         }
-        let lp = !legacy["pocketfader"].as_str().unwrap_or("").is_empty();
-        let due = if sysname == "linux" {
-            // without systemd, Pocketfader ran from its login entry or its desktop window: stopped all the same
-            lp || (self.h().has_systemd() && self.unit_path(OLD).exists()) || !self.running(&[OLD]).is_empty()
-        } else {
-            lp || self.plist_path(OLD).exists()
-        };
-        let retire = || if due { vec![step("retire", "Stop Pocketfader (its old name)", 0.5, me(Self::retire))] } else { vec![] };
         if sysname == "linux" {
             steps.push(step("menu", "The ytm-starcast command (and its window, if chosen)", 0.5, me(Self::menu)));
-            steps.extend(retire());
-            if !self.h().has_systemd() && self.autostart_path(OLD).exists() {
-                steps.push(step("login", "Start it when you log in, as Pocketfader did", 0.5, me(Self::xdg_autostart)));
+            if !self.h().has_systemd() && self.autostart_path(NEW).exists() {
+                steps.push(step("login", "Start it when you log in, as before", 0.5, me(Self::xdg_autostart)));
             }
-            steps.extend(beacon());
             if self.h().has_systemd() {
                 steps.push(step("service", if opt("autostart") { "Start it now and at login" } else { "Start it now" }, 1.0, me(Self::systemd_step)));
                 steps.push(step("check", "Check that it answers", 1.0, me(Self::wait)));
             }
         } else {
-            steps.extend(retire());
-            steps.extend(beacon());
             steps.push(step("agent", if opt("autostart") { "Start it now and at login" } else { "Start it now" }, 1.0, me(Self::launchd)));
             steps.push(step("check", "Check that it answers", 1.0, me(Self::wait)));
         }
-        steps.extend(cleanup());
         steps
     }
 
     fn finish(&self, sess: &Session, op: &str, opts: &Map<String, Value>) -> Value {
-        let before = sess.vars.get("before").cloned().unwrap_or(json!({}));
         let v = |k: &str| sess.vars.get(k).cloned().unwrap_or(Value::Null);
         let purge = opts.get("purge").and_then(|x| x.as_bool()).unwrap_or(false);
         if op == "uninstall" {
             let mut body = vec![];
             if !purge {
-                body.push(format!("Your settings are kept in {}.", self.kept_settings().display()));
-            }
-            if v("beacon_removed") == json!(true) {
-                body.push("YTM Beacon is removed too: remove its extension from your browser's extensions page.".into());
-            } else if let Some(left) = v("beacon_left").as_str() {
-                body.push(format!("YTM Beacon is still at {left}: remove it with `ytm-beacon uninstall`."));
+                body.push(format!("Your settings are kept in {}.", self.settings_dir(NEW).display()));
             }
             body.push("If you added YTM Starcast's browser extension, remove it from your browser's extensions page.".into());
             return json!({"headline": "YTM Starcast is removed.", "body": body.join(" "), "next": []});
         }
         let mut note = String::new();
-        if v("beacon_removed") == json!(true) {
-            note = " YTM Beacon is removed: YTM Starcast shows your Discord status now (turn it on in YTM Starcast if it's off). Remove YTM Beacon's \
-                    extension from your browser's extensions page.".into();
-        } else if let Some(left) = v("beacon_left").as_str() {
-            note = format!(" YTM Beacon is still at {left}: YTM Starcast shows your Discord status once it is gone. Remove it with `ytm-beacon uninstall`.");
-        } else if !before["legacy"]["beacon"].as_str().unwrap_or("").is_empty() && !opts.get("beacon").and_then(|x| x.as_bool()).unwrap_or(false) {
-            note = " YTM Beacon is kept: YTM Starcast's Discord status waits while it runs. YTM Starcast's page in Orbit can remove it.".into();
-        }
         if let Some(pid) = v("still_running").as_i64() {
-            note.push_str(&format!(" Pocketfader is still running (process {pid}) and keeps YTM Starcast's port: stop it with `kill {pid}`, or restart the computer."));
+            note = format!(" An older copy is still running (process {pid}) and keeps YTM Starcast's port: stop it with `kill {pid}`, or restart the computer.");
         }
         let h = self.h();
-        let moved = before["how"] == MOVED;
         let port = opts.get("port").and_then(|p| p.as_u64()).unwrap_or(PORT as u64);
         let nxt = json!([{"id": "app", "label": "open in orbit", "kind": "app", "app": self.id(), "primary": true},
                          {"id": "web", "label": "open ytm starcast", "kind": "url", "url": format!("http://127.0.0.1:{port}/")},
@@ -1339,19 +1008,12 @@ impl Recipe for StarcastRecipe {
             ("YTM Starcast is installed and running.".to_string(),
              "On your phone, open this computer's address on port 8777 (YTM Starcast's window shows it, with a QR code), then add it to your home screen.".to_string())
         };
-        if moved {
-            head = "Pocketfader is now YTM Starcast.".into();
-            body = format!("Your settings and paired phones carry over: phones keep the same address. {}", body.replacen("On your phone", "On a new phone", 1));
-        }
         if v("slow") == json!(true) {
-            head = if moved { "Pocketfader is now YTM Starcast." } else { "YTM Starcast is installed." }.into();
+            head = "YTM Starcast is installed.".into();
             body = format!("It hasn't answered yet; give it a few seconds, or read its log in Orbit. {body}");
         }
         if h.system == "darwin" {
             body.push_str(" YTM Starcast isn't tested on macOS yet; if something doesn't work, its log is in ~/Library/Logs/ytm-starcast.log.");
-        }
-        if v("beacon_removed") == json!(true) && !moved && !before["installed"].as_bool().unwrap_or(false) {
-            note.push_str(" Then add YTM Starcast's browser extension (ytm-starcast-extension.zip in its release) so YTM Starcast hears what YouTube Music plays.");
         }
         json!({"headline": head, "body": format!("{body}{note}"), "next": nxt})
     }
@@ -1363,10 +1025,10 @@ mod tests {
 
     #[test]
     fn servers_are_recognised_by_their_command_line() {
-        assert!(StarcastRecipe::is_server(b"/home/u/.local/share/pocketfader/venv/bin/pocketfader\0--port\08777", &[OLD]));
-        assert!(StarcastRecipe::is_server(b"python3\0-m\0pocketfader\0", &[OLD]));
-        assert!(!StarcastRecipe::is_server(b"python3\0-m\0something\0", &[OLD]));
-        assert!(!StarcastRecipe::is_server(b"/usr/bin/bash\0", &[NEW, OLD]));
+        assert!(StarcastRecipe::is_server(b"/home/u/.local/share/ytm-starcast/venv/bin/ytm-starcast\0--port\08777", &[NEW]));
+        assert!(StarcastRecipe::is_server(b"python3\0-m\0starcast\0", &[NEW]));
+        assert!(!StarcastRecipe::is_server(b"python3\0-m\0something\0", &[NEW]));
+        assert!(!StarcastRecipe::is_server(b"/usr/bin/bash\0", &[NEW]));
     }
 
     #[test]

@@ -1,5 +1,9 @@
 **Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.8.4**
+
+- **Support for very old versions is retired.** Orbit no longer moves a computer from Pocketfader and YTM Beacon to YTM Starcast (they became YTM Starcast in Orbit 0.4.0), and Orbit's downloads are published only under their usual names. If a computer still has Pocketfader or YTM Beacon, remove them with their own uninstallers, then install YTM Starcast from Orbit. An Orbit for Android older than 0.3.5 can't update itself any more: install the new one from this page.
+
 **New in 0.8.3**
 
 - **Every app has a settings button**, on its card and its page. It shows the settings Orbit can see (and change, where the app allows it), and a button that opens the app's own settings in the app itself.

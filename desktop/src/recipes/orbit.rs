@@ -7,8 +7,7 @@
 //! takes its name, and the new one starts. The new Orbit deletes `orbit.old` once it runs. On macOS the whole app
 //! (Orbit.app) is replaced; the waiting and old copies are hidden .app folders (.Orbit-new.app, .Orbit-old.app).
 //!
-//! The release files are named without the version (orbit-windows-x64.exe …). A copy named with one
-//! (orbit-v0.3.4-windows-x64.exe) takes the plain name at its next update, and Orbit's own menu entry follows it.
+//! The release files are named without the version (orbit-windows-x64.exe …), so the program keeps its name.
 use crate::engine::{Session, Sources};
 use crate::host::Host;
 use crate::recipe::{need, step, Recipe, RecipeBase, StepDef};
@@ -60,23 +59,6 @@ pub fn beside(path: &Path, suffix: &str) -> PathBuf {
     path.with_file_name(format!("{name}{suffix}"))
 }
 
-/// Where the program goes at its update: its own place, except that a file named with a version
-/// (orbit-v0.3.4-linux-x86_64) becomes orbit-linux-x86_64, when nothing by that name is in the way.
-pub fn settled(u: &Path) -> PathBuf {
-    let re = regex::Regex::new(r"^orbit-v\d+(?:\.\d+)*-(.+)$").unwrap();
-    let name = u.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if u.extension().map(|e| e == "app").unwrap_or(false) {
-        return u.to_path_buf();
-    }
-    match re.captures(&name) {
-        Some(c) => {
-            let plain = u.with_file_name(format!("orbit-{}", &c[1]));
-            if util::exists(&plain) { u.to_path_buf() } else { plain }
-        }
-        None => u.to_path_buf(),
-    }
-}
-
 /// Delete the previous program left by an update, once the new one runs. Quietly.
 pub fn cleanup_old(exe: Option<&Path>) -> bool {
     let Some(exe) = exe.map(Path::to_path_buf).or_else(running_program) else { return true };
@@ -115,27 +97,22 @@ pub fn waiting(exe: Option<&Path>) -> String {
     }
 }
 
-/// Put the waiting new Orbit in this one's place. Returns the program to start (the same path, or the plain name
-/// when this one's name had its version in it), or None when nothing was waiting. Call it only right before
-/// starting the new one.
+/// Put the waiting new Orbit in this one's place. Returns the program to start, or None when nothing was waiting.
+/// Call it only right before starting the new one.
 pub fn switch(exe: Option<&Path>) -> std::io::Result<Option<PathBuf>> {
     let Some(exe) = exe.map(Path::to_path_buf).or_else(running_program) else { return Ok(None) };
     if waiting(Some(&exe)).is_empty() || deb_install(&exe) {
         return Ok(None); // the Debian package: apt has already put the new program in place
     }
     let u = unit(&exe);
-    let target = settled(&u);
-    let (new, old) = (beside(&u, ".new"), beside(&target, ".old"));
+    let (new, old) = (beside(&u, ".new"), beside(&u, ".old"));
     let _ = util::remove_any(&old);
     std::fs::rename(&u, &old)?;
-    if let Err(e) = std::fs::rename(&new, &target) {
+    if let Err(e) = std::fs::rename(&new, &u) {
         let _ = std::fs::rename(&old, &u); // put the old one back
         return Err(e);
     }
     let _ = std::fs::remove_file(beside(&u, ".new.ok"));
-    if target != u {
-        return Ok(Some(target)); // the caller has Orbit's own menu entry follow it (desktop_entry::follow)
-    }
     Ok(Some(exe))
 }
 
@@ -155,8 +132,8 @@ impl OrbitRecipe {
         self.program.clone().or_else(running_program)
     }
 
-    /// The release file for this computer (orbit-windows-x64.exe …). With a tag: the name releases before 0.3.5 used.
-    pub fn asset(&self, tag: &str) -> Option<String> {
+    /// The release file for this computer (orbit-windows-x64.exe …).
+    pub fn asset(&self) -> Option<String> {
         let h = &self.base.host;
         let kind = match (h.system.as_str(), h.arch.as_str()) {
             ("windows", "arm64") => "windows-arm64.exe".to_string(),
@@ -166,26 +143,18 @@ impl OrbitRecipe {
             ("darwin", a) => format!("macos-{}.dmg", if a == "arm64" { "apple-silicon" } else { "intel" }),
             _ => return None,
         };
-        Some(if tag.is_empty() { format!("orbit-{kind}") } else { format!("orbit-{tag}-{kind}") })
+        Some(format!("orbit-{kind}"))
     }
 
     fn deb(&self) -> bool {
         self.program.is_none() && self.exe().map(|e| deb_install(&e)).unwrap_or(false)
     }
 
-    /// The name this release gives the file: without the version (0.3.5 on), or with it (before). Orbit installed
-    /// from the Debian package gets the package.
-    pub fn pick(&self, rel: &Value) -> String {
-        if self.deb() {
-            return format!("{}.deb", self.asset("").unwrap_or_default());
-        }
-        let tag = rel["tag"].as_str().unwrap_or("");
-        for name in [self.asset(""), self.asset(tag)].into_iter().flatten() {
-            if rel["assets"].get(&name).is_some() {
-                return name;
-            }
-        }
-        self.asset("").unwrap_or_default()
+    /// The file to download from a release: the program for this computer, or the Debian package when Orbit was
+    /// installed from it.
+    pub fn pick(&self, _rel: &Value) -> String {
+        let name = self.asset().unwrap_or_default();
+        if self.deb() { format!("{name}.deb") } else { name }
     }
 
     fn find(&self, s: &mut Session) -> Res<bool> {
@@ -322,7 +291,7 @@ impl Recipe for OrbitRecipe {
     }
     /// A release with a file for this computer (Orbit builds ARM and Mac programs only at milestones, x.y.0).
     fn wants(&self, rel: &Value) -> bool {
-        self.asset("").is_some() && rel["assets"].get(self.pick(rel)).is_some()
+        self.asset().is_some() && rel["assets"].get(self.pick(rel)).is_some()
     }
     fn platform(&self, system: &str) -> (String, String) {
         match system {
@@ -349,7 +318,7 @@ impl Recipe for OrbitRecipe {
         if op == "uninstall" {
             return vec![];
         }
-        if self.asset("").is_none() {
+        if self.asset().is_none() {
             return vec![need("A program for this computer", false, &format!("There's no Orbit for {} yet.", self.base.host.label()), true, "")];
         }
         let Some(exe) = self.exe() else { return vec![] };
@@ -366,7 +335,7 @@ impl Recipe for OrbitRecipe {
     }
 
     fn assets(&self, rel: &Value) -> Vec<String> {
-        if self.asset("").is_none() { vec![] } else { vec![self.pick(rel), "SHA256SUMS".into()] }
+        if self.asset().is_none() { vec![] } else { vec![self.pick(rel), "SHA256SUMS".into()] }
     }
 
     fn title(&self, _op: &str, rel: Option<&Value>) -> String {
@@ -385,11 +354,10 @@ impl Recipe for OrbitRecipe {
                         "Install it with apt, as the administrator (the system asks for your password)".into(),
                         "Restart Orbit on it".into()];
         }
-        let moved = u.as_ref().filter(|u| settled(u) != **u).map(|u| format!(" as {}", settled(u).file_name().unwrap_or_default().to_string_lossy())).unwrap_or_default();
         vec![format!("Download Orbit {tag} from GitHub: {}", rel.map(|r| self.pick(r)).unwrap_or_else(|| "the program for this computer".into())),
              "Check it against the release's checksums".into(),
              "Start it once to make sure it runs and is the version it should be".into(),
-             format!("Keep it next to this one ({name}) until you restart Orbit: then it takes this one's place{moved}, and the old one is kept until the new one has started")]
+             format!("Keep it next to this one ({name}) until you restart Orbit: then it takes this one's place, and the old one is kept until the new one has started")]
     }
 
     fn steps(self: Arc<Self>, _op: &str, _opts: &Map<String, Value>) -> Vec<StepDef> {
@@ -452,26 +420,10 @@ mod tests {
     }
 
     #[test]
-    fn a_copy_named_with_its_version_takes_the_plain_name() {
-        let d = tmp();
-        let exe = d.join("orbit-v0.3.4-linux-x86_64");
-        std::fs::write(&exe, "old").unwrap();
-        std::fs::write(beside(&exe, ".new"), "new").unwrap();
-        std::fs::write(beside(&exe, ".new.ok"), "orbit 9.9.9\n").unwrap();
-        let plain = d.join("orbit-linux-x86_64");
-        assert_eq!(switch(Some(&exe)).unwrap(), Some(plain.clone()));
-        assert_eq!(std::fs::read_to_string(&plain).unwrap(), "new");
-        assert!(!exe.exists());
-        assert!(cleanup_old(Some(&plain)));
-        let _ = std::fs::remove_dir_all(d);
-    }
-
-    #[test]
     fn mac_apps_use_hidden_app_folders() {
         let app = Path::new("/Applications/Orbit.app");
         assert_eq!(unit(&app.join("Contents/MacOS/Orbit")), app);
         assert_eq!(beside(app, ".new"), Path::new("/Applications/.Orbit-new.app"));
         assert_eq!(beside(app, ".old"), Path::new("/Applications/.Orbit-old.app"));
-        assert_eq!(settled(app), app);
     }
 }

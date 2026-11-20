@@ -73,40 +73,11 @@ host a download is redirected to. *check access* shows what the current sign-in 
 **Removing** keeps your settings unless you tick the box to delete them. An app installed some other way (with pip,
 or run from its source folder) is shown but left alone.
 
-### Moving from Pocketfader and YTM Beacon
-
-Pocketfader and YTM Beacon are now one app, YTM Starcast. When a computer still has Pocketfader (installed by Orbit or
-by its own installer) or only the YTM Beacon program, YTM Starcast's card offers the move, and the installer says
-exactly what it will do before it starts:
-
-1. YTM Starcast is downloaded, checked and put in place first.
-2. Pocketfader is stopped and no longer starts at login (both use the same port). On Linux without systemd, that
-   includes a Pocketfader its desktop window or its login entry started.
-3. YTM Beacon is removed with its own uninstaller, which keeps its settings (YTM Starcast shows your Discord status
-   itself now, and two Discord statuses would fight). This is the installer's *Remove the old YTM Beacon app* choice:
-   turn it off to keep YTM Beacon, and YTM Starcast's Discord status waits while YTM Beacon runs. It starts off when
-   YTM Starcast is already installed next to YTM Beacon, and on a Mac.
-4. YTM Starcast starts. Only once it answers are Pocketfader's old program files removed; if it is slow to start, the
-   next install or update removes them. One exception: on Windows with *start at logon* on, YTM Starcast's own setup
-   script removes Pocketfader's program folder a moment earlier, while it sets up the logon task.
-
-Your settings are never copied or deleted by Orbit: YTM Starcast takes over Pocketfader's settings (including the
-access token your phones are paired with, so they keep working) and YTM Beacon's Discord settings by itself when it
-first starts. Remove the YTM Beacon extension from your browser's extensions page yourself, and add YTM Starcast's
-extension (`ytm-starcast-extension.zip` in its release) if you haven't yet: browsers only allow that by hand. A
-computer that only has YTM Beacon gets *install YTM Starcast (replaces YTM Beacon)*. A YTM Beacon kept next to YTM
-Starcast is removed from YTM Starcast's page whenever you like: *move over from YTM Beacon* while YTM Starcast runs,
-otherwise *remove YTM Beacon*. Removing YTM Starcast removes Pocketfader's and YTM Beacon's programs too, if they are
-still there.
-
-Orbit 0.3.5 and older can't install or update YTM Starcast: update Orbit first.
-
 ## Orbit for Android
 
 `android/` is Orbit for phones and tablets (Android 5.0 and newer). It installs, updates, opens and removes the
-Android apps of **YTM Starcast** and **Nova**, and updates **Orbit** itself. YTM Starcast's phone app keeps the
-Android app id Pocketfader's had, so an installed Pocketfader app updates to YTM Starcast in place, with its settings.
-Your Discord status controls are in YTM Starcast's app.
+Android apps of **YTM Starcast**, **Nova** and **xmas-tui**, and updates **Orbit** itself. Your Discord status controls
+are in YTM Starcast's app.
 
 Installing works like the desktop installer: review what will happen, then each step ticks off with the download's
 progress, then a result. The APK comes from the app's GitHub release and is checked before Android sees it: its
@@ -166,15 +137,13 @@ the source folder, update with `git pull`.
 
 The update replaces the program **in place**: the downloads are named without the version (`orbit-windows-x64.exe`,
 `orbit-linux-x86_64`, `orbit-macos-apple-silicon.dmg`, …), so the program keeps its name and folder from version to
-version, and launchers and shortcuts keep working. A copy downloaded before 0.3.5, named with its version
-(`orbit-v0.3.4-windows-x64.exe`), takes the plain name at its next update, and Orbit's own apps-menu or Start-menu entry
-follows it.
+version, and launchers and shortcuts keep working.
 
 ## What each app gets
 
 | | Status | Settings | Actions |
 |---|---|---|---|
-| **YTM Starcast** | running or not, output device, volume, what's playing, the browser extension, EQ, sleep timer, your Discord status (what Discord shows and why, the Discord connection), release; details: Discord user, application ID, album, browser extension, the last Discord error, the old YTM Beacon app | *Pause other players*; YTM Starcast's parts (YouTube Music remote, Discord status, Refine, this computer's audio); the Discord card: private mode, name in member list, album art, progress, badge, button, when paused, words never to show; address and access token | open web app, desktop window, hide your Discord status for 30 min / 1 h / 3 h, show now, move over from YTM Beacon, remove YTM Beacon, start/stop/restart, start at login |
+| **YTM Starcast** | running or not, output device, volume, what's playing, the browser extension, EQ, sleep timer, your Discord status (what Discord shows and why, the Discord connection), release; details: Discord user, application ID, album, browser extension, the last Discord error | *Pause other players*; YTM Starcast's parts (YouTube Music remote, Discord status, Refine, this computer's audio); the Discord card: private mode, name in member list, album art, progress, badge, button, when paused, words never to show; address and access token | open web app, desktop window, hide your Discord status for 30 min / 1 h / 3 h, show now, start/stop/restart, start at login |
 | **Nova** | answering or not, version and API level; how the server itself is doing: what needs attention, containers, websites, the fullest drive, the last backup, uptime; every Nova service and timer (the assistant and lighting when set up), failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web and the Nova Server window (Nova 0.9.16 and newer); status, doctor, recent actions, the API's log; pair a phone, a view-only device or a phone that's away from home, paired devices, what's waiting for approval, approve a browser, remove a device; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API; linked servers, plugins |
 | **YTDL-UI** | answering or not, version, yt-dlp ready, its folder, release | shown (it changes them in its own admin console): address, password for visitors, allowed sites, where downloads are processed, downloads at the same time, how long finished files are kept, speed limit, update checks | open, its own settings, start/stop/restart, start at login (Linux) |
 | **xmas-tui** | running as your wallpaper or not, its settings file | frame rate, size, zoom, snow, wind, critters, time of day, your villager, clock, widgets, weather, sound | its own settings, play in a window, start/stop/restart, start at login (Linux) |
@@ -278,8 +247,7 @@ python3 -W error::ResourceWarning -m unittest discover -s tests -t .   # catalog
 
 More checks run against the built programs on real machines in CI: `tools/ci-nova-windows.py` installs the newest
 Nova, YTM Starcast, YTDL-UI and xmas-tui through the built `orbit.exe` on GitHub's Windows machines, checks that each
-one answers, installs it again over itself and removes it (and moves a machine with Pocketfader and YTM Beacon over to
-YTM Starcast the way a person's PC would be moved); `tools/ci-selfupdate.py` has a real Orbit update itself to a newer
+one answers, installs it again over itself and removes it; `tools/ci-selfupdate.py` has a real Orbit update itself to a newer
 build and restart on it, on Linux, Windows and both kinds of Mac; and the Android app is installed and opened on an
 Android emulator.
 

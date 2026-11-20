@@ -1,11 +1,7 @@
 //! YTM Starcast: a YouTube Music companion. A phone remote (volume, outputs, EQ and the YouTube Music tab), the music
 //! as a Discord status, and Refine inside YouTube Music. A user service with a local JSON API on port 8777.
-//!
-//! YTM Starcast is what Pocketfader and YTM Beacon became. Until a computer has moved over, this page also works with
-//! the Pocketfader that still runs there: same address, same API, and its service is used for start/stop and the log.
 use super::{discord, field, open_url, release_info, run_unit_action, unit_actions, unit_states, with, App, Ctx};
 use crate::net;
-use crate::systemd;
 use crate::util::{bad, Res};
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
@@ -14,7 +10,6 @@ use std::time::{Duration, Instant};
 
 pub const DEFAULT_URL: &str = "http://127.0.0.1:8777";
 const UNIT: &str = "ytm-starcast.service";
-const LEGACY_UNIT: &str = "pocketfader.service"; // Pocketfader, before the computer moved over to YTM Starcast
 /// YTM Starcast's parts, each with its own switch (`GET/POST /api/parts`): key -> (label, help)
 const PARTS: [(&str, &str, &str); 4] = [
     ("remote", "YouTube Music remote", "Phones and the desktop window may control the YouTube Music tab."),
@@ -26,7 +21,6 @@ const HIDE_FOR: [i64; 3] = [30, 60, 180];
 
 pub struct Starcast {
     ctx: Arc<Ctx>,
-    found: Mutex<Option<(Instant, String)>>, // which service runs it here (forgotten after an install)
     beacon: Mutex<Option<Value>>,            // the last Discord status payload, so the buttons match what it is doing
     extension: Mutex<Value>,                 // YTM Starcast's word on its browser extension (0.2.0a2 and newer), or null
     focus: Mutex<bool>,                      // it can bring YouTube Music (and its settings there) to the front
@@ -46,7 +40,7 @@ fn s_of(v: &Value) -> String {
 
 impl Starcast {
     pub fn new(ctx: Arc<Ctx>) -> Starcast {
-        Starcast { ctx, found: Mutex::new(None), beacon: Mutex::new(None), extension: Mutex::new(Value::Null), focus: Mutex::new(false),
+        Starcast { ctx, beacon: Mutex::new(None), extension: Mutex::new(Value::Null), focus: Mutex::new(false),
                    refine_off: Mutex::new(false), answering: Mutex::new(false),
                    port: Mutex::new(None), connect: Mutex::new(None) }
     }
@@ -123,19 +117,14 @@ impl Starcast {
         let off = parts["discord"] == json!(false) || b.is_none() || b.map(|b| b["reachable"] == json!(false)).unwrap_or(true);
         if off {
             facts.push(json!(["discord status", "off", "muted"]));
-            if let Some(b) = b {
-                if truthy(&b["beaconApp"]["running"]) {
-                    facts.push(json!(["old ytm beacon", "still running: move over to YTM Starcast", "warn"]));
-                }
-            }
             return;
         }
         let b = b.unwrap();
-        let (code, tone, text) = discord::describe(b);
+        let (_code, tone, text) = discord::describe(b);
         let t = match tone.as_str() { "warn" => json!("warn"), "off" => json!("muted"), _ => Value::Null };
         facts.push(json!(["discord status", text, t]));
         let state = &b["discord"]["state"];
-        if truthy(state) && code != "beacon-app" {
+        if truthy(state) {
             facts.push(json!(["discord", s_of(state), if state == "connected" { Value::Null } else { json!("warn") }]));
         }
     }
@@ -180,7 +169,6 @@ impl Starcast {
         groups
     }
 
-    /// YTM Starcast's desktop window, wherever it was installed: YTM Starcast's places first, then Pocketfader's.
     /// YTM Starcast's own window, when it's installed and wanted (left out with "no-desktop-app", as Orbit installs it).
     fn desktop_app_here() -> bool {
         let home = crate::config::home();
@@ -209,7 +197,7 @@ impl Starcast {
         let home = crate::config::home();
         let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Local"));
         let mut out = vec![];
-        for (cmd, folder, win) in [("ytm-starcast-gui", "ytm-starcast", "YTM Starcast"), ("pocketfader-gui", "pocketfader", "Pocketfader")] {
+        for (cmd, folder, win) in [("ytm-starcast-gui", "ytm-starcast", "YTM Starcast")] {
             if let Some(p) = crate::runner::which(cmd) {
                 out.push(p);
             }
@@ -220,19 +208,6 @@ impl Starcast {
         out
     }
 
-    /// The old YTM Beacon program, when it is still on this computer.
-    pub fn beacon_binary() -> Option<PathBuf> {
-        if let Some(p) = crate::runner::which("ytm-beacon") {
-            return Some(p);
-        }
-        let home = crate::config::home();
-        let p = if cfg!(windows) {
-            std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Local")).join("ytm-beacon").join("ytm-beacon.exe")
-        } else {
-            home.join(".local/bin/ytm-beacon")
-        };
-        p.exists().then_some(p)
-    }
 }
 
 impl App for Starcast {
@@ -300,25 +275,9 @@ impl App for Starcast {
             None
         }
     }
-    fn forget_found(&self) {
-        *self.found.lock().unwrap() = None;
-    }
 
-    /// ytm-starcast.service, or Pocketfader's service while that is the one this computer has (before the move).
     fn units(&self) -> Vec<(String, bool)> {
-        if let Some((until, unit)) = self.found.lock().unwrap().clone() {
-            if until > Instant::now() {
-                return vec![(unit, true)];
-            }
-        }
-        let r = &self.ctx.runner;
-        let mut unit = UNIT.to_string();
-        if systemd::here() && systemd::show(r, UNIT, true)["state"] == "missing"
-            && systemd::show(r, LEGACY_UNIT, true)["state"].as_str().map(|s| s != "missing").unwrap_or(false) {
-            unit = LEGACY_UNIT.into();
-        }
-        *self.found.lock().unwrap() = Some((Instant::now() + Duration::from_secs(10), unit.clone()));
-        vec![(unit, true)]
+        vec![(UNIT.to_string(), true)]
     }
 
     fn hub_fields(&self) -> Vec<Value> {
@@ -441,8 +400,6 @@ impl App for Starcast {
                        else { json!(["starts at logon", if unit["enabled"] == "enabled" { "yes" } else { "no (switched off)" }]) });
         } else if unit["state"] == "missing" {
             facts.push(json!(["service", "not installed as a user service", "muted"]));
-        } else if unit["unit"] == LEGACY_UNIT {
-            facts.push(json!(["service", "still Pocketfader's: update to move it over to YTM Starcast", "muted"]));
         }
         done(s, facts, "ok", format!("Running{}", if device.is_empty() { String::new() } else { format!(" · {device}") }))
     }
@@ -531,11 +488,7 @@ impl App for Starcast {
         let b = self.beacon.lock().unwrap().clone();
         match b.filter(|b| b["reachable"] != json!(false)) {
             Some(b) => {
-                if truthy(&b["beaconApp"]["canMigrate"]) {
-                    acts.push(json!({"id": "migrate-beacon", "label": "move over from YTM Beacon", "group": "discord", "primary": true,
-                        "confirm": "Move your Discord status over from the old YTM Beacon app? YTM Starcast removes YTM Beacon (its settings are \
-                                    kept for YTM Starcast) and shows your status itself."}));
-                } else if b["visible"] == json!(false) {
+                if b["visible"] == json!(false) {
                     acts.push(json!({"id": "show", "label": "show now", "group": "discord", "primary": true}));
                 } else {
                     for m in HIDE_FOR {
@@ -543,13 +496,7 @@ impl App for Starcast {
                     }
                 }
             }
-            None => {
-                if Self::beacon_binary().is_some() {
-                    acts.push(json!({"id": "remove-beacon", "label": "remove YTM Beacon", "group": "maintenance", "term": true, "changes": true,
-                        "confirm": "Remove the old YTM Beacon app? YTM Starcast shows your Discord status instead. Its settings are kept, so YTM \
-                                    Starcast can take them over."}));
-                }
-            }
+            None => {}
         }
         acts.extend(unit_actions(self));
         acts
@@ -595,26 +542,6 @@ impl App for Starcast {
             }
             "releases" => return open_url(self, &format!("{}/releases", self.homepage())),
             "extension" => return open_url(self, &format!("{}/#extension", self.base())), // YTM Starcast's own guide
-            "migrate-beacon" => {
-                if self.ctx.dry_run() {
-                    return Ok(json!({"ok": true, "message": "dry run: would move over from YTM Beacon"}));
-                }
-                let r = self.post("/api/beacon/migrate", &json!({}), 60.0).map_err(|e| {
-                    // YTM Starcast explains each refusal in its reply: show its words
-                    if !e.text.is_empty() {
-                        return bad(e.text);
-                    }
-                    bad(match e.message.as_str() {
-                        "nothing_to_move" => "There's nothing to move over: YTM Beacon isn't installed here.".to_string(),
-                        "uninstall_failed" => "YTM Beacon's uninstaller stopped with an error. Remove it with `ytm-beacon uninstall`, then try again.".to_string(),
-                        other => format!("YTM Starcast: {other}"),
-                    })
-                })?;
-                *self.beacon.lock().unwrap() = None;
-                net::forget_ports();
-                let msg = r["message"].as_str().filter(|m| !m.is_empty()).unwrap_or("moved over from YTM Beacon").to_string();
-                return Ok(json!({"ok": true, "message": msg}));
-            }
             _ => {}
         }
         let hide = action.strip_prefix("hide:").and_then(|m| m.parse::<i64>().ok()).filter(|m| HIDE_FOR.contains(m));
@@ -630,13 +557,5 @@ impl App for Starcast {
             return run_unit_action(self, action);
         }
         Err(bad("unknown action"))
-    }
-
-    fn term_command(&self, action: &str, _args: &Map<String, Value>) -> Res<Option<Value>> {
-        if action != "remove-beacon" {
-            return Ok(None);
-        }
-        let exe = Self::beacon_binary().ok_or_else(|| bad("YTM Beacon isn't installed"))?;
-        Ok(Some(json!({"argv": [exe.to_string_lossy(), "uninstall"], "title": "YTM Beacon · remove"})))
     }
 }

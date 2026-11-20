@@ -327,13 +327,10 @@ impl Hub {
         let latest = self.installer.sources.cached_with(r.repo(), &|x| r.wants(x)).map(|rel| crate::util::version_of(rel["tag"].as_str().unwrap_or(""))).unwrap_or_default();
         let (installed, version, pending) = (inst["installed"].as_bool().unwrap_or(false), inst["version"].as_str().unwrap_or(""),
                                              inst["pending"].as_str().unwrap_or(""));
-        // "migrate": an app that replaces an older one (YTM Starcast: Pocketfader) offers to move it over even when the
-        // version alone wouldn't say so. The recipe only says so while the old app is still the install here.
-        let migrate = inst["migrate"].as_bool().unwrap_or(false);
         json!({"installed": installed, "version": version, "supported": sup["level"], "latest": latest,
-               "busy": self.installer.busy(id), "pending": pending, "migrate": migrate,
+               "busy": self.installer.busy(id), "pending": pending,
                "update": installed && !latest.is_empty() && pending.is_empty()
-                         && (migrate || (!version.is_empty() && net::is_newer(&latest, version)))})
+                         && !version.is_empty() && net::is_newer(&latest, version)})
     }
 
     /// First look: learn the latest versions in the background, once (then at most every 10 minutes per app).
@@ -614,19 +611,13 @@ impl Hub {
             return Err(bad(format!("{} {} still being installed or removed: restart Orbit when that's done",
                                    busy.join(" and "), if busy.len() == 1 { "is" } else { "are" })));
         }
-        let mut exe = running_program().ok_or_else(|| bad("Orbit can't find its own program; close it and open it yourself"))?;
-        let before = exe.clone();
+        let exe = running_program().ok_or_else(|| bad("Orbit can't find its own program; close it and open it yourself"))?;
         if !waiting(Some(&exe)).is_empty() {
-            match switch(Some(&exe)) {
-                Ok(Some(p)) => exe = p, // the same file, or its new name (a download named with a version)
-                Ok(None) => {}
-                Err(e) => return Err(bad(format!("couldn't switch to the new Orbit ({e}); this one keeps running"))),
+            if let Err(e) = switch(Some(&exe)) {
+                return Err(bad(format!("couldn't switch to the new Orbit ({e}); this one keeps running")));
             }
         }
-        // a program that moved (a name with its version in it → the plain name): the new Orbit has Orbit's own menu
-        // entry follow it once it runs (on Windows that starts PowerShell, which must not hold up the switch)
-        let moved_from = if exe != before { before.to_string_lossy().into_owned() } else { String::new() };
-        start_again(&exe, &moved_from, "")?;
+        start_again(&exe, "")?;
         Ok(json!({"ok": true, "message": "restarting Orbit…"}))
     }
 
@@ -650,7 +641,7 @@ impl Hub {
             if self.dry_run() {
                 return Ok(json!({"ok": true, "message": "dry run: Orbit would start again from its new place"}));
             }
-            start_again(std::path::Path::new(&program), "", &old)?;
+            start_again(std::path::Path::new(&program), &old)?;
             return Ok(json!({"ok": true, "message": "Orbit starts again from its new place…"}));
         }
         if step == "move" && !self.dry_run() && self.installer.busy("orbit").is_some() {
@@ -675,7 +666,7 @@ impl Hub {
         let mut r = desktop_entry::install(&self.ctx.runner);
         if r["restart"] == json!(true) {
             let program = std::path::PathBuf::from(r["program"].as_str().unwrap_or(""));
-            match start_again(&program, "", r["old"].as_str().unwrap_or("")) {
+            match start_again(&program, r["old"].as_str().unwrap_or("")) {
                 Ok(()) => r["message"] = json!(format!("{}; Orbit starts again from there…", r["message"].as_str().unwrap_or(""))),
                 Err(_) => r["message"] = json!(format!("{}; close Orbit and open it from your apps menu", r["message"].as_str().unwrap_or(""))),
             }
@@ -1110,10 +1101,10 @@ fn handle(hub: &Arc<Hub>, mut req: tiny_http::Request) {
 /// Listen on 127.0.0.1 (port 0 = any free port) and answer in the background. Returns the port.
 /// Start `exe` as the new Orbit (it waits for this one to let go of the port), then close the window and end. The new
 /// one deletes `delete_old` once this one has ended (a copy left behind by "install orbit").
-fn start_again(exe: &std::path::Path, moved_from: &str, delete_old: &str) -> Res<()> {
+fn start_again(exe: &std::path::Path, delete_old: &str) -> Res<()> {
     let mut argv = vec![exe.to_string_lossy().into_owned()];
     argv.extend(std::env::args().skip(1));
-    crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1"), ("ORBIT_MOVED_FROM", moved_from), ("ORBIT_DELETE_OLD", delete_old)])
+    crate::runner::detached(&argv, &[("ORBIT_RESTARTED", "1"), ("ORBIT_DELETE_OLD", delete_old)])
         .map_err(|e| bad(format!("couldn't start Orbit again: {e}; close it and open it yourself")))?;
     end_soon();
     Ok(())

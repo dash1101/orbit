@@ -133,7 +133,7 @@ Copy the closest existing recipe and adapt it:
 - `recipes/xmas_tui.rs`: runs the app's own installer script or setup, and installs things the computer needs
   (with the administrator's password).
 - `recipes/nova.rs`: a Debian package plus a signed release (ed25519 signature check).
-- `recipes/starcast.rs`: a Python wheel, and moving an older app over (migration).
+- `recipes/starcast.rs`: a Python wheel in its own environment, keeping the server's options across updates.
 
 Implement the `Recipe` trait (`desktop/src/recipe.rs`). Only `base`, `id`, `name`, `repo`, `blurb`, `glyph`,
 `color`, `platform` and `steps` are required:
@@ -282,7 +282,7 @@ The details are in `RELEASING.md`. The short version:
    macOS.
 5. The tag build publishes the release without the Android app, because the signing key isn't in the repository. The
    maintainer signs `orbit-android-unsigned.apk` locally (`tools/sign-apk/Sign.java`). They upload it as
-   `orbit-android.apk` and `orbit-vX.Y.Z-android.apk`, and add both lines to `SHA256SUMS`.
+   `orbit-android.apk` and add its line to `SHA256SUMS`.
 6. Run the *self-update-from-a-release* workflow: the previous release updates itself to the new one on every system.
 
 A release isn't needed for catalog-only changes (names, icons, blurbs, Android listings): pushing to `main` is enough.

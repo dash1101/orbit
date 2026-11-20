@@ -39,7 +39,7 @@ class CatalogApplyTest {
         val starcast = Catalog.apps.first { it.id == "ytm-starcast" }
         assertEquals("ytm-starcast-android.apk", starcast.apk(listOf("ytm-starcast-android-unshrunk.apk", "ytm-starcast-android.apk")))
         val orbit = Catalog.apps.first { it.id == "orbit" }
-        assertEquals("orbit-v0.6.0-android.apk", orbit.apk(listOf("orbit-v0.6.0-android.apk")))
+        assertEquals("orbit-android.apk", orbit.apk(listOf("orbit-linux-x86_64", "orbit-android.apk")))
         // xmas-tui's live wallpaper comes from the catalog alone (no built-in listing, no signing key)
         val xmas = Catalog.apps.first { it.id == "xmas-tui" }
         assertEquals(listOf("io.github.dash1101.xmastui"), xmas.pkgs)

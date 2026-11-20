@@ -366,10 +366,6 @@ jobs:
         if: matrix.name == 'windows-x64'
         env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
         run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe nova,ytm-starcast,ytdl-ui,xmas-tui
-      - name: "Windows: move a computer from Pocketfader and YTM Beacon to YTM Starcast through the program"
-        if: matrix.name == 'windows-x64'
-        env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
-        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe ytm-starcast --migrate
       - name: Package
         run: |
           mkdir -p out
@@ -404,8 +400,7 @@ jobs:
           ls -la
           rm -f orbit-android-unsigned.apk         # never published: it can't be installed
           # The files keep one name from release to release (orbit-windows-x64.exe …), so a program that updates
-          # itself keeps its name too. (Up to 0.5.1 each file was also published under a name with the version, for
-          # Orbit 0.3.4 and older; those update to 0.5.1 first.)
+          # itself keeps its name too.
           sha256sum orbit-* > SHA256SUMS
           # the notes list only the downloads this release has (Macs and ARM get builds at milestones)
           python3 ../tools/release-notes.py ../packaging/release-notes.md . orbit-android.apk > ../notes.md

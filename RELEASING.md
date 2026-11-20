@@ -15,16 +15,6 @@ of the *build* workflow with *everything* ticked. The release notes then list on
 (`tools/release-notes.py`), and Orbit on a Mac or an ARM computer updates itself to the newest release with its file,
 passing over the others.
 
-**Orbit 0.4.0 and YTM Starcast.** 0.4.0 replaces Pocketfader and YTM Beacon with YTM Starcast
-(`dash1101/ytm-starcast`, the renamed `dash1101/pocketfader`). Release it right after YTM Starcast's first release,
-once all of these are true, or its checks fail: `dash1101/ytm-starcast` exists under exactly that name (Orbit compares
-download addresses with it letter for letter), its newest release has `ytm_starcast-<version>-py3-none-any.whl`,
-`ytm-starcast-v<tag>-windows-x64.zip`, `ytm-starcast-android.apk` and `SHA256SUMS.txt`, and `starcast/static/icon.svg`
-is on its default branch (for `tools/sync-icons.py`). The *apps-on-windows* workflow also moves a Windows machine from
-Pocketfader `v0.1.0-alpha.15` (from YTM Starcast's releases) and YTM Beacon `v0.1.4` (from `dash1101/ytm-beacon`,
-which must stay public) to YTM Starcast. Orbit 0.3.5 and older can't install YTM Starcast, so the release notes tell
-people to update Orbit first.
-
 The `build` workflow builds the Android app and standalone programs for Linux, Windows and macOS (Apple chips and Intel; see *Which systems a release builds*), starts each one on its own system as a check, and publishes a pre-release with all of them, each as a single file: the `.exe`, the Linux program, a `.dmg` per Mac type, and the `.apk`. The desktop programs are the Rust build in `desktop/` (see its README); each is a single file with nothing to install. The Android app is the one piece that depends on where the signing key is.
 
 ## The signing key
@@ -59,10 +49,7 @@ Then upload it to the release with its checksum (`gh release upload v0.4.0 orbit
 **File names.** Release files keep one name from release to release, so a program that updates itself keeps its name:
 `orbit-windows-x64.exe`, `orbit-windows-arm64.exe`, `orbit-linux-x86_64`, `orbit-linux-arm64`, `orbit-linux-x86_64.deb`,
 `orbit-linux-arm64.deb`, `orbit-macos-apple-silicon.dmg`, `orbit-macos-intel.dmg` and `orbit-android.apk` (upload the
-signed APK under that name). Up to 0.5.1 each file was also published under a name with the version, for Orbit 0.3.4 and
-older; from 0.5.2 on only the plain names are, except the Android app: from 0.6.0 on the signed APK is uploaded under
-both `orbit-android.apk` and `orbit-v<version>-android.apk` (with a SHA256SUMS line for each), because Orbit 0.3.4 and
-older on Android only look for the name with the version and would otherwise never update.
+signed APK under that name).
 
 **The catalog.** `packaging/catalog.json` (written by `tools/make-catalog.py` from its list and the icons) is what every
 Orbit from 0.6.0 on reads from this repository's default branch: the apps' names, descriptions, colours and icons, and on

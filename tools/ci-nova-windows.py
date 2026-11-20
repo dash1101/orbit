@@ -6,65 +6,15 @@ which GitHub's machines grant without a prompt), checks that the app answers and
 installs again over itself (an update), then removes it with its settings and makes sure nothing is left.
 
     python tools/ci-nova-windows.py --exe orbit.exe [nova,ytm-starcast,ytdl-ui,xmas-tui]
-    python tools/ci-nova-windows.py --exe orbit.exe ytm-starcast --migrate
-                                    the move to YTM Starcast: first puts Pocketfader and YTM Beacon on the machine the
-                                    way they were installed before YTM Starcast, then has Orbit move it over and remove
-                                    everything again
 """
-import hashlib
 import json
 import os
-import ssl
 import sys
 import tempfile
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from pathlib import Path
-
-API = "https://api.github.com"
-
-
-class HttpError(Exception):
-    pass
-
-
-def get_json(url, timeout=10, insecure=False, headers=None):
-    """GET a JSON answer (the small part of Orbit's own HTTP code this check needs)."""
-    req = urllib.request.Request(url, headers=dict(headers or {}, **{"User-Agent": "orbit-ci"}))
-    ctx = ssl._create_unverified_context() if insecure else None
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
-            return json.loads(r.read().decode("utf-8") or "null")
-    except (urllib.error.URLError, OSError, ValueError) as e:
-        raise HttpError(str(e)) from e
-
-
-def github_headers():
-    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-    h = {"Accept": "application/vnd.github+json"}
-    if tok:
-        h["Authorization"] = f"Bearer {tok}"
-    return h
-
-
-def sha256_file(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 16), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def parse_sums(text):
-    """{file name: sha256} from a checksum list (sha256sum's format, with or without the binary-mode star)."""
-    out = {}
-    for line in text.splitlines():
-        parts = line.strip().split(None, 1)
-        if len(parts) == 2 and len(parts[0]) == 64:
-            out[parts[1].lstrip("*").strip()] = parts[0].lower()
-    return out
 
 
 def say(text):
@@ -76,16 +26,6 @@ def fail(text):
     sys.exit(1)
 
 
-def answers():
-    for url, insecure in (("https://127.0.0.1:8495/api/v1/ping", True), ("http://127.0.0.1:8095/api/v1/ping", False)):
-        try:
-            if (get_json(url, timeout=3, insecure=insecure) or {}).get("ok"):
-                return url
-        except HttpError:
-            pass
-    return ""
-
-
 # What each app is installed with, and removed with, through the program (the window's own choices).
 APPS = {"nova": ({"firewall": True}, {"purge": True}),
         "ytm-starcast": ({}, {"purge": True}),
@@ -93,175 +33,6 @@ APPS = {"nova": ({"firewall": True}, {"purge": True}),
         "xmas-tui": ({"startup": True}, {"purge": True})}
 # installed from Orbit, with no page of their own in it: checked by the version Orbit sees instead
 NO_PAGE = {"ytdl-ui", "xmas-tui"}
-
-# The apps YTM Starcast replaces, at fixed releases: Pocketfader's last one (in YTM Starcast's repository, its new
-# name) and YTM Beacon's (its repository stays readable). (repository, tag, Windows file, checksum list)
-LEGACY_POCKETFADER = ("dash1101/ytm-starcast", "v0.1.0-alpha.15", "pocketfader-v0.1.0-alpha.15-windows-x64.zip",
-                      "SHA256SUMS.txt")
-LEGACY_BEACON = ("dash1101/ytm-beacon", "v0.1.4", "ytm-beacon_windows_amd64.zip", "checksums.txt")
-RUN_KEY = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
-BEACON_PORTS = (41713, 41714, 41715, 41716, 41717)
-
-
-def fetch_release_file(repo, tag, name, sums_name, folder):
-    """One file of a given release, checked against that release's checksum list (as Orbit checks its downloads)."""
-    rel = get_json(f"{API}/repos/{repo}/releases/tags/{urllib.parse.quote(tag)}", timeout=20, headers=github_headers())
-    assets = {a["name"]: a.get("browser_download_url", "") for a in rel.get("assets") or [] if isinstance(a, dict) and a.get("name")}
-    for n in (name, sums_name):
-        if n not in assets:
-            fail(f"{repo} {tag} has no {n}")
-        if not assets[n].startswith(f"https://github.com/{repo}/releases/download/"):
-            fail(f"{n} isn't hosted where Orbit expects: {assets[n]}")
-    get = lambda url: urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "orbit-ci"}), timeout=60)
-    with get(assets[sums_name]) as r:
-        sums = parse_sums(r.read(1 << 20).decode("utf-8", "replace"))
-    dest = Path(folder) / name
-    with get(assets[name]) as r, open(dest, "wb") as f:
-        while True:
-            chunk = r.read(1 << 16)
-            if not chunk:
-                break
-            f.write(chunk)
-    if sums.get(name) != sha256_file(dest):
-        fail(f"{name} from {repo} {tag} doesn't match its published checksum")
-    say(f"downloaded {repo} {tag} {name} (checksum OK)")
-    return dest
-
-
-def beacon_answers():
-    for port in BEACON_PORTS:
-        try:
-            if (get_json(f"http://127.0.0.1:{port}/v1/ping", timeout=2) or {}).get("app") == "ytm-beacon":
-                return port
-        except HttpError:
-            pass
-    return 0
-
-
-def starcast_info():
-    """What answers on YTM Starcast's port (Pocketfader before the move), or {}."""
-    try:
-        return get_json("http://127.0.0.1:8777/api/info", timeout=3) or {}
-    except HttpError:
-        return {}
-
-
-def windows_query(argv):
-    """Exit code of a command that only looks (schtasks /Query, reg query)."""
-    import subprocess
-    return subprocess.run(argv, capture_output=True, stdin=subprocess.DEVNULL).returncode
-
-
-def safe_extract(archive, dest):
-    """Unpack a zip, refusing any entry that would land outside dest."""
-    import zipfile
-    dest = Path(dest).resolve()
-    with zipfile.ZipFile(archive) as z:
-        for info in z.infolist():
-            target = (dest / info.filename).resolve()
-            if dest != target and dest not in target.parents:
-                fail(f"{archive} has an entry outside its folder: {info.filename}")
-        z.extractall(dest)
-
-
-def put_legacy_apps():
-    """This machine as a person's PC was before YTM Starcast: Pocketfader where Orbit 0.3 put it (its program in
-    %LOCALAPPDATA%\\Programs\\Pocketfader, its scheduled task, running), and YTM Beacon through its own installer."""
-    import json
-    import shutil
-    import subprocess
-    local = Path(os.environ["LOCALAPPDATA"])
-    work = Path(tempfile.mkdtemp())
-
-    say("\n===== putting Pocketfader v0.1.0-alpha.15 in place, as Orbit 0.3 did")
-    repo, tag, name, sums_name = LEGACY_POCKETFADER
-    safe_extract(fetch_release_file(repo, tag, name, sums_name, work), work / "pf")
-    exe = next((work / "pf").rglob("pocketfader.exe"), None)
-    if not exe:
-        fail(f"{name} has no pocketfader.exe")
-    dest = local / "Programs" / "Pocketfader"
-    shutil.copytree(exe.parent, dest, dirs_exist_ok=True)
-    (dest / "orbit-install.json").write_text(json.dumps({"version": tag.lstrip("v")}), encoding="utf-8")
-    ps = ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"]
-    subprocess.run(ps + ["-File", str(dest / "install-exe.ps1")], check=True, stdin=subprocess.DEVNULL)
-    subprocess.run(ps + ["-Command", "Start-ScheduledTask -TaskName Pocketfader"], check=True, stdin=subprocess.DEVNULL)
-    deadline = time.time() + 90
-    while not starcast_info() and time.time() < deadline:
-        time.sleep(2)
-    if not starcast_info():
-        fail("Pocketfader doesn't answer on port 8777")
-    say(f"Pocketfader answers: {starcast_info()}")
-
-    say("\n===== installing YTM Beacon v0.1.4 with its own installer")
-    repo, tag, name, sums_name = LEGACY_BEACON
-    safe_extract(fetch_release_file(repo, tag, name, sums_name, work), work / "beacon")
-    exe = next((work / "beacon").rglob("ytm-beacon.exe"), None)
-    if not exe:
-        fail(f"{name} has no ytm-beacon.exe")
-    p = subprocess.run([str(exe), "install", "--no-open"], capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                       timeout=180)
-    say(p.stdout + p.stderr)
-    if p.returncode != 0:
-        fail(f"YTM Beacon's installer stopped with code {p.returncode}")
-    deadline = time.time() + 60
-    while not beacon_answers() and time.time() < deadline:
-        time.sleep(2)
-    if not beacon_answers():
-        fail("YTM Beacon doesn't answer after installing it")
-    if not (local / "ytm-beacon" / "ytm-beacon.exe").exists():
-        fail("YTM Beacon isn't where Orbit looks for it (%LOCALAPPDATA%\\ytm-beacon\\ytm-beacon.exe)")
-    say(f"YTM Beacon answers on port {beacon_answers()}")
-
-
-def check_moved():
-    """After the move: Pocketfader and YTM Beacon are gone, nothing of theirs starts at logon, YTM Starcast
-    answers."""
-    local = Path(os.environ["LOCALAPPDATA"])
-    if windows_query(["schtasks", "/Query", "/TN", "Pocketfader"]) == 0:
-        fail("Pocketfader's scheduled task is still there")
-    if (local / "Programs" / "Pocketfader").exists():
-        fail("Pocketfader's program folder is still there")
-    beacon = local / "ytm-beacon" / "ytm-beacon.exe"
-    deadline = time.time() + 30
-    while beacon.exists() and time.time() < deadline:
-        time.sleep(1)
-    if beacon.exists():
-        fail("YTM Beacon's program is still there")
-    if beacon_answers():
-        fail("YTM Beacon still answers")
-    if windows_query(["reg", "query", RUN_KEY, "/v", "YTMBeacon"]) == 0:
-        fail("YTM Beacon still starts at login")
-    if windows_query(["schtasks", "/Query", "/TN", "YTM Starcast"]) != 0:
-        fail("YTM Starcast's scheduled task is missing")
-
-    def starcast():
-        info = starcast_info()
-        return info if info and not str(info.get("version", "")).startswith("0.1.") else None
-    deadline = time.time() + 120
-    while not starcast() and time.time() < deadline:
-        time.sleep(2)
-    info = starcast()
-    if not info:
-        fail(f"YTM Starcast doesn't answer on port 8777 (it says {starcast_info()})")
-    say(f"moved: Pocketfader and YTM Beacon are gone, YTM Starcast {info.get('version')} answers")
-
-
-def check_family_gone():
-    """After removing YTM Starcast with its settings: nothing of YTM Starcast, Pocketfader or YTM Beacon is left."""
-    local, roaming = Path(os.environ["LOCALAPPDATA"]), Path(os.environ["APPDATA"])
-    left = [p for p in (local / "Programs" / "YTM Starcast", local / "Programs" / "Pocketfader", local / "ytm-beacon",
-                        roaming / "ytm-starcast", roaming / "pocketfader", roaming / "ytm-beacon") if p.exists()]
-    if left:
-        fail(f"left behind: {left}")
-    for task in ("YTM Starcast", "Pocketfader"):
-        if windows_query(["schtasks", "/Query", "/TN", task]) == 0:
-            fail(f"the scheduled task {task} is still there")
-    deadline = time.time() + 20
-    while starcast_info() and time.time() < deadline:
-        time.sleep(1)
-    if starcast_info():
-        fail("something still answers on port 8777")
-
 
 WATCH = r"""
 Add-Type @'
@@ -347,21 +118,14 @@ def watch_windows(folder):
     return done
 
 
-def through_the_program(exe, apps, migrate=False):
+def through_the_program(exe, apps):
     """Install each app through the standalone program's own API (what its install window calls), check that it
-    answers and that Orbit's page for it sees that, then remove it and check it's gone. With `migrate` (YTM Starcast
-    only): Pocketfader and YTM Beacon are put in place first, the install is the move from them, and the removal takes
-    everything of all three with it."""
+    answers and that Orbit's page for it sees that, then remove it and check it's gone."""
     import json
     import socket
     import subprocess
     import urllib.error
     import urllib.request
-
-    if migrate:
-        if list(apps) != ["ytm-starcast"]:
-            fail("--migrate is for ytm-starcast alone")
-        put_legacy_apps()
 
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -413,10 +177,8 @@ def through_the_program(exe, apps, migrate=False):
         return listing(app)["installed"]["installed"]
 
     home = Path(tempfile.mkdtemp())
-    # Orbit keeps its own settings in a folder of its own here; for the move it sees the machine's real settings
-    # folder, where Pocketfader, YTM Beacon and YTM Starcast keep theirs, so that removing them with their settings
-    # is checked
-    env = dict(os.environ) if migrate else dict(os.environ, APPDATA=str(home))
+    # Orbit keeps its own settings in a folder of its own here
+    env = dict(os.environ, APPDATA=str(home))
     windows = watch_windows(home)
     p = subprocess.Popen([exe, "--no-window", "--port", str(port)], env=env, stdin=subprocess.DEVNULL,
                          stdout=open(home / "orbit.log", "w"), stderr=subprocess.STDOUT)
@@ -437,26 +199,9 @@ def through_the_program(exe, apps, migrate=False):
         say(f"Orbit {hub['version']} on port {port}")
         for app in apps:
             install, remove = APPS[app]
-            if migrate:
-                found = listing(app)
-                inst = found["installed"]
-                say(f"before the move: {inst} · update offered: {found.get('update')}")
-                if not (inst["installed"] and inst.get("migrate") and inst.get("how") == "Pocketfader (its old name)"
-                        and inst.get("legacy", {}).get("beacon")):
-                    fail("Orbit doesn't see Pocketfader and YTM Beacon as something to move to YTM Starcast")
-                # the card offers the move once Orbit has learned the latest release, which it looks up in the
-                # background after it starts
-                until("YTM Starcast's card to offer the move", lambda: listing(app).get("update"), 120)
-                old = call(f"/api/apps/{app}")["status"]
-                say(f"Orbit's {app} page before the move: {old['state']} · {old['headline']} · {old.get('version')}")
-            elif installed(app):
+            if installed(app):
                 fail(f"{app} is already installed here")
             job(app, "install", install)
-            if migrate:
-                check_moved()
-                after = listing(app)["installed"]
-                if after.get("migrate") or after.get("how") != "standalone program":
-                    fail(f"after the move Orbit still sees something to move: {after}")
             if app in NO_PAGE:
                 want = listing(app)["latest"]
                 found = until(f"Orbit to see {app} {want} installed",
@@ -477,21 +222,10 @@ def through_the_program(exe, apps, migrate=False):
                 fail(f"Nova's Windows actions are missing: {[a['id'] for a in page['actions']]}")
             job(app, "uninstall", remove)
             until(f"{app} to be gone", lambda: not installed(app), 120)
-            if migrate:
-                check_family_gone()
-                say("Pocketfader and YTM Beacon moved to YTM Starcast, and YTM Starcast removed with its settings, "
-                    "through the standalone Orbit.")
             say(f"{app}: installed, answered and removed through the standalone Orbit.")
         say(f"\nAll of {', '.join(apps)}: installed, answered and removed through the standalone Orbit.")
         polling["on"] = False
         seen = windows()
-        if migrate:
-            # YTM Beacon's own uninstaller (an archived app, run once when moving over from it) deletes itself with
-            # "ping -n 3 …" in a console window of its own: Orbit runs it hidden, but can't hide what it starts
-            beacon = {w: lines for w, lines in seen.items() if any("ping  -n 3 127.0.0.1" in ln for ln in lines)}
-            for lines in beacon.values():
-                say("::warning::YTM Beacon's own uninstaller opened a console window to delete itself: " + " / ".join(lines))
-            seen = {w: lines for w, lines in seen.items() if w not in beacon}
         if seen:
             fail("console windows opened while Orbit installed, polled and removed apps (nothing should show one):\n  "
                  + "\n  ".join(" / ".join(lines) for lines in seen.values()))
@@ -507,7 +241,7 @@ def through_the_program(exe, apps, migrate=False):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--migrate"]
+    args = sys.argv[1:]
     if len(args) < 2 or args[0] != "--exe":
         sys.exit(__doc__)
-    through_the_program(args[1], args[2].split(",") if len(args) > 2 else ["nova"], migrate="--migrate" in sys.argv)
+    through_the_program(args[1], args[2].split(",") if len(args) > 2 else ["nova"])

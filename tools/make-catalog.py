@@ -47,8 +47,7 @@ APPS = [
     {"id": "orbit", "name": "Orbit", "blurb": "This app",
      "repo": "dash1101/orbit", "color": "#f0668e", "icon": "icon.svg",
      "android": {
-         # orbit-android.apk from 0.3.5 on; releases before named it with the version (orbit-v0.3.4-android.apk)
-         "pkgs": ["app.novalabs.orbit"], "apk": ["orbit-android.apk", "re:orbit-v[^/]*-android\\.apk"], "sums": "SHA256SUMS",
+         "pkgs": ["app.novalabs.orbit"], "apk": ["orbit-android.apk"], "sums": "SHA256SUMS",
          "note": "Orbit updates itself from its GitHub releases."}},
 ]
 

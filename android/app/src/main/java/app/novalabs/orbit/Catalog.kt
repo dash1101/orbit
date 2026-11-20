@@ -69,8 +69,7 @@ object Catalog {
             blurb = "This app",
             repo = "dash1101/orbit", pkgs = listOf("app.novalabs.orbit"), icon = "orbit.svg", color = 0xFFF0668E,
             sums = "SHA256SUMS",
-            // orbit-android.apk from 0.3.5 on; releases before named it with the version (orbit-v0.3.4-android.apk)
-            apk = { names -> names.firstOrNull { it == "orbit-android.apk" } ?: names.firstOrNull { Regex("""orbit-v[^/]*-android\.apk""").matches(it) } },
+            apk = { names -> names.firstOrNull { it == "orbit-android.apk" } },
             note = "Orbit updates itself from its GitHub releases.",
             self = true,
         ),

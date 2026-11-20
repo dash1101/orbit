@@ -120,8 +120,6 @@ fn run() -> i32 {
     }
     let restarted = std::env::var("ORBIT_RESTARTED").map(|v| v == "1").unwrap_or(false);
     std::env::remove_var("ORBIT_RESTARTED");
-    let moved_from = std::env::var("ORBIT_MOVED_FROM").unwrap_or_default();
-    std::env::remove_var("ORBIT_MOVED_FROM");
     let delete_old = std::env::var("ORBIT_DELETE_OLD").unwrap_or_default();
     std::env::remove_var("ORBIT_DELETE_OLD");
     if restarted && !delete_old.is_empty() {
@@ -136,14 +134,6 @@ fn run() -> i32 {
         });
     }
     desktop_entry::installed_started();
-    if restarted && !moved_from.is_empty() {
-        // the Orbit before was named with its version: Orbit's own menu entry follows this one
-        std::thread::spawn(move || {
-            if let Some(me) = recipes::orbit::running_program() {
-                desktop_entry::follow(std::path::Path::new(&moved_from), &me);
-            }
-        });
-    }
     if !a.port_given {
         // the port chosen in Orbit's settings
         if let Some(p) = config::Config::new(None).get("port").as_u64().and_then(|p| u16::try_from(p).ok()).filter(|p| *p >= 1024) {
@@ -249,9 +239,6 @@ fn switch_to_waiting_update(port: u16) -> bool {
         return false;
     }
     let Ok(Some(new)) = recipes::orbit::switch(Some(&exe)) else { return false };
-    if new != exe {
-        desktop_entry::follow(&exe, &new);
-    }
     let mut argv = vec![new.to_string_lossy().into_owned()];
     argv.extend(std::env::args().skip(1));
     #[cfg(unix)]

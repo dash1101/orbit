@@ -5,9 +5,8 @@
     python tools/ci-selfupdate.py --real <a published Orbit> <the newest version>
 
 A stand-in for GitHub (on 127.0.0.1, named to Orbit by ORBIT_TEST_GITHUB_API) publishes the newer build as release
-v99.0.0 with its SHA256SUMS, under the name releases use (orbit-linux-x86_64 …). In the "restart" run the program
-starts out named the way downloads before 0.3.5 were (orbit-v1.0.0-linux-x86_64), and must end up under the plain name,
-with Orbit's own menu entry following it (Linux and Windows). With --real, an Orbit downloaded from an earlier release updates itself from the real
+v99.0.0 with its SHA256SUMS, under the name releases use (orbit-linux-x86_64 …). The program keeps its name, and
+Orbit's own menu entry still starts it afterwards (Linux and Windows). With --real, an Orbit downloaded from an earlier release updates itself from the real
 GitHub releases instead. A copy of this build is started, asked through its own API to update itself (exactly
 what the window's "update" button does), then to restart; the newer Orbit must come up on the same port and the
 old program must be gone. Run by the build workflow on Linux and Windows.
@@ -165,8 +164,8 @@ def show_processes():
 
 def stop_everything(app):
     if os.name == "nt":
-        # by program name: every name it has during a run (as downloaded, with or without a version)
-        names = {Path(old_exe).name} | ({f"orbit-{suffix}", f"orbit-v1.0.0-{suffix}"} if not REAL else set())
+        # by program name: every name it has during a run
+        names = {Path(old_exe).name} | ({f"orbit-{suffix}"} if not REAL else set())
         for name in sorted(names):
             subprocess.run(["taskkill", "/F", "/T", "/IM", name], capture_output=True)
         return
@@ -204,13 +203,12 @@ def scenario(gh, how):
     else:
         name = Path(old_exe).name
         if not REAL:
-            name = f"orbit-v1.0.0-{suffix}" if how == "restart" else f"orbit-{suffix}"
+            name = f"orbit-{suffix}"
         bundle = exe = app / name
         shutil.copy2(old_exe, exe)
         original = Path(old_exe)
-    # where the program is after the update: the same place, or (named with a version) the plain name
-    final = bundle if REAL or bundle.suffix == ".app" else app / f"orbit-{suffix}"
-    final_exe = exe if final == bundle else final
+    # where the program is after the update: the same place
+    final, final_exe = bundle, exe
     port = free_port()
     env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), APPDATA=str(root / "config"),
                XDG_DATA_HOME=str(root / "data"))
@@ -242,7 +240,7 @@ def scenario(gh, how):
                 if said.get("ok", True) is not False:
                     break
             else:
-                fail("Orbit couldn't add its menu entry, so there is nothing to check it follows the update")
+                fail("Orbit couldn't add its menu entry, so there is nothing to check after the update")
         if how == "auto":
             tag = wait_for("Orbit to get the update ready by itself",
                            lambda: (lambda t: t if t.get("pending") else None)(call(port, "/api/hub").get("orbitUpdate") or {}), 180)
@@ -303,8 +301,7 @@ def scenario(gh, how):
                     return os.path.samefile(menu_target(root), final_exe)   # the same file, however its path is written
                 except OSError:
                     return False
-            # the new Orbit updates its menu entry by itself once it runs (on Windows that takes PowerShell a while)
-            same = wait_for("the menu entry to follow", follows, 90, quiet=True)
+            same = wait_for("the menu entry to start the updated program", follows, 90, quiet=True)
             say(f"the menu entry starts: {menu_target(root)}")
             if not same:
                 fail(f"the menu entry doesn't start {final_exe}")

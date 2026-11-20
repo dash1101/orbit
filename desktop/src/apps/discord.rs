@@ -1,8 +1,8 @@
-//! Discord status: what YTM Starcast (or, before the move, Pocketfader relaying YTM Beacon) reports about the music
+//! Discord status: what YTM Starcast reports about the music
 //! shown as the Discord status, turned into the words Orbit shows. Pure helpers, no network.
 //!
-//! The payload is YTM Starcast's `GET /api/beacon`. Older payloads (YTM Beacon's own `/v1/status`) work too: every
-//! field is optional.
+//! The payload is YTM Starcast's `GET /api/beacon` (the Discord status's route keeps its first name); every field is
+//! optional.
 use serde_json::{json, Value};
 
 pub const DEFAULT_CLIENT_ID: &str = "1567329407901634670"; // the Discord application the status shows as by default (public)
@@ -24,8 +24,6 @@ fn headline_text(code: &str) -> Option<(&'static str, &'static str)> {
         "waiting" => ("ok", "Sending to Discord…"),
         "ad" => ("ok", "An advert is playing: hidden until the music is back"),
         "unreachable" => ("off", "Off"),
-        "unsupported" => ("warn", "YTM Beacon is too old: update it"),
-        "beacon-app" => ("warn", "The old YTM Beacon app is still running: move over to YTM Starcast"),
         _ => return None,
     })
 }
@@ -48,7 +46,7 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
-/// The payload's own headline when it has one, else worked out in the same order as YTM Beacon's dashboard.
+/// The payload's own headline when it has one, else worked out from its parts.
 pub fn headline(s: &Value) -> String {
     if !truthy(s) {
         return "unreachable".into();
@@ -87,10 +85,7 @@ pub fn headline(s: &Value) -> String {
 
 /// (code, tone, text) for the Discord line.
 pub fn describe(s: &Value) -> (String, String, String) {
-    let mut code = headline(s);
-    if code == "beacon-running" || truthy(&obj(s, "beaconApp")["running"]) {
-        code = "beacon-app".into(); // YTM Starcast's own Discord status waits until the old app is gone, whatever else it says
-    }
+    let code = headline(s);
     let (tone, mut text) = match headline_text(&code) {
         Some((t, x)) => (t.to_string(), x.to_string()),
         None => ("ok".into(), code.replace('-', " ")),
@@ -172,11 +167,6 @@ pub fn details(raw: &Value) -> Vec<Value> {
     if truthy(obj(raw, "detail")) {
         out.push(json!(["last discord error", s_of(&raw["detail"])]));
     }
-    let old = obj(raw, "beaconApp");
-    if truthy(&old["running"]) || truthy(&old["installed"]) {
-        let v = if truthy(&old["version"]) { format!(" · {}", s_of(&old["version"])) } else { String::new() };
-        out.push(json!(["old ytm beacon app", format!("{}{v}", if truthy(&old["running"]) { "still running" } else { "installed, not running" })]));
-    }
     if !obj(raw, "uptimeSec").is_null() {
         out.push(json!(["running for", dur(&raw["uptimeSec"])]));
     }
@@ -202,7 +192,6 @@ mod tests {
         playing["hidden"] = json!("paused");
         assert_eq!(headline(&playing), "paused-hidden");
         assert_eq!(describe(&json!({"visible": false, "snoozeSec": 30})).2, "Hidden for 1 more min");
-        assert_eq!(describe(&json!({"headline": "showing", "beaconApp": {"running": true}})).0, "beacon-app");
         assert_eq!(dur(&json!(90061)), "1 d 1 h 1 min");
     }
 }
