@@ -24,10 +24,10 @@ class IconTests(unittest.TestCase):
         kt = (ROOT / "android/app/src/main/java/app/novalabs/orbit/Catalog.kt").read_text()
         for icon in re.findall(r'icon = "([^"]+)"', kt):
             self.assertTrue((sync.ANDROID / icon).is_file(), f"Android catalogue names {icon}")
-        from orbit.apps import BUILTIN
-        for app in BUILTIN:
-            if app.icon:
-                self.assertTrue((sync.DESKTOP / app.icon).is_file(), f"{app.id} names {app.icon}")
+        # every app page in the desktop program (fn icon(&self) -> String { "x.svg".into() })
+        for f in (ROOT / "desktop/src/apps").glob("*.rs"):
+            for icon in re.findall(r'fn icon\(&self\) -> String \{\s*"([^"]+)"', f.read_text()):
+                self.assertTrue((sync.DESKTOP / icon).is_file(), f"{f.name} names {icon}")
 
     def test_android_catalogue_keeps_the_phone_apps_ids(self):
         kt = (ROOT / "android/app/src/main/java/app/novalabs/orbit/Catalog.kt").read_text()

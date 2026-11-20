@@ -1,6 +1,6 @@
 # Releasing
 
-1. Bump the version in `desktop/Cargo.toml`, `desktop/tauri.conf.json` and `orbit/__init__.py` (the Python Orbit).
+1. Bump the version in `desktop/Cargo.toml` and `desktop/tauri.conf.json`, then `cd desktop && cargo build` (for `Cargo.lock`).
 2. `python3 tools/sync-icons.py` pulls the apps' current icons from their repositories (a test fails if the desktop
    and Android copies differ, or if a file in Orbit's icon folders isn't one of the script's icons). Orbit's own icon
    is drawn by `python3 tools/make-icon.py` (`packaging/icon/`).

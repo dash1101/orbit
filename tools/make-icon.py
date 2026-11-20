@@ -131,7 +131,7 @@ def main():
     mac = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
     mac.alpha_composite(render(full, 824), (100, 100))
     mac.save(OUT / "orbit-mac-1024.png")
-    (ROOT / "orbit" / "static" / "icon.svg").write_text(full)
+    (ROOT / "web" / "icon.svg").write_text(full)
     (ROOT / "android" / "app" / "src" / "main" / "assets" / "icons" / "orbit.svg").write_text(full)   # Orbit's own card
     # Android: the tile for Android 7 and older, and the adaptive icon's foreground and themed (monochrome) layers on
     # the 108 dp canvas (the background is res/drawable/ic_launcher_background.xml)

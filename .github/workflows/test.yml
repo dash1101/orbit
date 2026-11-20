@@ -9,27 +9,22 @@ permissions:
   contents: read
 
 jobs:
-  python:
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.9", "3.13"]
-    runs-on: ubuntu-22.04   # the newest Ubuntu runner no longer has Python 3.9, the oldest Orbit runs on
+  checks:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "${{ matrix.python }}" }
-      - name: Tests (fakes and stub servers only)
+        with: { python-version: "3.13" }
+      - name: Catalog, icons, translations, themes and release notes are consistent
         run: python -W error::ResourceWarning -m unittest discover -s tests -t . -v
       - name: The apps' icons match their own repositories
-        if: matrix.python == '3.13'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: python tools/sync-icons.py --check && python tools/make-catalog.py --check
       - name: Page script parses
         run: |
           python - <<'PY'
           import re, pathlib
-          s = pathlib.Path("orbit/static/index.html").read_text()
+          s = pathlib.Path("web/index.html").read_text()
           pathlib.Path("page.mjs").write_text(re.search(r"<script>(.*)</script>", s, re.S).group(1))
           PY
           node --check page.mjs

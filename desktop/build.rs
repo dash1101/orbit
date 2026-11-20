@@ -13,12 +13,12 @@ fn main() {
     }
     println!("cargo::rustc-check-cfg=cfg(orbit_window_inside)");
     for f in ["index.html", "icon.svg"] {
-        println!("cargo:rerun-if-changed=../orbit/static/{f}");
+        println!("cargo:rerun-if-changed=../web/{f}");
     }
-    println!("cargo:rerun-if-changed=../orbit/static/apps");
-    println!("cargo:rerun-if-changed=../orbit/static/i18n");
-    // The apps' icons, built into the program: one entry per file in orbit/static/apps.
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../orbit/static/apps");
+    println!("cargo:rerun-if-changed=../web/apps");
+    println!("cargo:rerun-if-changed=../web/i18n");
+    // The apps' icons, built into the program: one entry per file in web/apps.
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/apps");
     let mut rows = String::from("pub static APP_ICONS: &[(&str, &[u8])] = &[\n");
     let mut names: Vec<_> = std::fs::read_dir(&dir).map(|d| d.flatten().map(|e| e.path()).collect()).unwrap_or_default();
     names.sort();

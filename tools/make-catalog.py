@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "packaging" / "catalog.json"
-ICONS = ROOT / "orbit" / "static"
+ICONS = ROOT / "web"
 
 APPS = [
     {"id": "ytm-starcast", "name": "YTM Starcast",

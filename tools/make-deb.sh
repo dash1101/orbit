@@ -11,7 +11,7 @@ root="$(mktemp -d)"
 chmod 0755 "$root"
 trap 'rm -rf "$root"' EXIT
 install -D -m 0755 "$prog" "$root/usr/bin/orbit"
-install -D -m 0644 "$here/orbit/static/icon.svg" "$root/usr/share/icons/hicolor/scalable/apps/app.novalabs.orbit.svg"
+install -D -m 0644 "$here/web/icon.svg" "$root/usr/share/icons/hicolor/scalable/apps/app.novalabs.orbit.svg"
 install -D -m 0644 "$here/desktop/icons/icon.png" "$root/usr/share/icons/hicolor/512x512/apps/app.novalabs.orbit.png"
 install -D -m 0644 /dev/stdin "$root/usr/share/applications/app.novalabs.orbit.desktop" <<EOF
 [Desktop Entry]

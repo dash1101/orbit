@@ -1,5 +1,5 @@
 //! Orbit's own settings: ~/.config/orbit/config.json (or $XDG_CONFIG_HOME/orbit; %APPDATA%\Orbit on Windows).
-//! The same file and format as the Python Orbit, so an update keeps everything.
+//! Kept in the same format from version to version, so an update keeps everything.
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;

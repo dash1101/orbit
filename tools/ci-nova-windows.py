@@ -1,36 +1,70 @@
-"""For CI only: Orbit's installer puts Nova on this Windows machine, for real, and takes it off again.
+"""For CI only: the standalone Orbit installs its apps on this Windows machine, for real, and takes them off again.
 
-Runs on GitHub's Windows machines (.github/workflows/nova-windows.yml), never on a person's PC: it installs
-Nova's newest release (asking Windows for administrator rights the way it would on a PC, which GitHub's machines
-grant without a prompt), checks that Nova answers and that Orbit's Nova page sees it, installs again over
-itself (an update), then removes it with its settings and makes sure nothing is left.
+Runs on GitHub's Windows machines (the build workflow), never on a person's PC: through a built orbit.exe, the way its
+window does it, it installs each app's newest release (asking Windows for administrator rights the way it would on a PC,
+which GitHub's machines grant without a prompt), checks that the app answers and that Orbit's page for it sees it,
+installs again over itself (an update), then removes it with its settings and makes sure nothing is left.
 
-    python tools/ci-nova-windows.py                   through Orbit's Python code
     python tools/ci-nova-windows.py --exe orbit.exe [nova,ytm-starcast,ytdl-ui,xmas-tui]
-                                                      through a built standalone Orbit, the way its window does it
     python tools/ci-nova-windows.py --exe orbit.exe ytm-starcast --migrate
-                                                      the move to YTM Starcast: first puts Pocketfader and YTM Beacon
-                                                      on the machine the way they were installed before YTM Starcast,
-                                                      then has the standalone Orbit move it over and remove everything
-                                                      again
+                                    the move to YTM Starcast: first puts Pocketfader and YTM Beacon on the machine the
+                                    way they were installed before YTM Starcast, then has Orbit move it over and remove
+                                    everything again
 """
+import hashlib
+import json
 import os
+import ssl
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+API = "https://api.github.com"
 
-from orbit import net                                   # noqa: E402
-from orbit.apps.nova import Nova                        # noqa: E402
-from orbit.config import Config                         # noqa: E402
-from orbit.install.engine import Installer, Sources     # noqa: E402
-from orbit.install.host import Host                     # noqa: E402
-from orbit.install.recipes import load                  # noqa: E402
-from orbit.net import Releases                          # noqa: E402
-from orbit.runner import Runner                         # noqa: E402
-from orbit.server import Ctx, Jobs                      # noqa: E402
+
+class HttpError(Exception):
+    pass
+
+
+def get_json(url, timeout=10, insecure=False, headers=None):
+    """GET a JSON answer (the small part of Orbit's own HTTP code this check needs)."""
+    req = urllib.request.Request(url, headers=dict(headers or {}, **{"User-Agent": "orbit-ci"}))
+    ctx = ssl._create_unverified_context() if insecure else None
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            return json.loads(r.read().decode("utf-8") or "null")
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise HttpError(str(e)) from e
+
+
+def github_headers():
+    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+    h = {"Accept": "application/vnd.github+json"}
+    if tok:
+        h["Authorization"] = f"Bearer {tok}"
+    return h
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def parse_sums(text):
+    """{file name: sha256} from a checksum list (sha256sum's format, with or without the binary-mode star)."""
+    out = {}
+    for line in text.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and len(parts[0]) == 64:
+            out[parts[1].lstrip("*").strip()] = parts[0].lower()
+    return out
 
 
 def say(text):
@@ -42,92 +76,14 @@ def fail(text):
     sys.exit(1)
 
 
-def run(installer, op, opts):
-    say(f"\n===== {op} {opts}")
-    job = installer.start("nova", op, opts)
-    seen = 0
-    while True:
-        snap = job.snapshot(seen)
-        for line in snap["log"]:
-            say("  " + line)
-        seen = snap["logNext"]
-        if snap["state"] != "running":
-            break
-        time.sleep(1)
-    for s in snap["steps"]:
-        took = f"{s['ended'] - s['started']:.1f} s" if s.get("ended") and s.get("started") else ""
-        say(f"  [{s['state']:>7}] {s['label']} {took} {s.get('detail') or ''}")
-    if snap["state"] != "done":
-        fail(f"{op} {snap['state']}: {snap['error']} {snap['hint']}")
-    say(f"  result: {snap['result'].get('headline')} {snap['result'].get('body')}")
-    return snap
-
-
 def answers():
     for url, insecure in (("https://127.0.0.1:8495/api/v1/ping", True), ("http://127.0.0.1:8095/api/v1/ping", False)):
         try:
-            if (net.get_json(url, timeout=3, insecure=insecure) or {}).get("ok"):
+            if (get_json(url, timeout=3, insecure=insecure) or {}).get("ok"):
                 return url
-        except net.HttpError:
+        except HttpError:
             pass
     return ""
-
-
-def main():
-    host = Host()
-    if host.system != "windows":
-        fail("this only runs on Windows")
-    sources = Sources()
-    recipe = load(host, sources)["nova"]
-    info = recipe.info("install")
-    say(f"{info['title']} · support {info['support']['level']} · {info['release'] and info['release']['tag']}")
-    for line in info["summary"]:
-        say(" › " + line)
-    if info["blocked"]:
-        fail("blocked: " + info["blocked"])
-    if info["support"]["level"] != "limited":
-        fail("expected Nova on Windows to be a preview (limited)")
-    installer = Installer(host, sources, {"nova": recipe}, spawn=Runner().spawn)
-
-    run(installer, "install", {"firewall": True})
-    got = recipe.detect()
-    say(f"detected: {got}")
-    if not got["installed"]:
-        fail("Orbit doesn't see Nova after installing it")
-    deadline = time.time() + 60
-    while not answers() and time.time() < deadline:
-        time.sleep(2)
-    if not answers():
-        fail("Nova doesn't answer after the install")
-    say("answers at " + answers())
-
-    cfg = Config(Path(tempfile.mkdtemp()) / "config.json")
-    page = Nova(Ctx(cfg, Runner(), Releases(), Jobs()))
-    st = page.status()
-    say(f"Orbit's Nova page: {st['state']} · {st['headline']} · {st.get('version')} · {st['facts']}")
-    if st["state"] != "ok":
-        fail("Orbit's Nova page doesn't show Nova running")
-    acts = [a["id"] for a in page.actions()]
-    say(f"actions: {acts}")
-    if "win:add" not in acts or "gui" not in acts:
-        fail("the Windows actions are missing")
-    if not recipe.win_shortcut.exists():
-        fail(f"no Start menu entry at {recipe.win_shortcut}")
-
-    snap = run(installer, "install", {"firewall": True})     # over itself: an update keeps settings and devices
-    if not snap["result"]["headline"].startswith(("Nova is updated", "Nova is installed")):
-        fail("unexpected result after installing again")
-    if not answers():
-        fail("Nova doesn't answer after installing again")
-
-    run(installer, "uninstall", {"purge": True})
-    recipe.forget()
-    if recipe.detect()["installed"]:
-        fail("Nova is still there after removing it")
-    left = [p for p in (recipe.win_dir, Path(os.environ.get("ProgramData", "C:\\ProgramData")) / "Nova") if p.exists()]
-    if left:
-        fail(f"left behind: {left}")
-    say("\nNova installed, answered, updated and was removed through Orbit.")
 
 
 # What each app is installed with, and removed with, through the program (the window's own choices).
@@ -149,22 +105,18 @@ BEACON_PORTS = (41713, 41714, 41715, 41716, 41717)
 
 def fetch_release_file(repo, tag, name, sums_name, folder):
     """One file of a given release, checked against that release's checksum list (as Orbit checks its downloads)."""
-    import urllib.parse
-    from orbit.install.engine import parse_sums, sha256_file
-    sources = Sources()
-    rel = net.get_json(f"{sources.api}/repos/{repo}/releases/tags/{urllib.parse.quote(tag)}", timeout=20,
-                       headers=sources._api_headers())
-    assets = {a["name"]: {"url": a.get("browser_download_url", ""), "api": a.get("url", "")}
-              for a in rel.get("assets") or [] if isinstance(a, dict) and a.get("name")}
+    rel = get_json(f"{API}/repos/{repo}/releases/tags/{urllib.parse.quote(tag)}", timeout=20, headers=github_headers())
+    assets = {a["name"]: a.get("browser_download_url", "") for a in rel.get("assets") or [] if isinstance(a, dict) and a.get("name")}
     for n in (name, sums_name):
         if n not in assets:
             fail(f"{repo} {tag} has no {n}")
-        if not sources.allowed(assets[n]["url"], repo):
-            fail(f"{n} isn't hosted where Orbit expects: {assets[n]['url']}")
-    with sources.open_asset(assets[sums_name], repo) as r:
+        if not assets[n].startswith(f"https://github.com/{repo}/releases/download/"):
+            fail(f"{n} isn't hosted where Orbit expects: {assets[n]}")
+    get = lambda url: urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "orbit-ci"}), timeout=60)
+    with get(assets[sums_name]) as r:
         sums = parse_sums(r.read(1 << 20).decode("utf-8", "replace"))
     dest = Path(folder) / name
-    with sources.open_asset(assets[name], repo) as r, open(dest, "wb") as f:
+    with get(assets[name]) as r, open(dest, "wb") as f:
         while True:
             chunk = r.read(1 << 16)
             if not chunk:
@@ -179,19 +131,18 @@ def fetch_release_file(repo, tag, name, sums_name, folder):
 def beacon_answers():
     for port in BEACON_PORTS:
         try:
-            if (net.get_json(f"http://127.0.0.1:{port}/v1/ping", timeout=2) or {}).get("app") == "ytm-beacon":
+            if (get_json(f"http://127.0.0.1:{port}/v1/ping", timeout=2) or {}).get("app") == "ytm-beacon":
                 return port
-        except net.HttpError:
+        except HttpError:
             pass
     return 0
 
 
 def starcast_info():
     """What answers on YTM Starcast's port (Pocketfader before the move), or {}."""
-    net.forget_ports()
     try:
-        return net.get_json("http://127.0.0.1:8777/api/info", timeout=3) or {}
-    except net.HttpError:
+        return get_json("http://127.0.0.1:8777/api/info", timeout=3) or {}
+    except HttpError:
         return {}
 
 
@@ -201,13 +152,24 @@ def windows_query(argv):
     return subprocess.run(argv, capture_output=True, stdin=subprocess.DEVNULL).returncode
 
 
+def safe_extract(archive, dest):
+    """Unpack a zip, refusing any entry that would land outside dest."""
+    import zipfile
+    dest = Path(dest).resolve()
+    with zipfile.ZipFile(archive) as z:
+        for info in z.infolist():
+            target = (dest / info.filename).resolve()
+            if dest != target and dest not in target.parents:
+                fail(f"{archive} has an entry outside its folder: {info.filename}")
+        z.extractall(dest)
+
+
 def put_legacy_apps():
     """This machine as a person's PC was before YTM Starcast: Pocketfader where Orbit 0.3 put it (its program in
     %LOCALAPPDATA%\\Programs\\Pocketfader, its scheduled task, running), and YTM Beacon through its own installer."""
     import json
     import shutil
     import subprocess
-    from orbit.install.engine import safe_extract
     local = Path(os.environ["LOCALAPPDATA"])
     work = Path(tempfile.mkdtemp())
 
@@ -546,7 +508,6 @@ def through_the_program(exe, apps, migrate=False):
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if a != "--migrate"]
-    if len(args) > 1 and args[0] == "--exe":
-        through_the_program(args[1], args[2].split(",") if len(args) > 2 else ["nova"], migrate="--migrate" in sys.argv)
-    else:
-        main()
+    if len(args) < 2 or args[0] != "--exe":
+        sys.exit(__doc__)
+    through_the_program(args[1], args[2].split(",") if len(args) > 2 else ["nova"], migrate="--migrate" in sys.argv)

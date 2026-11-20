@@ -1,4 +1,4 @@
-//! Orbit's languages. The window translates its own text (orbit/static/index.html); these are the same files, served
+//! Orbit's languages. The window translates its own text (web/index.html); these are the same files, served
 //! to it and used for the few words Orbit shows outside the window (its desktop notifications). See tools/i18n.py.
 use serde_json::Value;
 use std::collections::HashMap;
@@ -7,15 +7,15 @@ use std::sync::OnceLock;
 /// The languages Orbit has besides English: code, and the file built into the program.
 pub const LANGS: &[(&str, &[u8])] = &[
     ("en", b"{}"),
-    ("es", include_bytes!("../../orbit/static/i18n/es.json")),
-    ("fr", include_bytes!("../../orbit/static/i18n/fr.json")),
-    ("de", include_bytes!("../../orbit/static/i18n/de.json")),
-    ("pt-BR", include_bytes!("../../orbit/static/i18n/pt-BR.json")),
-    ("it", include_bytes!("../../orbit/static/i18n/it.json")),
-    ("ru", include_bytes!("../../orbit/static/i18n/ru.json")),
-    ("ja", include_bytes!("../../orbit/static/i18n/ja.json")),
-    ("zh-CN", include_bytes!("../../orbit/static/i18n/zh-CN.json")),
-    ("ko", include_bytes!("../../orbit/static/i18n/ko.json")),
+    ("es", include_bytes!("../../web/i18n/es.json")),
+    ("fr", include_bytes!("../../web/i18n/fr.json")),
+    ("de", include_bytes!("../../web/i18n/de.json")),
+    ("pt-BR", include_bytes!("../../web/i18n/pt-BR.json")),
+    ("it", include_bytes!("../../web/i18n/it.json")),
+    ("ru", include_bytes!("../../web/i18n/ru.json")),
+    ("ja", include_bytes!("../../web/i18n/ja.json")),
+    ("zh-CN", include_bytes!("../../web/i18n/zh-CN.json")),
+    ("ko", include_bytes!("../../web/i18n/ko.json")),
 ];
 
 pub fn file(code: &str) -> Option<&'static [u8]> {

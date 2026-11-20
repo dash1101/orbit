@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Orbit's languages: the English text in Orbit's source, and the translation files in orbit/static/i18n.
+"""Orbit's languages: the English text in Orbit's source, and the translation files in web/i18n.
 
-Orbit is written in English. Each other language has orbit/static/i18n/<code>.json: {"English text": "translation"}.
+Orbit is written in English. Each other language has web/i18n/<code>.json: {"English text": "translation"}.
 Text that has parts that change (a version, a name) is a pattern: "Download {} from GitHub" -> "{} von GitHub laden";
 the {} take the parts in order, or {1} {2} … to put them in another order. Orbit translates text as it is shown, in the
-window (orbit/static/index.html) and in the Android app (Txt and TuiButton), so this tool only has to find the text.
+window (web/index.html) and in the Android app (Txt and TuiButton), so this tool only has to find the text.
 
   python3 tools/i18n.py keys              every English text found, one per line
   python3 tools/i18n.py missing <code>    numbered list (N<TAB>text) of what <code> lacks
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-I18N = ROOT / "orbit" / "static" / "i18n"
+I18N = ROOT / "web" / "i18n"
 ANDROID = ROOT / "android" / "app" / "src" / "main" / "assets" / "i18n"
 KT = ROOT / "android" / "app" / "src" / "main" / "java" / "app" / "novalabs" / "orbit"
 
@@ -254,7 +254,7 @@ class _Html(html.parser.HTMLParser):
 def keys():
     out = set()
     # the desktop window
-    page = (ROOT / "orbit" / "static" / "index.html").read_text(encoding="utf-8")
+    page = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     p = _Html()
     p.feed(re.sub(r"<script>.*?</script>|<style>.*?</style>", "", page, flags=re.S))
     out |= p.found

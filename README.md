@@ -22,16 +22,8 @@ browser instead.
 
 Download the program for your system from the [releases page](../../releases) (see *The programs* below).
 
-The program is written in Rust (`desktop/`; see its README to build it). The page it shows is `orbit/static/index.html`.
-The Python version of Orbit is still here and works the same way, for running from the source folder:
-
-```bash
-./install.sh            # adds the Python Orbit to your apps menu and an `orbit` command
-python3 -m orbit        # or run it without installing (on Windows: py -m orbit)
-```
-
-Its native window needs `python3-gi` and `gir1.2-webkit2-4.1` (Debian/Ubuntu); without them it opens in a browser.
-Remove it with `./install.sh --uninstall`.
+The program is written in Rust (`desktop/`; see its README to build it). The page it shows is `web/index.html`. Its
+options:
 
 | Option | |
 |---|---|
@@ -234,7 +226,7 @@ border, monospace type and a small square for each app's status. Pick one in **o
 rounding and glow, and the whole window previews your changes as you make them. Custom themes are saved in Orbit's
 settings.
 
-A theme is a block of colour and shape tokens in `orbit/static/index.html` (`[data-theme="…"]`), plus an entry in
+A theme is a block of colour and shape tokens in `web/index.html` (`[data-theme="…"]`), plus an entry in
 `THEMES` in `orbit/server.py`.
 
 ## Languages
@@ -245,7 +237,7 @@ Android: settings → language). Everything Orbit says itself is translated: its
 checks and messages, and its notifications. What an app reports about itself (Nova's check-up, YTM Starcast's outputs)
 stays as that app says it.
 
-The translations are files in `orbit/static/i18n/`, one per language, mapping each English text to its translation
+The translations are files in `web/i18n/`, one per language, mapping each English text to its translation
 (`{}` marks a part that changes, such as a version). `python3 tools/i18n.py check` lists anything missing.
 
 ## Keys
@@ -280,19 +272,16 @@ list, marked "not available on … yet".
 ## Tests
 
 ```bash
-python3 -W error::ResourceWarning -m unittest discover -s tests -t .
+cd desktop && cargo test                                            # the program's own tests
+python3 -W error::ResourceWarning -m unittest discover -s tests -t .   # catalog, icons, translations, themes, notes
 ```
 
-The tests use fakes and small stub servers, so they never touch real services. The installer tests run real
-downloads, checksum and signature checks against a stub GitHub, with fake `pkexec`, `apt-get`, `python3` and
-`systemctl` in a temporary home folder, and the Windows and macOS installs as dry runs.
-
-The program's own tests: `cd desktop && cargo test`. The Python tests run on Linux in CI. Two more checks run against
-the built programs on real machines in CI: `tools/ci-nova-windows.py` installs the newest Nova and YTM Starcast through
-the built `orbit.exe` on GitHub's Windows machines, checks each one
-answers, and removes them again (and installs Nova over itself through Orbit's Python code, and moves a machine with
-Pocketfader and YTM Beacon over to YTM Starcast the way a person's PC would be moved); and `tools/ci-selfupdate.py`
-has a real standalone Orbit update itself to a newer build and restart on it, on Linux, Windows and both kinds of Mac.
+More checks run against the built programs on real machines in CI: `tools/ci-nova-windows.py` installs the newest
+Nova, YTM Starcast, YTDL-UI and xmas-tui through the built `orbit.exe` on GitHub's Windows machines, checks that each
+one answers, installs it again over itself and removes it (and moves a machine with Pocketfader and YTM Beacon over to
+YTM Starcast the way a person's PC would be moved); `tools/ci-selfupdate.py` has a real Orbit update itself to a newer
+build and restart on it, on Linux, Windows and both kinds of Mac; and the Android app is installed and opened on an
+Android emulator.
 
 ## License
 

@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DESKTOP = ROOT / "orbit" / "static" / "apps"
+DESKTOP = ROOT / "web" / "apps"
 ANDROID = ROOT / "android" / "app" / "src" / "main" / "assets" / "icons"
 
 # file name in Orbit -> (repository, where its icon is, newest place first, also used by the Android app?).

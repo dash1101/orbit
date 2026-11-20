@@ -97,7 +97,7 @@ class GitHub(BaseHTTPRequestHandler):
 
 
 def beside(path, suffix):
-    """Where Orbit keeps the new and old copies (the same rule as orbit/install/recipes/orbit.py)."""
+    """Where Orbit keeps the new and old copies (the same rule as desktop/src/recipes/orbit.rs)."""
     if path.suffix == ".app":
         s = path.stem
         return path.with_name({".new": f".{s}-new.app", ".old": f".{s}-old.app", ".new.ok": f".{s}-new.ok"}[suffix])

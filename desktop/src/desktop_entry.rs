@@ -4,7 +4,7 @@ use crate::runner::Runner;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-pub const ICON: &[u8] = include_bytes!("../../orbit/static/icon.svg");
+pub const ICON: &[u8] = include_bytes!("../../web/icon.svg");
 /// Orbit's id on Linux: its window's app id (window.rs), and the name of its apps-menu entry and icon, so the
 /// desktop shows the open window with Orbit's name and icon.
 pub const APP_ID: &str = "app.novalabs.orbit";

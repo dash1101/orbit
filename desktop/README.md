@@ -2,7 +2,7 @@
 
 The desktop Orbit in Rust: one small program that serves Orbit's page and API on `127.0.0.1` and shows it in a window
 of its own, drawn by the web engine that comes with the system (WebView2 on Windows, WebKit on macOS, WebKitGTK on
-Linux) through [Tauri](https://tauri.app). The page is `../orbit/static/index.html`, built into the program, so the look
+Linux) through [Tauri](https://tauri.app). The page is `../web/index.html`, built into the program, so the look
 and every animation are the same as before.
 
 If the web engine is missing, Orbit offers to install it: Microsoft's WebView2 installer on Windows (checked to be
@@ -25,7 +25,7 @@ it can offer to install it, and it unpacks the window build into `~/.cache/orbit
 
 ## Checks on real machines
 
-`.github/workflows/rust.yml` builds every system and runs the same checks as the Python Orbit against these programs:
+`.github/workflows/build.yml` builds every system and runs these checks against the programs:
 `tools/ci-selfupdate.py` (a real update to a newer build, then a restart, on every system) and
-`tools/ci-nova-windows.py --exe` (installs, checks and removes Nova through the program on Windows). It also takes a
+`tools/ci-nova-windows.py --exe` (installs, checks and removes the apps through the program on Windows). It also takes a
 screenshot of the window on each system.

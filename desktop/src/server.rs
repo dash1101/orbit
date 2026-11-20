@@ -1,5 +1,5 @@
-//! Orbit's local server: the web app plus a small JSON API over the app adapters. The same API as the Python
-//! Orbit, so the page and Orbit's own checks work unchanged.
+//! Orbit's local server: the web app plus a small JSON API over the app adapters (the page, web/index.html, and
+//! Orbit's real-machine checks in tools/ use it).
 //!
 //! Security: it listens on 127.0.0.1 only and has no login. To stop web pages from using it: the Host header must
 //! be a loopback name (no DNS rebinding), any Origin must be Orbit's own, and POSTs must be JSON (a plain HTML form
@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex, RwLock, Weak};
 use std::time::{Duration, Instant};
 
 include!(concat!(env!("OUT_DIR"), "/app_icons.rs"));
-const INDEX: &[u8] = include_bytes!("../../orbit/static/index.html");
-const ICON: &[u8] = include_bytes!("../../orbit/static/icon.svg");
+const INDEX: &[u8] = include_bytes!("../../web/index.html");
+const ICON: &[u8] = include_bytes!("../../web/icon.svg");
 
 const THEMES: [(&str, &str); 9] = [("tui", "dusk"), ("phosphor", "phosphor"), ("amber", "amber"), ("paper", "paper"), ("frost", "frost"),
                                    ("ember", "ember"), ("ocean", "ocean"), ("lilac", "lilac"), ("mono", "mono")];
