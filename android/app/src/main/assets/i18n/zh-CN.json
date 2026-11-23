@@ -234,6 +234,7 @@
 "Hide after (minutes, 0 = never)": "多久后隐藏（分钟，0 = 从不）",
 "Host": "主机",
 "IMAGENAME eq xmas-tui.exe": "IMAGENAME eq xmas-tui.exe",
+"If RPCortex Studio is open, close it, then try again.": "如果 RPCortex Studio 正在运行，请将其关闭后重试。",
 "If it's a private repository, sign in with GitHub in Orbit's settings (or run gh auth login), then try again.": "如果是私有仓库，请在 Orbit 的设置中使用 GitHub 登录（或运行 gh auth login），然后重试。",
 "If it's private, sign in with GitHub in Orbit's settings.": "如果是私有仓库，请在 Orbit 的设置中使用 GitHub 登录。",
 "If you added YTM Starcast's browser extension, remove it from your browser's extensions page.": "如果你添加了 YTM Starcast 的浏览器扩展，请在浏览器的扩展页面中将其移除。",

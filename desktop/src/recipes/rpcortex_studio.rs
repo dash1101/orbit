@@ -199,7 +199,21 @@ impl RpcortexStudioRecipe {
         if s.opt_bool("purge", false) {
             paths.push(self.config_dir());
         }
-        s.remove(&paths)?;
+        // Windows: a copy that is still closing (just opened, or asked its version) keeps its file for a moment
+        let mut tries = 0;
+        loop {
+            match s.remove(&paths) {
+                Ok(()) => break,
+                Err(crate::util::Error::Cancelled) => return Err(crate::util::Error::Cancelled),
+                Err(e) if tries >= 10 || self.h().system != "windows" => {
+                    return Err(failed(e.to_string(), "If RPCortex Studio is open, close it, then try again."));
+                }
+                Err(_) => {
+                    tries += 1;
+                    s.sleep(1.0)?;
+                }
+            }
+        }
         self.forget();
         Ok(true)
     }
@@ -257,10 +271,14 @@ impl Recipe for RpcortexStudioRecipe {
         if !self.exe().is_file() {
             return json!({"installed": false, "version": "", "where": "", "how": ""});
         }
-        let (rc, out) = self.h().probe(&[sv(&self.exe()), "--version".into()]);
-        let mut v = if rc == 0 { version_said(&out) } else { String::new() };
+        // Orbit's own note of what it installed; the program is asked only without one (it runs while asked, and on
+        // Windows a running program can't be replaced or removed, so it isn't asked at every look)
+        let mut v = self.written_version();
         if v.is_empty() {
-            v = self.written_version();
+            let (rc, out) = self.h().probe(&[sv(&self.exe()), "--version".into()]);
+            if rc == 0 {
+                v = version_said(&out);
+            }
         }
         json!({"installed": true, "version": v, "where": sv(&self.dir()), "how": "its ready-made program"})
     }

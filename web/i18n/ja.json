@@ -234,6 +234,7 @@
 "Hide after (minutes, 0 = never)": "非表示にするまで（分、0 = しない）",
 "Host": "Host",
 "IMAGENAME eq xmas-tui.exe": "IMAGENAME eq xmas-tui.exe",
+"If RPCortex Studio is open, close it, then try again.": "RPCortex Studio が開いている場合は閉じてから、もう一度お試しください。",
 "If it's a private repository, sign in with GitHub in Orbit's settings (or run gh auth login), then try again.": "プライベートリポジトリの場合は、Orbit の設定で GitHub にサインイン（または gh auth login を実行）してから、もう一度お試しください。",
 "If it's private, sign in with GitHub in Orbit's settings.": "プライベートの場合は、Orbit の設定で GitHub にサインインしてください。",
 "If you added YTM Starcast's browser extension, remove it from your browser's extensions page.": "YTM Starcast のブラウザ拡張機能を追加していた場合は、ブラウザの拡張機能ページから削除してください。",

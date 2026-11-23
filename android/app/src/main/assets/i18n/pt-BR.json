@@ -234,6 +234,7 @@
 "Hide after (minutes, 0 = never)": "Ocultar após (minutos, 0 = nunca)",
 "Host": "Host",
 "IMAGENAME eq xmas-tui.exe": "IMAGENAME eq xmas-tui.exe",
+"If RPCortex Studio is open, close it, then try again.": "Se o RPCortex Studio estiver aberto, feche-o e tente de novo.",
 "If it's a private repository, sign in with GitHub in Orbit's settings (or run gh auth login), then try again.": "Se for um repositório privado, entre com o GitHub nas configurações do Orbit (ou execute gh auth login) e tente de novo.",
 "If it's private, sign in with GitHub in Orbit's settings.": "Se for privado, entre com o GitHub nas configurações do Orbit.",
 "If you added YTM Starcast's browser extension, remove it from your browser's extensions page.": "Se você adicionou a extensão do YTM Starcast ao navegador, remova-a na página de extensões do navegador.",

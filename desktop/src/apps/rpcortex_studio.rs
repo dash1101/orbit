@@ -81,6 +81,12 @@ impl RpcortexStudio {
     fn version(&self) -> String {
         let mut v = self.version.lock().unwrap();
         if v.is_empty() {
+            // Orbit's own note first: asking the program runs it, which holds its file on Windows
+            *v = std::fs::read_to_string(exe().with_file_name("orbit-install.json")).ok()
+                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                .and_then(|j| j["version"].as_str().map(String::from)).unwrap_or_default();
+        }
+        if v.is_empty() {
             let (rc, out) = crate::runner::run_capture(&[exe().to_string_lossy().into_owned(), "--version".into()],
                                                        std::time::Duration::from_secs(5), true);
             if rc == 0 {
