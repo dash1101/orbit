@@ -385,6 +385,7 @@ mod tests {
         assert_eq!(serial_group("root:x:0:\ndialout:x:20:u\n"), "dialout");
         assert_eq!(serial_group("root:x:0:\nuucp:x:14:\n"), "uucp");
         assert_eq!(serial_group(""), "dialout");
+        #[cfg(unix)]
         assert!(!can_read_write(std::path::Path::new("/nonexistent/ttyACM9")));
     }
 }

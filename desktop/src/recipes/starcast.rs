@@ -589,6 +589,7 @@ impl StarcastRecipe {
         // the program in its folder
         let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
         let programs: Vec<PathBuf> = names.iter().map(|n| real(&self.venv_bin(n.slug, *n))).collect();
+        #[cfg(unix)]
         let uid = self.h().uid();
         for d in std::fs::read_dir(&self.proc).map(|r| r.flatten().collect::<Vec<_>>()).unwrap_or_default() {
             let name = d.file_name().to_string_lossy().into_owned();

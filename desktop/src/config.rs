@@ -143,9 +143,3 @@ fn save(path: &Path, data: &Map<String, Value>) {
         std::fs::rename(&tmp, path) // atomic: a crash can't leave half a file
     })();
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-}
