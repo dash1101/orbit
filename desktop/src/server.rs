@@ -158,7 +158,8 @@ impl Hub {
         let list = self.apps.read().unwrap().clone();
         // xmas-tui has a page while it's installed: look again when that changed
         if list.iter().any(|a| a.id() == "xmas-tui") != apps::xmas_tui::installed()
-            || list.iter().any(|a| a.id() == "ytdl-ui") != apps::ytdl_ui::installed() {
+            || list.iter().any(|a| a.id() == "ytdl-ui") != apps::ytdl_ui::installed()
+            || list.iter().any(|a| a.id() == "rpcortex-studio") != apps::rpcortex_studio::installed() {
             self.reload();
             return self.apps.read().unwrap().clone();
         }

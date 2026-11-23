@@ -5,7 +5,7 @@ window does it, it installs each app's newest release (asking Windows for admini
 which GitHub's machines grant without a prompt), checks that the app answers and that Orbit's page for it sees it,
 installs again over itself (an update), then removes it with its settings and makes sure nothing is left.
 
-    python tools/ci-nova-windows.py --exe orbit.exe [nova,ytm-starcast,ytdl-ui,xmas-tui]
+    python tools/ci-nova-windows.py --exe orbit.exe [nova,ytm-starcast,ytdl-ui,xmas-tui,rpcortex-studio]
 """
 import json
 import os
@@ -30,9 +30,10 @@ def fail(text):
 APPS = {"nova": ({"firewall": True}, {"purge": True}),
         "ytm-starcast": ({}, {"purge": True}),
         "ytdl-ui": ({}, {"purge": True}),
-        "xmas-tui": ({"startup": True}, {"purge": True})}
+        "xmas-tui": ({"startup": True}, {"purge": True}),
+        "rpcortex-studio": ({}, {"purge": True})}
 # installed from Orbit, with no page of their own in it: checked by the version Orbit sees instead
-NO_PAGE = {"ytdl-ui", "xmas-tui"}
+NO_PAGE = {"ytdl-ui", "xmas-tui", "rpcortex-studio"}
 
 WATCH = r"""
 Add-Type @'

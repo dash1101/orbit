@@ -26,6 +26,7 @@ ICONS = {
     "nova.svg": ("dash1101/Nova", ["server/web/icon.svg"], True),
     "ytdl-ui.svg": ("JustAyden/YTDL-UI", ["static/img/icon.svg", "static/img/icon-192.png"], False),
     "xmas-tui.svg": ("dash1101/xmas-tui", ["web/site/icon.svg", "web/site/icon-192.png"], False),
+    "rpcortex-studio.svg": ("dash1101/rpcortex-studio", ["assets/icon.svg"], False),
 }
 # The Android app's catalog takes icons up to 64 KB (Catalog.kt): a PNG must stay well under that once wrapped.
 MAX_ICON = 60_000

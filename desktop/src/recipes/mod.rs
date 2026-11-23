@@ -1,6 +1,7 @@
 //! Install recipes for the apps Orbit knows how to install.
 pub mod nova;
 pub mod orbit;
+pub mod rpcortex_studio;
 pub mod starcast;
 pub mod xmas_tui;
 pub mod ytdl_ui;
@@ -16,6 +17,7 @@ pub fn load(host: &Host, sources: &Arc<Sources>) -> Vec<Arc<dyn Recipe>> {
         Arc::new(nova::NovaRecipe::new(host.clone(), sources.clone())),
         Arc::new(ytdl_ui::YtdlUiRecipe::new(host.clone(), sources.clone())),
         Arc::new(xmas_tui::XmasTuiRecipe::new(host.clone(), sources.clone())),
+        Arc::new(rpcortex_studio::RpcortexStudioRecipe::new(host.clone(), sources.clone())),
         Arc::new(orbit::OrbitRecipe::new(host.clone(), sources.clone(), None)),
     ]
 }

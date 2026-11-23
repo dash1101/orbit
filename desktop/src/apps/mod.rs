@@ -7,6 +7,7 @@
 pub mod custom;
 pub mod discord;
 pub mod nova;
+pub mod rpcortex_studio;
 pub mod starcast;
 pub mod xmas_tui;
 pub mod ytdl_ui;
@@ -350,6 +351,9 @@ pub fn load(ctx: &Arc<Ctx>) -> Vec<Arc<dyn App>> {
     }
     if ytdl_ui::installed() {
         apps.push(Arc::new(ytdl_ui::YtdlUi::new(ctx.clone()))); // a page once Orbit has installed it
+    }
+    if rpcortex_studio::installed() {
+        apps.push(Arc::new(rpcortex_studio::RpcortexStudio::new(ctx.clone())));
     }
     for spec in ctx.config.get("custom").as_array().cloned().unwrap_or_default() {
         let id = spec["id"].as_str().unwrap_or("").to_string();

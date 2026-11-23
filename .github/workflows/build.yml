@@ -362,10 +362,10 @@ jobs:
           tools/make-deb.sh desktop/target-next/release/orbit 99.0.0 "${{ matrix.deb }}" "$RUNNER_TEMP/orbit-next.deb"
           dpkg-deb --info "$RUNNER_TEMP/orbit.deb"; dpkg-deb --contents "$RUNNER_TEMP/orbit.deb"
           python tools/ci-selfupdate.py --deb "$RUNNER_TEMP/orbit.deb" "$RUNNER_TEMP/orbit-next.deb" "${{ matrix.name }}"
-      - name: "Windows: install, check and remove Nova, YTM Starcast, YTDL-UI and xmas-tui through the program"
+      - name: "Windows: install, check and remove Nova, YTM Starcast, YTDL-UI, xmas-tui and RPCortex Studio through the program"
         if: matrix.name == 'windows-x64'
         env: { PYTHONIOENCODING: utf-8, GH_TOKEN: "${{ github.token }}" }
-        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe nova,ytm-starcast,ytdl-ui,xmas-tui
+        run: python tools/ci-nova-windows.py --exe desktop/target/release/orbit.exe nova,ytm-starcast,ytdl-ui,xmas-tui,rpcortex-studio
       - name: Package
         run: |
           mkdir -p out

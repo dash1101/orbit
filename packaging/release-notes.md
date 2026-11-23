@@ -1,5 +1,9 @@
 **Orbit** by NovaLabs: one place for YTM Starcast, Nova, YTDL-UI and xmas-tui. Each download is the program itself: nothing to unpack, and nothing else to install.
 
+**New in 0.8.5**
+
+- **RPCortex Studio**: control an RPCortex device from your computer (files, packages, firmware, logs and a terminal, over USB serial). Orbit installs its ready-made program on Linux (x86-64), Windows (x64) and Macs with Apple chips, checked against the release's checksums, with the `rpcortex-studio` and `rpc` commands (Linux and macOS) or a Start-menu entry (Windows). Its page in Orbit shows whether a board is plugged in, opens it in a terminal in Orbit's theme, and sets its own theme. On Linux, Orbit checks that you may open the board's serial port and says how if not.
+
 **New in 0.8.4**
 
 - **Support for very old versions is retired.** Orbit no longer moves a computer from Pocketfader and YTM Beacon to YTM Starcast (they became YTM Starcast in Orbit 0.4.0), and Orbit's downloads are published only under their usual names. If a computer still has Pocketfader or YTM Beacon, remove them with their own uninstallers, then install YTM Starcast from Orbit. An Orbit for Android older than 0.3.5 can't update itself any more: install the new one from this page.

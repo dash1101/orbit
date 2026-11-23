@@ -5,7 +5,8 @@ By NovaLabs. Standalone downloads for Linux, Windows, macOS and Android are on t
 One place for all your apps: install them, see at a glance whether each one is running, start and stop it, change its
 settings, read its log and update it when a new release is out. It comes with support for
 [YTM Starcast](https://github.com/dash1101/ytm-starcast), [Nova](https://github.com/dash1101/Nova),
-[YTDL-UI](https://github.com/JustAyden/YTDL-UI) and [xmas-tui](https://github.com/dash1101/xmas-tui), and you can add
+[YTDL-UI](https://github.com/JustAyden/YTDL-UI), [xmas-tui](https://github.com/dash1101/xmas-tui) and
+[RPCortex Studio](https://github.com/dash1101/rpcortex-studio), and you can add
 any other app from Orbit's settings.
 
 Orbit is one small program with its own window, drawn by the web engine that comes with your system (WebView2 on
@@ -50,6 +51,7 @@ here. Installing, updating and removing all go through the same five steps:
 | **Nova** | the `.deb` on Debian/Ubuntu (so apt keeps it updated), Nova's one-file installer elsewhere; needs systemd | a preview: Nova's Windows installer (`nova-windows.zip`) puts it in `C:\Program Files\Nova` with three background tasks that start with Windows, and its own uninstaller removes it. Pairing, devices, approvals, live graphs, alerts, the task manager, power and Docker Desktop work; programs and updates, files, the terminal and backups aren't there yet | not available |
 | **YTDL-UI** | its ready-made app (x64 or ARM64) in `~/.local/share/ytdl-ui`, apps-menu entry, and, if you like, a systemd user service (`ytdl-ui.service`) that keeps it at `http://localhost:5000`. It downloads ffmpeg itself | its ready-made app (x64 or ARM64) in `%LOCALAPPDATA%\Programs\YTDL-UI` and a Start-menu entry; it runs in its console window while open and finds or downloads ffmpeg itself | its ready-made app (Apple Silicon or Intel) in `~/Library/Application Support/YTDL-UI` and, if you like, a LaunchAgent that keeps it running; converting needs `brew install ffmpeg` |
 | **xmas-tui** | x86-64 only: its own no-sudo installer (`~/.local/share/xmas-tui`, systemd user service `xmas-tui.service`). Needs kitty 0.36 or newer and a Wayland desktop with layers (KDE Plasma 6, Sway, Hyprland; not GNOME): Orbit checks for them first, and offers to install kitty (from your system's packages, after the system asks for your password, or kitty's own build just for you) and ffmpeg for its moving lock screen. Adds the `xmas-tui` command | its own per-user setup, run silently: `%LOCALAPPDATA%\Programs\xmas-tui`, Start-menu entries, run at startup if you like, and its own uninstaller | not available |
+| **RPCortex Studio** | x86-64: its program in `~/.local/share/rpcortex-studio`, with the `rpcortex-studio` and `rpc` commands in `~/.local/bin`. Opening a board needs membership of the `dialout` group (`uucp` on Arch): Orbit checks it and says how | its program in `%LOCALAPPDATA%\Programs\RPCortex Studio` and a Start-menu entry | Apple chips: its program in `~/Library/Application Support/RPCortex Studio`, with the same commands |
 
 Only Nova needs the administrator password, and Orbit never sees it: on Linux your desktop's password window asks for
 it (`pkexec`), or a terminal with `sudo` when there's no such window; on Windows, Windows asks for permission once and
@@ -147,6 +149,7 @@ version, and launchers and shortcuts keep working.
 | **Nova** | answering or not, version and API level; how the server itself is doing: what needs attention, containers, websites, the fullest drive, the last backup, uptime; every Nova service and timer (the assistant and lighting when set up), failed background jobs, Tailscale and Cloudflare tunnel, release | Nova web address | open Nova web and the Nova Server window (Nova 0.9.16 and newer); status, doctor, recent actions, the API's log; pair a phone, a view-only device or a phone that's away from home, paired devices, what's waiting for approval, approve a browser, remove a device; Tailscale status and sign-in, Cloudflare API token, what Nova changed in Cloudflare and undoing it, setup; check for and install updates, back up now, list backups, restart the API; linked servers, plugins |
 | **YTDL-UI** | answering or not, version, yt-dlp ready, its folder, release | shown (it changes them in its own admin console): address, password for visitors, allowed sites, where downloads are processed, downloads at the same time, how long finished files are kept, speed limit, update checks | open, its own settings, start/stop/restart, start at login (Linux) |
 | **xmas-tui** | running as your wallpaper or not, its settings file | frame rate, size, zoom, snow, wind, critters, time of day, your villager, clock, widgets, weather, sound | its own settings, play in a window, start/stop/restart, start at login (Linux) |
+| **RPCortex Studio** | its version, whether a board is plugged in (Linux and macOS), its theme | open it in Orbit's theme, its own theme | open it (in a terminal), releases |
 | **Your own apps** | the service's state and/or a health address | name, service, health address, web page | open, start/stop/restart, start at login, remove |
 
 **Every app has a settings button**, on its card and its page: it shows the settings Orbit can see (and change, where
@@ -246,7 +249,7 @@ python3 -W error::ResourceWarning -m unittest discover -s tests -t .   # catalog
 ```
 
 More checks run against the built programs on real machines in CI: `tools/ci-nova-windows.py` installs the newest
-Nova, YTM Starcast, YTDL-UI and xmas-tui through the built `orbit.exe` on GitHub's Windows machines, checks that each
+Nova, YTM Starcast, YTDL-UI, xmas-tui and RPCortex Studio through the built `orbit.exe` on GitHub's Windows machines, checks that each
 one answers, installs it again over itself and removes it; `tools/ci-selfupdate.py` has a real Orbit update itself to a newer
 build and restart on it, on Linux, Windows and both kinds of Mac; and the Android app is installed and opened on an
 Android emulator.

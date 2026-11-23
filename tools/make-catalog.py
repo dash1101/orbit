@@ -44,6 +44,9 @@ APPS = [
          "pkgs": ["io.github.dash1101.xmastui"], "apk": ["xmas-tui-android.apk"], "sums": "SHA256SUMS",
          "note": "A live wallpaper: open it and tap Set as live wallpaper. Its settings fit the snowy dock to your launcher.",
          "extra": "Needs Android 7 or later."}},
+    {"id": "rpcortex-studio", "name": "RPCortex Studio",
+     "blurb": "Control an RPCortex device from your computer: files, packages, firmware, logs and a terminal, over USB serial",
+     "repo": "dash1101/rpcortex-studio", "color": "#2dd4be", "icon": "apps/rpcortex-studio.svg"},
     {"id": "orbit", "name": "Orbit", "blurb": "This app",
      "repo": "dash1101/orbit", "color": "#f0668e", "icon": "icon.svg",
      "android": {
