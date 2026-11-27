@@ -45,8 +45,12 @@ APPS = [
          "note": "A live wallpaper: open it and tap Set as live wallpaper. Its settings fit the snowy dock to your launcher.",
          "extra": "Needs Android 7 or later."}},
     {"id": "rpcortex-studio", "name": "RPCortex Studio",
-     "blurb": "Control an RPCortex device from your computer: files, packages, firmware, logs and a terminal, over USB serial",
-     "repo": "dash1101/rpcortex-studio", "color": "#2dd4be", "icon": "apps/rpcortex-studio.svg"},
+     "blurb": "Control an RPCortex device from your computer or phone: files, packages, firmware, logs and a terminal",
+     "repo": "dash1101/rpcortex-studio", "color": "#2dd4be", "icon": "apps/rpcortex-studio.svg",
+     "android": {
+         "pkgs": ["app.novalabs.rpcstudio"], "apk": ["rpcortex-studio-android.apk"], "sums": "SHA256SUMS",
+         "note": "Plug the board into the phone's USB-C port (or through an OTG adapter) and Android offers to open RPCortex Studio.",
+         "extra": "Needs Android 8 or later and a phone that can host USB devices."}},
     {"id": "orbit", "name": "Orbit", "blurb": "This app",
      "repo": "dash1101/orbit", "color": "#f0668e", "icon": "icon.svg",
      "android": {
